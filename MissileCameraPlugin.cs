@@ -1,0 +1,74 @@
+using System.IO;
+using BepInEx;
+using BepInEx.Logging;
+
+namespace MissileCamera
+{
+    [BepInPlugin(PluginGuid, PluginName, AppVersion.BepInSemVer)]
+    public sealed class MissileCameraPlugin : BaseUnityPlugin
+    {
+        public const string PluginGuid = "com.at747.missilecamera.bepinex";
+        public const string PluginName = "Missile Camera";
+
+        internal const string DefaultIni = @"[Layout]
+Enabled=1
+DisplayMode=split
+OverlayMaxWidth=0.45
+LeftWidth=0.58
+MissilePanelBottom=0.38
+WeaponsStripHeight=0.12
+ShowDivider=1
+DebugStub=0
+StubLabel=MISSILE CAMERA
+
+[MissileCameraFeed]
+Enabled=1
+NoseSkinInset=0.08
+CameraBackOffset=0.35
+Fov=60
+FeedWidth=512
+FeedHeight=512
+HorizonLock=1
+TurnLookBankScale=1
+MaxTurnLookDegrees=90
+DefaultMissileGLimit=20
+TurnLookGDeadband=0.15
+TurnLookGFilterHz=7
+TurnLookSlewDegPerSec=120
+TurnLookSmoothTime=0.18
+PostExplosionHoldSeconds=0
+RenderFps=30
+
+[MissileCameraHud]
+Enabled=1
+SalvoWindowSeconds=0.5
+ShowCenterCluster=1
+ShowTargetMarker=1
+InterceptColor=0,1,0,1
+ReticleColor=0,0.4,1,1
+HorizonColor=0.05,0.35,0.08,1
+HorizonOutlineColor=0.2,1,0.25,1
+MissileNameColor=1,0,1,1
+TargetNameColor=0.4,0.9,1,1
+LabelBackgroundColor=0.18,0.18,0.18,0.62
+LabelBackgroundAlpha=0.62
+";
+
+        internal static ManualLogSource? ModLogger { get; private set; }
+
+        private void Awake()
+        {
+            ModLogger = base.Logger;
+
+            string? pluginDir = Path.GetDirectoryName(Info.Location);
+            if (string.IsNullOrEmpty(pluginDir))
+            {
+                ModLogger.LogError("Could not resolve plugin directory.");
+                return;
+            }
+
+            MissileCameraHost.Ensure(pluginDir, ModLogger);
+            ModLogger.LogInfo($"{PluginName} {AppVersion.DisplayVersion} loaded.");
+        }
+    }
+}
