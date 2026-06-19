@@ -22,7 +22,10 @@ namespace MissileCamera
             MissileCameraHudConfig.Refresh();
             float now = Time.unscaledTime;
             if (now - _lastRegisterTimeUnscaled > MissileCameraHudConfig.SalvoWindowSeconds)
-                CurrentBurst.Clear();
+            {
+                PruneBurst();
+                // Start a new burst only after the previous wave is fully gone.
+            }
 
             _lastRegisterTimeUnscaled = now;
             if (!CurrentBurst.Contains(missile))
@@ -37,39 +40,53 @@ namespace MissileCamera
             CurrentBurst.Remove(missile);
         }
 
-        internal static void GetSalvoInfo(Missile missile, out int index, out int total)
+        internal static void GetSalvoInfo(
+            Missile missile,
+            IReadOnlyList<Missile>? ownedActive,
+            out int index,
+            out int total)
         {
             index = 1;
             total = 1;
             if (missile == null)
                 return;
 
+            if (ownedActive != null && TryGetSalvoFromList(missile, ownedActive, out index, out total))
+                return;
+
             PruneBurst();
             if (CurrentBurst.Count == 0)
                 return;
 
-            var ordered = new List<Missile>(CurrentBurst.Count);
-            for (int i = 0; i < CurrentBurst.Count; i++)
-            {
-                Missile candidate = CurrentBurst[i];
-                if (IsTrackable(candidate))
-                    ordered.Add(candidate);
-            }
+            TryGetSalvoFromList(missile, CurrentBurst, out index, out total);
+        }
 
-            ordered.Sort((a, b) => b.timeSinceSpawn.CompareTo(a.timeSinceSpawn));
-            total = Mathf.Max(1, ordered.Count);
-
-            for (int i = 0; i < ordered.Count; i++)
-            {
-                if (ordered[i] == missile)
-                {
-                    index = i + 1;
-                    return;
-                }
-            }
-
+        private static bool TryGetSalvoFromList(
+            Missile missile,
+            IReadOnlyList<Missile> missiles,
+            out int index,
+            out int total)
+        {
             index = 1;
-            total = Mathf.Max(1, ordered.Count);
+            total = 0;
+            float myAge = missile.timeSinceSpawn;
+
+            for (int i = 0; i < missiles.Count; i++)
+            {
+                Missile candidate = missiles[i];
+                if (!IsTrackable(candidate))
+                    continue;
+
+                total++;
+                if (candidate != missile && candidate.timeSinceSpawn > myAge)
+                    index++;
+            }
+
+            if (total <= 0)
+                return false;
+
+            total = Mathf.Max(1, total);
+            return true;
         }
 
         private static void PruneBurst()

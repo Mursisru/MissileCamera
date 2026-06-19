@@ -73,11 +73,10 @@ namespace MissileCamera
             MissileCameraRig? rig,
             IReadOnlyList<Missile> ownedActive)
         {
-            _ = ownedActive;
             if (missile == null || missile.disabled || missile.rb == null)
                 return Empty;
 
-            MissileCameraSalvoTracker.GetSalvoInfo(missile, out int salvoIndex, out int salvoTotal);
+            MissileCameraSalvoTracker.GetSalvoInfo(missile, ownedActive, out int salvoIndex, out int salvoTotal);
 
             bool hasTarget = MissileAccess.TryGetTargetPosition(missile, out GlobalPosition targetPosition);
             bool hasAimPoint = MissileAccess.TryGetAimPoint(missile, out GlobalPosition aimPoint);
