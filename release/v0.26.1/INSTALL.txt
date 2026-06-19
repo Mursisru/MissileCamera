@@ -1,0 +1,12 @@
+MissileCamera v0.26.1 — BepInEx 5 plugin for Nuclear Option
+
+Install:
+1. Install BepInEx 5 for Nuclear Option.
+2. Extract into: Nuclear Option\BepInEx\plugins\MissileCamera\
+   - MissileCamera.dll
+   - mod_config.ini
+
+Plugin GUID: com.at747.missilecamera.bepinex
+
+Changes in v0.26.1:
+- Fix camera ending up inside the missile body on some missile types (#1).
