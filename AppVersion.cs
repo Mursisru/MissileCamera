@@ -7,7 +7,7 @@ namespace MissileCamera
         public const string VersionChannel = "PR-R";
         public const int CycleBuildNumber = 1;
         public const string ChangeLetters = "P";
-        public const int SubNumber = 1;
-        public const string DisplayVersion = "0.26.0 Build PR-R1P1";
+        public const int SubNumber = 2;
+        public const string DisplayVersion = "0.26.0 Build PR-R1P2";
     }
 }

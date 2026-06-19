@@ -81,9 +81,15 @@ namespace MissileCamera
 
             float skinInset = MissileCameraFeedConfig.NoseSkinInset;
             float backOffset = MissileCameraFeedConfig.CameraBackOffset;
-            float cameraLocalZ = Mathf.Max(noseLocalZ - skinInset - backOffset, MinCameraLocalZ);
-            float refineMaxZ = noseLocalZ + Mathf.Max(skinInset, 0.15f);
-            cameraLocalZ = RefineCameraLocalZ(missile, missileTransform, cameraLocalZ, refineMaxZ);
+            float startZ = Mathf.Max(noseLocalZ - backOffset, MinCameraLocalZ);
+            float searchMaxZ = noseLocalZ + Mathf.Max(skinInset + backOffset + 1f, 1.5f);
+            float cameraLocalZ = ResolveExteriorCameraLocalZ(
+                missile,
+                missileTransform,
+                startZ,
+                searchMaxZ,
+                noseLocalZ,
+                skinInset);
 
             if (!foundMesh && minLocalZ == float.MaxValue)
                 minLocalZ = 0f;
@@ -260,21 +266,33 @@ namespace MissileCamera
             return node == excludedRoot || node.IsChildOf(excludedRoot);
         }
 
-        private static float RefineCameraLocalZ(Missile missile, Transform missileTransform, float startZ, float maxZ)
+        private static float ResolveExteriorCameraLocalZ(
+            Missile missile,
+            Transform missileTransform,
+            float startZ,
+            float searchMaxZ,
+            float noseLocalZ,
+            float skinInset)
         {
-            float z = startZ;
             const float step = 0.025f;
-            const int maxSteps = 80;
 
-            for (int i = 0; i < maxSteps && z <= maxZ; i++)
+            for (float z = startZ; z <= searchMaxZ; z += step)
             {
                 if (!IsCameraInsideMissileBody(missile, missileTransform, z))
                     return z;
-
-                z += step;
             }
 
-            return Mathf.Min(z, maxZ);
+            float fallback = noseLocalZ + skinInset;
+            if (!IsCameraInsideMissileBody(missile, missileTransform, fallback))
+                return fallback;
+
+            for (float z = fallback + step; z <= searchMaxZ; z += step)
+            {
+                if (!IsCameraInsideMissileBody(missile, missileTransform, z))
+                    return z;
+            }
+
+            return searchMaxZ;
         }
 
         private static bool IsCameraInsideMissileBody(Missile missile, Transform missileTransform, float localZ)
@@ -283,6 +301,9 @@ namespace MissileCamera
             Vector3 forward = missileTransform.forward;
             Transform? effectsRoot = GetEffectsTransform(missile);
             Transform? boosterRoot = GetBoosterTransform(missile);
+
+            if (IsPointInsideMissileMeshBounds(missileTransform, worldPoint, effectsRoot, boosterRoot))
+                return true;
 
             Collider[] colliders = missile.GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < colliders.Length; i++)
@@ -299,10 +320,53 @@ namespace MissileCamera
                     return true;
             }
 
-            if (ForwardRayHitsOwnMissile(missile, worldPoint, forward, 0.35f))
+            float probeDistance = Mathf.Max(MissileCameraFeedConfig.CameraBackOffset + MissileCameraFeedConfig.NoseSkinInset, 0.75f);
+            if (ForwardRayHitsOwnMissile(missile, worldPoint, forward, probeDistance))
+                return true;
+
+            if (ForwardRayHitsOwnMissile(missile, worldPoint, -forward, probeDistance))
                 return true;
 
             return false;
+        }
+
+        private static bool IsPointInsideMissileMeshBounds(
+            Transform missileTransform,
+            Vector3 worldPoint,
+            Transform? effectsRoot,
+            Transform? boosterRoot)
+        {
+            MeshRenderer[] meshRenderers = missileTransform.GetComponentsInChildren<MeshRenderer>(true);
+            for (int i = 0; i < meshRenderers.Length; i++)
+            {
+                if (TryPointInsideRendererBounds(meshRenderers[i], worldPoint, effectsRoot, boosterRoot))
+                    return true;
+            }
+
+            SkinnedMeshRenderer[] skinnedRenderers = missileTransform.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+            for (int i = 0; i < skinnedRenderers.Length; i++)
+            {
+                if (TryPointInsideRendererBounds(skinnedRenderers[i], worldPoint, effectsRoot, boosterRoot))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryPointInsideRendererBounds(
+            Renderer renderer,
+            Vector3 worldPoint,
+            Transform? effectsRoot,
+            Transform? boosterRoot)
+        {
+            if (renderer == null || !renderer.enabled)
+                return false;
+
+            Transform rendererTransform = renderer.transform;
+            if (IsUnderExcludedRoot(rendererTransform, effectsRoot) || IsUnderExcludedRoot(rendererTransform, boosterRoot))
+                return false;
+
+            return renderer.bounds.Contains(worldPoint);
         }
 
         private static bool ForwardRayHitsOwnMissile(Missile missile, Vector3 origin, Vector3 direction, float distance)
