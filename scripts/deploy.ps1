@@ -25,7 +25,6 @@ $pluginRoot = Join-Path $GameRoot "BepInEx\plugins\MissileCamera"
 New-Item -ItemType Directory -Path $pluginRoot -Force | Out-Null
 
 Copy-Item -Force $dll (Join-Path $pluginRoot "MissileCamera.dll")
-Copy-Item -Force (Join-Path $RepoRoot "mod_config.ini") (Join-Path $pluginRoot "mod_config.ini")
 
 if ($ClearHarmonyCache) {
     $cache = Join-Path $GameRoot "BepInEx\cache\harmony_interop_cache.dat"

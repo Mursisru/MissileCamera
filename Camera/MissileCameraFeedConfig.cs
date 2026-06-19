@@ -1,14 +1,9 @@
-using System;
-using System.IO;
 using MissileCamera.Config;
-using UnityEngine;
 
 namespace MissileCamera
 {
     internal static class MissileCameraFeedConfig
     {
-        private static DateTime _lastWriteUtc = DateTime.MinValue;
-
         internal static bool Enabled = true;
         internal static float NoseSkinInset = 0.08f;
         internal static float CameraBackOffset = 0.35f;
@@ -29,61 +24,62 @@ namespace MissileCamera
 
         internal static void Refresh(bool force = false)
         {
-            MfdLayoutConfig.EnsureInitialized();
-            string modRoot = GetModRoot();
-            if (string.IsNullOrEmpty(modRoot))
+            if (!MissileCameraBepInConfig.IsBound)
                 return;
 
-            string path = Path.Combine(modRoot, "mod_config.ini");
-            if (!File.Exists(path))
+            bool enabled = MissileCameraBepInConfig.FeedEnabled.Value;
+            float noseSkinInset = MissileCameraBepInConfig.NoseSkinInset.Value;
+            float cameraBackOffset = MissileCameraBepInConfig.CameraBackOffset.Value;
+            float fov = MissileCameraBepInConfig.Fov.Value;
+            int feedWidth = MissileCameraBepInConfig.FeedWidth.Value;
+            int feedHeight = MissileCameraBepInConfig.FeedHeight.Value;
+            bool horizonLock = MissileCameraBepInConfig.HorizonLock.Value;
+            float turnLookBankScale = MissileCameraBepInConfig.TurnLookBankScale.Value;
+            float maxTurnLookDegrees = MissileCameraBepInConfig.MaxTurnLookDegrees.Value;
+            float defaultMissileGLimit = MissileCameraBepInConfig.DefaultMissileGLimit.Value;
+            float turnLookGDeadband = MissileCameraBepInConfig.TurnLookGDeadband.Value;
+            float turnLookGFilterHz = MissileCameraBepInConfig.TurnLookGFilterHz.Value;
+            float turnLookSlewDegPerSec = MissileCameraBepInConfig.TurnLookSlewDegPerSec.Value;
+            float turnLookSmoothTime = MissileCameraBepInConfig.TurnLookSmoothTime.Value;
+            float postExplosionHoldSeconds = MissileCameraBepInConfig.PostExplosionHoldSeconds.Value;
+            int renderFps = MissileCameraBepInConfig.RenderFps.Value;
+
+            if (!force
+                && enabled == Enabled
+                && noseSkinInset == NoseSkinInset
+                && cameraBackOffset == CameraBackOffset
+                && fov == Fov
+                && feedWidth == FeedWidth
+                && feedHeight == FeedHeight
+                && horizonLock == HorizonLock
+                && turnLookBankScale == TurnLookBankScale
+                && maxTurnLookDegrees == MaxTurnLookDegrees
+                && defaultMissileGLimit == DefaultMissileGLimit
+                && turnLookGDeadband == TurnLookGDeadband
+                && turnLookGFilterHz == TurnLookGFilterHz
+                && turnLookSlewDegPerSec == TurnLookSlewDegPerSec
+                && turnLookSmoothTime == TurnLookSmoothTime
+                && postExplosionHoldSeconds == PostExplosionHoldSeconds
+                && renderFps == RenderFps)
                 return;
 
-            DateTime writeUtc = File.GetLastWriteTimeUtc(path);
-            if (!force && writeUtc <= _lastWriteUtc)
-                return;
-
-            _lastWriteUtc = writeUtc;
+            Enabled = enabled;
+            NoseSkinInset = noseSkinInset;
+            CameraBackOffset = cameraBackOffset;
+            Fov = fov;
+            FeedWidth = feedWidth;
+            FeedHeight = feedHeight;
+            HorizonLock = horizonLock;
+            TurnLookBankScale = turnLookBankScale;
+            MaxTurnLookDegrees = maxTurnLookDegrees;
+            DefaultMissileGLimit = defaultMissileGLimit;
+            TurnLookGDeadband = turnLookGDeadband;
+            TurnLookGFilterHz = turnLookGFilterHz;
+            TurnLookSlewDegPerSec = turnLookSlewDegPerSec;
+            TurnLookSmoothTime = turnLookSmoothTime;
+            PostExplosionHoldSeconds = postExplosionHoldSeconds;
+            RenderFps = renderFps;
             Revision++;
-            Load(ModIniConfig.Load(modRoot));
         }
-
-        private static string GetModRoot()
-        {
-            string? location = typeof(MissileCameraFeedConfig).Assembly.Location;
-            if (!string.IsNullOrEmpty(location))
-            {
-                string? dir = Path.GetDirectoryName(location);
-                if (!string.IsNullOrEmpty(dir))
-                    return dir;
-            }
-
-            return string.Empty;
-        }
-
-        private static void Load(ModIniConfig cfg)
-        {
-            Enabled = cfg.GetBool("MissileCameraFeed", "Enabled", true);
-            NoseSkinInset = MathfClamp(cfg.GetFloat("MissileCameraFeed", "NoseSkinInset", 0.08f), 0.01f, 2f);
-            CameraBackOffset = MathfClamp(cfg.GetFloat("MissileCameraFeed", "CameraBackOffset", 0.35f), 0.01f, 5f);
-            Fov = MathfClamp(cfg.GetFloat("MissileCameraFeed", "Fov", 60f), 10f, 120f);
-            FeedWidth = MathfClampInt(cfg.GetInt("MissileCameraFeed", "FeedWidth", 512), 128, 2048);
-            FeedHeight = MathfClampInt(cfg.GetInt("MissileCameraFeed", "FeedHeight", 512), 128, 2048);
-            HorizonLock = cfg.GetBool("MissileCameraFeed", "HorizonLock", true);
-            TurnLookBankScale = MathfClamp(cfg.GetFloat("MissileCameraFeed", "TurnLookBankScale", 1f), 0f, 1.5f);
-            MaxTurnLookDegrees = MathfClamp(cfg.GetFloat("MissileCameraFeed", "MaxTurnLookDegrees", 90f), 10f, 90f);
-            DefaultMissileGLimit = MathfClamp(cfg.GetFloat("MissileCameraFeed", "DefaultMissileGLimit", 20f), 1f, 100f);
-            TurnLookGDeadband = MathfClamp(cfg.GetFloat("MissileCameraFeed", "TurnLookGDeadband", 0.15f), 0f, 5f);
-            TurnLookGFilterHz = MathfClamp(cfg.GetFloat("MissileCameraFeed", "TurnLookGFilterHz", 7f), 1f, 30f);
-            TurnLookSlewDegPerSec = MathfClamp(cfg.GetFloat("MissileCameraFeed", "TurnLookSlewDegPerSec", 120f), 10f, 720f);
-            TurnLookSmoothTime = MathfClamp(cfg.GetFloat("MissileCameraFeed", "TurnLookSmoothTime", 0.18f), 0.02f, 1.5f);
-            PostExplosionHoldSeconds = MathfClamp(cfg.GetFloat("MissileCameraFeed", "PostExplosionHoldSeconds", 0f), 0f, 10f);
-            RenderFps = MathfClampInt(cfg.GetInt("MissileCameraFeed", "RenderFps", 30), 5, 60);
-        }
-
-        private static float MathfClamp(float value, float min, float max) =>
-            value < min ? min : value > max ? max : value;
-
-        private static int MathfClampInt(int value, int min, int max) =>
-            value < min ? min : value > max ? max : value;
     }
 }

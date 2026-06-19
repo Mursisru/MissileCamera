@@ -18,6 +18,8 @@ namespace MissileCamera
         private static readonly MissileCameraHudOverlay HudOverlay = new MissileCameraHudOverlay();
         private static bool _overlayActive;
         private static Missile? _followedMissile;
+        private static bool _manualFollowActive;
+        private static float _zoomOffset;
         private static float _restoreAfterLossAtUnscaled = -1f;
         private static float _nextRenderTimeUnscaled;
         private static float _nextReconcileTimeUnscaled;
@@ -45,8 +47,56 @@ namespace MissileCamera
             TryUnbindAircraft();
             OwnedActive.Clear();
             MissileCameraSalvoTracker.Reset();
+            _manualFollowActive = false;
+            _zoomOffset = 0f;
             _rig?.Destroy();
             _rig = null;
+        }
+
+        internal static void SelectNextMissile()
+        {
+            if (!_overlayActive || !HasTrackableOwnedMissile())
+                return;
+
+            Missile? current = _followedMissile ?? PickLatestMissile();
+            Missile? next = MissileCameraFeedSelection.CycleCurrent(OwnedActive, current, 1);
+            ApplyManualSelection(next);
+        }
+
+        internal static void SelectPreviousMissile()
+        {
+            if (!_overlayActive || !HasTrackableOwnedMissile())
+                return;
+
+            Missile? current = _followedMissile ?? PickLatestMissile();
+            Missile? previous = MissileCameraFeedSelection.CycleCurrent(OwnedActive, current, -1);
+            ApplyManualSelection(previous);
+        }
+
+        internal static void AdjustZoom(float delta)
+        {
+            if (!_overlayActive)
+                return;
+
+            float newOffset = MissileCameraControlsConfig.ClampZoomOffset(_zoomOffset + delta);
+            if (Mathf.Approximately(newOffset, _zoomOffset))
+                return;
+
+            _zoomOffset = newOffset;
+            EnsureRig().SetZoomOffset(_zoomOffset);
+            HudOverlay.NotifyZoomChanged(_zoomOffset);
+        }
+
+        internal static void ResetZoom()
+        {
+            if (!_overlayActive)
+                return;
+
+            _zoomOffset = 0f;
+            if (_rig != null)
+                _rig.SetZoomOffset(_zoomOffset);
+
+            HudOverlay.NotifyZoomChanged(_zoomOffset);
         }
 
         internal static void Tick()
@@ -80,7 +130,9 @@ namespace MissileCamera
 
             UseIdleDriverWait = false;
 
-            Missile? missile = PickLatestMissile();
+            MissileCameraFeedInput.Process();
+
+            Missile? missile = ResolveFollowedMissile();
             if (missile == null)
             {
                 HandleMissileLost();
@@ -96,6 +148,7 @@ namespace MissileCamera
             }
 
             MissileCameraRig rig = EnsureRig();
+            rig.SetZoomOffset(_zoomOffset);
             rig.Attach(missile);
             rig.AdvanceRoll(Time.deltaTime);
 
@@ -130,6 +183,8 @@ namespace MissileCamera
             _cachedPanelW = -1f;
             _cachedPanelH = -1f;
             HudOverlay.Destroy();
+            _manualFollowActive = false;
+            _zoomOffset = 0f;
             DetachRig();
             MissileCameraTelemetry.ResetThrottle();
         }
@@ -288,6 +343,34 @@ namespace MissileCamera
             _nextConfigRefreshTime = now + ConfigRefreshInterval;
             MissileCameraFeedConfig.Refresh();
             MissileCameraHudConfig.Refresh();
+            MissileCameraControlsConfig.Refresh();
+        }
+
+        private static void ApplyManualSelection(Missile? missile)
+        {
+            if (missile == null)
+                return;
+
+            _manualFollowActive = true;
+            if (_followedMissile == missile)
+                return;
+
+            _followedMissile = missile;
+            _nextHudSnapshotTime = 0f;
+            _nextCornerHudTime = 0f;
+        }
+
+        private static Missile? ResolveFollowedMissile()
+        {
+            if (_manualFollowActive)
+            {
+                if (MissileCameraFeedSelection.IsStillTrackable(_followedMissile))
+                    return _followedMissile;
+
+                return MissileCameraFeedSelection.ResolveFallbackNewest(OwnedActive);
+            }
+
+            return PickLatestMissile();
         }
 
         private static MissileCameraHudSnapshot ResolveHudSnapshot(Missile? missile)
@@ -373,6 +456,9 @@ namespace MissileCamera
 
             return false;
         }
+
+        internal static bool HasOverlayInputContext() =>
+            _overlayActive && HasTrackableOwnedMissile();
 
         private static MissileCameraRig EnsureRig()
         {

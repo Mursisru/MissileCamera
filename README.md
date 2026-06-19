@@ -2,7 +2,7 @@
 
 [![Nuclear Option](https://img.shields.io/badge/Game-Nuclear%20Option-blue)](https://store.steampowered.com/app/2168680/Nuclear_Option/)
 [![BepInEx 5](https://img.shields.io/badge/Loader-BepInEx%205-orange)](https://docs.bepinex.dev/)
-[![Version](https://img.shields.io/badge/Version-0.26.0-green)]()
+[![Version](https://img.shields.io/badge/Version-0.27.0-green)]()
 
 BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-eye view (Missile Nose Cam) and a tactical HUD overlay directly onto your cockpit MFD Target display.
 
@@ -15,6 +15,7 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 * **MFD split-screen UI:** Splits the wide tactical MFD (Target view) into zones and embeds the missile feed in the weapons panel area.
 * **Seeker cam (missile nose cam):** Renders a live `RawImage` feed from your latest **player-owned** in-flight missile while it guides toward the target.
 * **Tactical HUD overlay:** Telemetry (`SPD`, `ALT`, `RNG`), horizon reticle, salvo info, and target markers drawn on the live feed.
+* **Manual feed controls:** Cycle in-flight owned missiles and adjust camera zoom while the MFD overlay is active (see **Controls** below).
 * **Per-aircraft layout (`DisplayMode=auto`):**
   * **Dedicated split** (e.g. KR-67): wide target cam on the left, missile panel on the right.
   * **Small tac overlay** (e.g. Cricket): mod **skipped** — vanilla tactical MFD unchanged.
@@ -27,6 +28,7 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 * **Nuclear Option** ([Steam](https://store.steampowered.com/app/2168680/Nuclear_Option/)).
 * Matching game `Assembly-CSharp.dll` (for Harmony patches).
 * **BepInEx 5** (x64) in the game root (`BepInEx\core\` must exist for **build** reference paths).
+* **[Configuration Manager](https://github.com/BepInEx/BepInEx.ConfigurationManager)** (recommended) — in-game UI for plugin settings.
 
 ---
 
@@ -40,9 +42,10 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
    ```
 
    * `MissileCamera.dll`
-   * `mod_config.ini`
 
-3. Do **not** rename the plugin folder or install duplicate copies under different names.
+3. Settings are stored in `BepInEx\config\com.at747.missilecamera.bepinex.cfg` (auto-created on first run). Edit in-game via **Configuration Manager**, or edit the `.cfg` file while the game is closed.
+
+4. Do **not** rename the plugin folder or install duplicate copies under different names.
 
 > **Troubleshooting:** After a DLL update, delete `BepInEx\cache\harmony_interop_cache.dat` if Harmony patches behave oddly.
 
@@ -72,61 +75,44 @@ Open `MissileCamera.sln` in Visual Studio or JetBrains Rider for IDE builds.
 
 ---
 
-## Configuration (`mod_config.ini`)
+## Controls & keybinds
 
-Edit `mod_config.ini` next to the DLL.
+Active only while the missile feed overlay is on and you have **player-owned** in-flight missiles. **US English keyboard layout** (Right Alt may act as AltGr on some EU keyboards). Keybinds are **fixed in code** (not in Configuration Manager).
 
-### `[Layout]`
+| Keybind | Unity `KeyCode` | Action |
+| :--- | :--- | :--- |
+| **Right Alt** + `/` | `RightAlt` + `Slash` | Next missile (newer; wraps 6/6 → 1/6) |
+| **Right Alt** + `,` | `RightAlt` + `Comma` | Previous missile (older; wraps 1/6 → 6/6) |
+| **Right Alt** + `;` | `RightAlt` + `Semicolon` | Zoom in (narrower FOV) |
+| **Right Alt** + `.` | `RightAlt` + `Period` | Zoom out (wider FOV) |
+| **Right Shift** + `.` | `RightShift` + `Period` | Reset zoom offset to `0.0` |
 
-| Key | Default | Description |
-| :--- | :---: | :--- |
-| `Enabled` | `1` | Master switch for MFD layout changes |
-| `DisplayMode` | `split` | `auto` (per-aircraft) \| `skip` (bypass) \| `split` (forced split) |
-| `OverlayMaxWidth` | `0.45` | Max normalized width for tac overlay detection |
-| `LeftWidth` | `0.58` | Target cam column width (0–1) |
-| `MissilePanelBottom` | `0.38` | Bottom edge of missile panel (engine strip below) |
-| `WeaponsStripHeight` | `0.12` | Compressed weapons wireframe strip height |
-| `ShowDivider` | `1` | Zone divider lines |
-| `DebugStub` | `0` | Bright magenta test panel |
-| `StubLabel` | `MISSILE CAMERA` | Label on debug stub |
+**Sticky selection:** after Next/Prev the camera stays on your chosen missile when new ones launch. If it is destroyed, the feed falls back to the newest remaining missile.
 
-### `[MissileCameraFeed]`
+**Zoom HUD:** each zoom change shows the current **offset** for **0.5 s** above feed center. Zoom step/limits: **MissileCameraControls** in Configuration Manager.
 
-| Key | Default | Description |
-| :--- | :---: | :--- |
-| `Enabled` | `1` | Live missile camera feed |
-| `NoseSkinInset` | `0.08` | Keep camera outside nose mesh (meters) |
-| `CameraBackOffset` | `0.35` | Pull camera back from nose point (meters) |
-| `Fov` | `60` | Field of view (degrees) |
-| `FeedWidth` | `512` | RenderTexture width |
-| `FeedHeight` | `512` | RenderTexture height |
-| `HorizonLock` | `1` | World-up roll lock; body-follow pitch/yaw |
-| `TurnLookBankScale` | `1` | G-load turn look scale |
-| `MaxTurnLookDegrees` | `90` | Max turn-look offset (degrees) |
-| `DefaultMissileGLimit` | `20` | Fallback G limit |
-| `TurnLookGDeadband` | `0.15` | G deadband |
-| `TurnLookGFilterHz` | `7` | G filter cutoff (Hz) |
-| `TurnLookSlewDegPerSec` | `120` | Turn-look slew rate (deg/s) |
-| `TurnLookSmoothTime` | `0.18` | Turn-look smoothing |
-| `PostExplosionHoldSeconds` | `0` | Hold last frame after missile loss (0 = off) |
-| `RenderFps` | `30` | Feed refresh rate |
+---
 
-### `[MissileCameraHud]`
+## Configuration (BepInEx Configuration Manager)
 
-| Key | Default | Description |
-| :--- | :---: | :--- |
-| `Enabled` | `1` | HUD overlay on feed |
-| `SalvoWindowSeconds` | `0.5` | Salvo grouping window (seconds) |
-| `ShowCenterCluster` | `1` | Center reticle / intercept ring |
-| `ShowTargetMarker` | `1` | Target diamond marker |
-| `InterceptColor` | `0,1,0,1` | Intercept ring RGBA (0–1) |
-| `ReticleColor` | `0,0.4,1,1` | Reticle RGBA |
-| `HorizonColor` | `0.05,0.35,0.08,1` | Horizon fill |
-| `HorizonOutlineColor` | `0.2,1,0.25,1` | Horizon outline |
-| `MissileNameColor` | `1,0,1,1` | Missile name label |
-| `TargetNameColor` | `0.4,0.9,1,1` | Target name label |
-| `LabelBackgroundColor` | `0.18,0.18,0.18,0.62` | Label backdrop |
-| `LabelBackgroundAlpha` | `0.62` | Backdrop alpha |
+All settings are exposed through **BepInEx.Configuration** (`Config.Bind`). Use [Configuration Manager](https://github.com/BepInEx/BepInEx.ConfigurationManager) in-game, or edit:
+
+```text
+BepInEx\config\com.at747.missilecamera.bepinex.cfg
+```
+
+NOLoader builds of this mod use `mod_config.ini` instead — do not mix config files between loaders.
+
+### Sections
+
+| Section | Purpose |
+| :--- | :--- |
+| **Layout** | MFD split layout, display mode (`auto` / `skip` / `split`), panel geometry |
+| **MissileCameraFeed** | Seeker camera, FOV, render size, turn-look, render FPS |
+| **MissileCameraHud** | Overlay telemetry, colors (RGBA comma strings), salvo window |
+| **MissileCameraControls** | Zoom enable, step/limits, indicator duration (**keybinds fixed in code** — see **Controls & keybinds**) |
+
+Default values match the previous `mod_config.ini` release. Hot-reload: change a value in Configuration Manager during a mission — the mod polls config every ~0.5 s.
 
 ---
 
@@ -145,15 +131,14 @@ Edit `mod_config.ini` next to the DLL.
 MissileCamera/
 ├── MissileCamera.csproj
 ├── MissileCamera.sln
-├── mod_config.ini
-├── MissileCameraPlugin.cs      # BepInPlugin entry
+├── MissileCameraPlugin.cs      # BepInPlugin entry, Config.Bind
 ├── MissileCameraHost.cs        # DDOL host, mission-scene bootstrap
 ├── AppVersion.cs
 ├── Harmony/                    # Harmony patches
 ├── Camera/                     # Feed rig, config, controller
 ├── Hud/                        # Overlay widgets
 ├── Layout/                     # MFD zone split
-├── Config/                     # INI reader, paths
+├── Config/                     # BepInEx config bindings, paths
 ├── Access/                     # Game API wrappers
 ├── Ui/                         # HUD graphics helpers
 ├── Logging/

@@ -2,7 +2,6 @@ using System.IO;
 
 namespace MissileCamera.Config
 {
-    /// <summary>BepInEx plugin folder: .../BepInEx/plugins/MissileCamera/</summary>
     internal static class ModPaths
     {
         private static string _pluginDir = string.Empty;
@@ -11,6 +10,7 @@ namespace MissileCamera.Config
 
         internal static void Init(string pluginDir) => _pluginDir = pluginDir;
 
-        internal static string ConfigIniPath => Path.Combine(_pluginDir, "mod_config.ini");
+        internal static string ConfigFilePath =>
+            Path.Combine(BepInEx.Paths.ConfigPath, MissileCamera.MissileCameraPlugin.PluginGuid + ".cfg");
     }
 }

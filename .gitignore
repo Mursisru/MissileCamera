@@ -5,3 +5,4 @@ _buildroot/
 .vs/
 .debug/
 *.user
+Directory.Build.props

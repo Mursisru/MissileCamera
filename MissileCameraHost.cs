@@ -81,10 +81,10 @@ namespace MissileCamera
         private void StartupMission(string pluginDir, ManualLogSource logger, string scenePath)
         {
             ModPaths.Init(pluginDir);
-            ModIniConfig.EnsureDefault(pluginDir, MissileCameraPlugin.DefaultIni);
-            MfdLayoutConfig.Init(pluginDir);
+            MfdLayoutConfig.Refresh(force: true);
             MissileCameraFeedConfig.Refresh(force: true);
             MissileCameraHudConfig.Refresh(force: true);
+            MissileCameraControlsConfig.Refresh(force: true);
 
             ApplyHarmonyPatches(logger);
             MissileCameraFeedDriverHost.Ensure();

@@ -11,6 +11,7 @@ namespace MissileCamera
         private MissileCameraCornerHud? _corners;
         private MissileCameraAttitudeWidget? _attitude;
         private MissileCameraTargetMarker? _targetMarker;
+        private MissileCameraZoomIndicator? _zoomIndicator;
         private HudRingGraphic? _interceptRing;
         private RectTransform? _interceptRoot;
         private TargetScreenUI? _screenUi;
@@ -28,6 +29,7 @@ namespace MissileCamera
             if (_root != null && _root.parent == viewRt)
             {
                 _corners?.BindScreenUi(screenUi);
+                _zoomIndicator?.BindScreenUi(screenUi);
                 RectTransform? panelRt = FindMissileCameraPanel(layoutRt);
                 ApplyLegacyStubVisibility(panelRt ?? layoutRt, hide: MissileCameraHudConfig.Enabled);
                 return;
@@ -43,6 +45,7 @@ namespace MissileCamera
             _corners = MissileCameraCornerHud.Create(_root, screenUi);
             _attitude = MissileCameraAttitudeWidget.Create(_root);
             _targetMarker = MissileCameraTargetMarker.Create(_root);
+            _zoomIndicator = MissileCameraZoomIndicator.Create(_root, screenUi);
 
             var interceptGo = new GameObject("MissileCameraHudIntercept", typeof(RectTransform), typeof(HudRingGraphic));
             interceptGo.transform.SetParent(_root, false);
@@ -69,6 +72,8 @@ namespace MissileCamera
         {
             if (_root == null)
                 return;
+
+            UpdateZoomIndicatorVisibility();
 
             bool hudEnabled = MissileCameraHudConfig.Enabled;
             _root.gameObject.SetActive(hudEnabled && snapshot.HasFeed);
@@ -101,6 +106,10 @@ namespace MissileCamera
 
         internal void InvalidateCornerLayout() => _corners?.InvalidateLayout();
 
+        internal void NotifyZoomChanged(float zoomOffset) => _zoomIndicator?.Show(zoomOffset);
+
+        internal void UpdateZoomIndicatorVisibility() => _zoomIndicator?.UpdateVisibility();
+
         internal void Destroy()
         {
             if (_root != null)
@@ -110,6 +119,7 @@ namespace MissileCamera
             _corners = null;
             _attitude = null;
             _targetMarker = null;
+            _zoomIndicator = null;
             _interceptRing = null;
             _interceptRoot = null;
         }
