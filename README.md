@@ -148,6 +148,17 @@ MissileCamera/
 
 ---
 
+## Compatibility & limitations
+
+Developed and tested against **vanilla Nuclear Option** aircraft and the stock Target MFD. The mod may work **incorrectly or not at all** when:
+
+* **Third-party / custom aircraft** — non-vanilla cockpit MFD hierarchy, custom `TargetScreenUI` layouts, or unusual weapon integration can break layout detection (`DisplayMode=auto`), feed binding, nose-cam placement, or salvo tracking.
+* **Other mods that change the MFD** — tactical UI overlays, layout replacers, or Harmony patches to `TargetScreenUI`, `TacScreen`, `TargetCam`, or target/weapon lists may **conflict** with this plugin's hooks and UI zone split.
+
+**Mitigation:** set **Layout → DisplayMode** to `skip` in Configuration Manager to keep vanilla MFD layout (feed may still bind if hooks remain compatible), or disable conflicting MFD mods. For modded setups, include aircraft/mod names and repro steps in issue reports.
+
+---
+
 ## Licence
 
 MIT License — see [LICENSE](LICENSE).
