@@ -7,21 +7,18 @@
 [![Version](https://img.shields.io/badge/Version-0.27.1-green)](https://github.com/Mursisru/MissileCamera/releases/tag/v0.27.1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](https://github.com/Mursisru/MissileCamera/blob/BepInExVersion/LICENSE)
 
-BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-eye view (Missile Nose Cam) and a tactical HUD overlay directly onto your cockpit MFD Target display.
-
-**Plugin GUID:** `com.at747.missilecamera.bepinex`
-
-**NOLoader port:** [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera/tree/NOLoaderVersion) — same gameplay; uses `mod_config.ini` and Cecil patches. Use **one** loader — do not install both builds.
-
 ---
 
 ## Critical warnings
+
+> [!CAUTION]
+> **Never install BepInEx and NOLoader builds together** - only one loader per game folder (`winhttp.dll` conflict).
 
 > [!IMPORTANT]
 > **BepInEx 5 (x64) required** - install [BepInEx](https://docs.bepinex.dev/articles/user_guide/installation/index.html) before this mod.
 
 > [!WARNING]
-> **Do not install both loaders** - use this BepInEx build **or** [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera); never both in the same game folder.
+> **Do not install both MissileCamera ports** - use this BepInEx build **or** [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera); never both in the same game folder.
 
 > [!WARNING]
 > **Third-party aircraft and MFD mods may break layout** - custom `TargetScreenUI` / tactical overlays can conflict; set `DisplayMode=skip` in Configuration Manager or disable conflicting MFD mods.
@@ -31,6 +28,14 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 
 > [!TIP]
 > **Configuration Manager recommended** - in-game UI for `com.at747.missilecamera.bepinex.cfg`. After game updates, delete `BepInEx\cache\harmony_interop_cache.dat` if patches behave oddly.
+
+BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-eye view (Missile Nose Cam) and a tactical HUD overlay directly onto your cockpit MFD Target display.
+
+**Plugin GUID:** `com.at747.missilecamera.bepinex`
+
+**NOLoader port:** [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera/tree/NOLoaderVersion) — same gameplay; uses `mod_config.ini` and Cecil patches. Use **one** loader — do not install both builds.
+
+---
 
 ## Table of contents
 
