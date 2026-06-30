@@ -1,3 +1,5 @@
+**Developer:** Mursisru
+
 # MissileCamera (Nuclear Option Mod)
 
 [![Nuclear Option](https://img.shields.io/badge/Game-Nuclear%20Option-blue)](https://store.steampowered.com/app/2168680/Nuclear_Option/)
@@ -66,6 +68,9 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 ---
 
 ## Player installation
+
+> [!IMPORTANT]
+> **BepInEx 5 (x64) required** - install [BepInEx](https://docs.bepinex.dev/) before this mod.
 
 1. Install [BepInEx 5](https://docs.bepinex.dev/articles/user_guide/installation/index.html) for Nuclear Option.
 2. Install [Configuration Manager](https://github.com/BepInEx/BepInEx.ConfigurationManager) (recommended).
@@ -297,3 +302,9 @@ See [CHANGELOG.md](CHANGELOG.md).
 ## Licence
 
 MIT License — see [LICENSE](LICENSE).
+
+---
+
+## Keywords
+
+nuclear-option, bepinex, harmony, mod, missilecamera, csharp, unity

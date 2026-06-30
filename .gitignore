@@ -6,3 +6,8 @@ _buildroot/
 .debug/
 *.user
 Directory.Build.props
+Directory.Build.user.props
+.cursorrules
+.cursor/
+ffmpeg.exe
+local_build_scripts/
