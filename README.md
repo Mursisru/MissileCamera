@@ -15,8 +15,26 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 
 ---
 
+## Critical warnings
+
+> [!IMPORTANT]
+> **BepInEx 5 (x64) required** - install [BepInEx](https://docs.bepinex.dev/articles/user_guide/installation/index.html) before this mod.
+
+> [!WARNING]
+> **Do not install both loaders** - use this BepInEx build **or** [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera); never both in the same game folder.
+
+> [!WARNING]
+> **Third-party aircraft and MFD mods may break layout** - custom `TargetScreenUI` / tactical overlays can conflict; set `DisplayMode=skip` in Configuration Manager or disable conflicting MFD mods.
+
+> [!NOTE]
+> **Mission-only bootstrap** - Harmony hooks attach on the first mission scene, not in the main menu.
+
+> [!TIP]
+> **Configuration Manager recommended** - in-game UI for `com.at747.missilecamera.bepinex.cfg`. After game updates, delete `BepInEx\cache\harmony_interop_cache.dat` if patches behave oddly.
+
 ## Table of contents
 
+- [Critical warnings](#critical-warnings)
 * [Features](#features)
 * [Choose your loader](#choose-your-loader)
 * [Requirements](#requirements)
@@ -30,8 +48,6 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 * [Troubleshooting](#troubleshooting)
 * [Changelog](#changelog)
 * [Licence](#licence)
-
----
 
 ## Features
 
