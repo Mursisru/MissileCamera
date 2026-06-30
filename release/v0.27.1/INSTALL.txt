@@ -1,0 +1,37 @@
+MissileCamera v0.27.1 — BepInEx 5 plugin for Nuclear Option
+
+Full docs: https://github.com/Mursisru/MissileCamera/blob/BepInExVersion/README.md
+
+Install:
+1. Install BepInEx 5 for Nuclear Option.
+2. Install Configuration Manager (recommended): https://github.com/BepInEx/BepInEx.ConfigurationManager
+3. Extract into: Nuclear Option\BepInEx\plugins\MissileCamera\
+   - MissileCamera.dll
+4. Settings: BepInEx\config\com.at747.missilecamera.bepinex.cfg (in-game via Configuration Manager).
+
+Plugin GUID: com.at747.missilecamera.bepinex
+NOLoader alternative: https://github.com/Mursisru/NOLoader.MissileCamera (branch NOLoaderVersion)
+Do NOT install both BepInEx and NOLoader in the same game folder.
+
+Keybinds (US English keyboard, fixed — not in Configuration Manager):
+  Right Alt + /     Next missile (wraps at end of salvo)
+  Right Alt + ,     Previous missile (wraps)
+  Right Alt + ;     Zoom in
+  Right Alt + .     Zoom out
+  Right Shift + .   Reset zoom to 0.0
+
+Active only while MFD missile feed overlay is on and owned missiles are in flight.
+
+After DLL update: delete BepInEx\cache\harmony_interop_cache.dat if patches behave oddly.
+
+Changes in v0.27.1:
+- Documentation-only release (README, CHANGELOG, INSTALL). Same gameplay as v0.27.0.
+
+Changes in v0.27.0:
+- Manual missile cycling (sticky follow, cyclic wrap) and session zoom with HUD offset readout.
+- BepInEx Configuration Manager bindings (replaces mod_config.ini).
+- MissileCameraControls section for zoom step/limits (keys fixed in code).
+
+Compatibility:
+- Tested on vanilla NO aircraft and stock Target MFD.
+- Third-party aircraft or MFD mods may conflict — see README Compatibility section.
