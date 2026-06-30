@@ -10,7 +10,6 @@
 ---
 
 ## Critical warnings
-
 > [!CAUTION]
 > **Never install BepInEx and NOLoader builds together** - only one loader per game folder (`winhttp.dll` conflict).
 
@@ -18,10 +17,8 @@
 > **BepInEx 5 (x64) required** - install [BepInEx](https://docs.bepinex.dev/articles/user_guide/installation/index.html) before this mod.
 
 > [!WARNING]
-> **Do not install both MissileCamera ports** - use this BepInEx build **or** [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera); never both in the same game folder.
-
-> [!WARNING]
-> **Third-party aircraft and MFD mods may break layout** - custom `TargetScreenUI` / tactical overlays can conflict; set `DisplayMode=skip` in Configuration Manager or disable conflicting MFD mods.
+> - **Do not install both MissileCamera ports** - use this BepInEx build **or** [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera); never both in the same game folder.
+> - **Third-party aircraft and MFD mods may break layout** - custom `TargetScreenUI` / tactical overlays can conflict; set `DisplayMode=skip` in Configuration Manager or disable conflicting MFD mods.
 
 > [!NOTE]
 > **Mission-only bootstrap** - Harmony hooks attach on the first mission scene, not in the main menu.
