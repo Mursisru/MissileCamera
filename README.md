@@ -193,8 +193,7 @@ MissileCamera/
 ├── release/
 │   └── v0.27.1/
 │       └── INSTALL.txt
-└── scripts/
-    └── deploy.ps1
+└── 
 ```
 
 ---
