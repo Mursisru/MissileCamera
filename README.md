@@ -58,7 +58,7 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 
 ## Player installation
 
-1. Install [BepInEx 5](https://docs.bepinex.dev/articles/user_guide/installation/index.html) for Nuclear Option.
+1. Install [BepInEx 5](https://github.com/bepinex/bepinex) for Nuclear Option.
 2. Install [Configuration Manager](https://github.com/BepInEx/BepInEx.ConfigurationManager) (recommended).
 3. Copy into:
 
