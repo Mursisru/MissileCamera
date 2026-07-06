@@ -53,16 +53,11 @@ namespace MissileCamera
         {
             GlobalPosition missilePos = missile.transform.GlobalPosition();
 
-            if (missile.targetID.IsValid
-                && UnitRegistry.TryGetUnit(missile.targetID, out Unit target)
-                && target != null
-                && !target.disabled)
-            {
-                if (missile.NetworkHQ != null && missile.NetworkHQ.TryGetKnownPosition(target, out GlobalPosition knownPos))
-                    return UnitConverter.DistanceReading(FastMath.Distance(missilePos, knownPos));
+            if (MissileAccess.TryGetAimPoint(missile, out GlobalPosition aimPoint))
+                return UnitConverter.DistanceReading(FastMath.Distance(missilePos, aimPoint));
 
+            if (MissileAccess.TryGetTarget(missile, out Unit? target) && target != null)
                 return UnitConverter.DistanceReading(FastMath.Distance(missilePos, target.GlobalPosition()));
-            }
 
             return "---";
         }

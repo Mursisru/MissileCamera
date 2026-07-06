@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.27.2] — 2026-07-06
+
+### Fixed
+
+- Telemetry **R** (range to target): use missile guidance `aimPoint` instead of stale HQ radar track; fallback to target actual position.
+
 ## [0.27.1] - 2026-06-30
 
 ### Changed
