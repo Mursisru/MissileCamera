@@ -33,9 +33,7 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 * [Player installation](#player-installation)
 * [Controls & keybinds](#controls--keybinds)
 * [Configuration (BepInEx Configuration Manager)](#configuration-bepinex-configuration-manager)
-* [Runtime lifecycle](#runtime-lifecycle)
 * [Project layout](#project-layout)
-* [Compatibility & limitations](#compatibility--limitations)
 * [Changelog](#changelog)
 * [Licence](#licence)
 
@@ -109,10 +107,6 @@ All settings are exposed through **BepInEx.Configuration** (`Config.Bind` in `Co
 BepInEx\config\com.at747.missilecamera.bepinex.cfg
 ```
 
-NOLoader builds use `mod_config.ini` with the **same keys and defaults** — do not mix config files between loaders.
-
-Hot-reload: change a value in Configuration Manager during a mission — the mod polls config every ~0.5 s.
-
 ### Layout
 
 | Key | Default | Description |
@@ -175,15 +169,6 @@ Hot-reload: change a value in Configuration Manager during a mission — the mod
 | `ZoomMax` | `4` | Maximum zoom offset |
 | `ZoomFovDegreesPerUnit` | `5` | FOV delta (degrees) per offset unit |
 | `IndicatorSeconds` | `0.5` | Zoom HUD readout duration (seconds) |
-
----
-
-## Runtime lifecycle
-
-1. **Bootstrap:** Plugin loads at game start; **Harmony** and the feed driver stay dormant until a mission scene loads (`MissileCameraHost`).
-2. **Activation:** With Target MFD active, launch a trackable owned missile — layout applies and the feed binds.
-3. **Rendering:** The auxiliary camera draws only while the overlay is active and a missile is in flight.
-4. **Isolation:** Vanilla `TargetCam` geometry is not modified; layout uses UI zones and a separate render rig.
 
 ---
 
