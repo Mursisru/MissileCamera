@@ -10,18 +10,11 @@
 ---
 
 ## Critical warnings
-> [!CAUTION]
-> **Never install BepInEx and NOLoader builds together** - only one loader per game folder (`winhttp.dll` conflict).
-
 > [!IMPORTANT]
 > **BepInEx 5 (x64) required** - install [BepInEx](https://docs.bepinex.dev/articles/user_guide/installation/index.html) before this mod.
 
 > [!WARNING]
-> - **Do not install both MissileCamera ports** - use this BepInEx build **or** [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera); never both in the same game folder.
 > - **Third-party aircraft and MFD mods may break layout** - custom `TargetScreenUI` / tactical overlays can conflict; set `DisplayMode=skip` in Configuration Manager or disable conflicting MFD mods.
-
-> [!NOTE]
-> **Mission-only bootstrap** - Harmony hooks attach on the first mission scene, not in the main menu.
 
 > [!TIP]
 > **Configuration Manager recommended** - in-game UI for `com.at747.missilecamera.bepinex.cfg`. After game updates, delete `BepInEx\cache\harmony_interop_cache.dat` if patches behave oddly.
@@ -30,24 +23,19 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 
 **Plugin GUID:** `com.at747.missilecamera.bepinex`
 
-**NOLoader port:** [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera/tree/NOLoaderVersion) — same gameplay; uses `mod_config.ini` and Cecil patches. Use **one** loader — do not install both builds.
-
 ---
 
 ## Table of contents
 
 - [Critical warnings](#critical-warnings)
 * [Features](#features)
-* [Choose your loader](#choose-your-loader)
 * [Requirements](#requirements)
 * [Player installation](#player-installation)
 * [Controls & keybinds](#controls--keybinds)
 * [Configuration (BepInEx Configuration Manager)](#configuration-bepinex-configuration-manager)
 * [Runtime lifecycle](#runtime-lifecycle)
-* [Developer guide](#developer-guide)
 * [Project layout](#project-layout)
 * [Compatibility & limitations](#compatibility--limitations)
-* [Troubleshooting](#troubleshooting)
 * [Changelog](#changelog)
 * [Licence](#licence)
 
@@ -64,23 +52,9 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 
 ---
 
-## Choose your loader
-
-| | **This repo (BepInEx)** | [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera/tree/NOLoaderVersion) |
-|---|---|---|
-| Loader | BepInEx 5 + Harmony | [NOLoader](https://github.com/Mursisru/NOLoader) |
-| Config | Configuration Manager (`.cfg`) | `mod_config.ini` |
-| Patches | Harmony runtime | Cecil IL + PatchTool |
-| Install path | `BepInEx\plugins\MissileCamera\` | `NOLoader\mods\MissileCamera\` |
-
-**Do not install both loaders** in the same game directory.
-
----
-
 ## Requirements
 
 * **Nuclear Option** ([Steam](https://store.steampowered.com/app/2168680/Nuclear_Option/)).
-* Matching game `Assembly-CSharp.dll` (for Harmony patches).
 * **BepInEx 5** (x64) in the game root (`BepInEx\core\` must exist for **build** reference paths).
 * **[Configuration Manager](https://github.com/BepInEx/BepInEx.ConfigurationManager)** (recommended) — in-game UI for plugin settings.
 
@@ -213,50 +187,6 @@ Hot-reload: change a value in Configuration Manager during a mission — the mod
 
 ---
 
-## Developer guide
-
-Close the game before deploy (managed DLLs must be unlocked).
-
-**AI / mod authors:** see `.cursorrules` in this repo; NOLoader port workflow in [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera) and `NOLoader_Engine/.cursorrules`.
-
-### Quick deploy
-
-```powershell
-.\scripts\deploy.ps1 -ClearHarmonyCache
-```
-
-### Build
-
-Set the game path in `Directory.Build.props` (`NuclearOptionRoot`) if needed. Copy `Directory.Build.props.example` to `Directory.Build.props` and adjust the path.
-
-```powershell
-dotnet build MissileCamera.csproj -c Release
-```
-
-Output: `bin\Release\net48\MissileCamera.dll`
-
-Open `MissileCamera.sln` in Visual Studio or JetBrains Rider for IDE builds.
-
-### Harmony patches
-
-Seven postfix patches in `Harmony/MfdHarmonyPatches.cs` (same targets as NOLoader `mod.json`):
-
-* `TargetScreenUI::SetupCamera`
-* `TargetCam::SetLandingCam` / `CancelTarget` / `OnDestroy`
-* `TacScreen::Initialize` / `TacScreen_OnCamToggle`
-* `WeaponManager::TargetListChanged`
-
-Shared hook bodies: `Harmony/MfdHarmonyHooks.cs`.
-
-### Porting to NOLoader
-
-1. Copy `Camera/`, `Hud/`, `Layout/`, `Access/`, `Ui/` to NOLoader repo `src/`.
-2. Map Harmony postfixes → `Patches.cs` static methods + `mod.json` entries with `expectedSignatureHash`.
-3. Mirror Configuration Manager defaults in `mod_config.ini`.
-4. See [NOLoader.MissileCamera README](https://github.com/Mursisru/NOLoader.MissileCamera/blob/NOLoaderVersion/README.md#porting-from-bepinex).
-
----
-
 ## Project layout
 
 ```text
@@ -282,34 +212,6 @@ MissileCamera/
     └── deploy.ps1
 ```
 
-**GitHub:** [Mursisru/MissileCamera](https://github.com/Mursisru/MissileCamera/tree/BepInExVersion) · **NOLoader port:** [NOLoader.MissileCamera](https://github.com/Mursisru/NOLoader.MissileCamera/tree/NOLoaderVersion)
-
----
-
-## Compatibility & limitations
-
-Developed and tested against **vanilla Nuclear Option** aircraft and the stock Target MFD. The mod may work **incorrectly or not at all** when:
-
-* **Third-party / custom aircraft** — non-vanilla cockpit MFD hierarchy, custom `TargetScreenUI` layouts, or unusual weapon integration can break layout detection (`DisplayMode=auto`), feed binding, nose-cam placement, or salvo tracking.
-* **Other mods that change the MFD** — tactical UI overlays, layout replacers, or Harmony patches to `TargetScreenUI`, `TacScreen`, `TargetCam`, or target/weapon lists may **conflict** with this plugin's hooks and UI zone split.
-
-**Mitigation:** set **Layout → DisplayMode** to `skip` in Configuration Manager to keep vanilla MFD layout (feed may still bind if hooks remain compatible), or disable conflicting MFD mods. For modded setups, include aircraft/mod names and repro steps in issue reports.
-
----
-
-## Troubleshooting
-
-| Symptom | Likely cause | Fix |
-| :--- | :--- | :--- |
-| Plugin not in Configuration Manager | Wrong folder / BepInEx broken | Verify `BepInEx\plugins\MissileCamera\MissileCamera.dll` |
-| Hooks never fire after update | Stale Harmony cache | Delete `BepInEx\cache\harmony_interop_cache.dat`; restart |
-| No feed on MFD | No owned in-flight missile | Launch missile with Target MFD active |
-| Layout wrong on modded aircraft | Custom MFD | `DisplayMode=skip` |
-| Keybinds ignored | Wrong keyboard / overlay off | US layout; feed must be active |
-| NOLoader + BepInEx conflict | Both loaders | Remove one installation |
-
-**Logs:** `BepInEx\LogOutput.log` — search for `com.at747.missilecamera.bepinex`.
-
 ---
 
 ## Changelog
@@ -321,9 +223,3 @@ See [CHANGELOG.md](CHANGELOG.md).
 ## Licence
 
 MIT License — see [LICENSE](LICENSE).
-
----
-
-## Keywords
-
-nuclear-option, bepinex, harmony, mod, missilecamera, csharp, unity
