@@ -42,8 +42,9 @@ namespace MissileCamera
             urp.renderType = CameraRenderType.Base;
             urp.renderPostProcessing = false;
             urp.antialiasing = AntialiasingMode.None;
-            urp.requiresColorOption = CameraOverrideOption.Off;
-            urp.requiresDepthOption = CameraOverrideOption.Off;
+            urp.requiresColorOption = CameraOverrideOption.UsePipelineSettings;
+            urp.requiresDepthOption = CameraOverrideOption.UsePipelineSettings;
+            urp.renderShadows = true;
 
             ApplyConfig();
         }
@@ -122,10 +123,12 @@ namespace MissileCamera
             try
             {
                 RenderSettings.fog = false;
+                MissileCameraRenderPrep.BeforeRender(_camera);
                 _camera.Render();
             }
             finally
             {
+                MissileCameraRenderPrep.AfterRender();
                 RenderSettings.fog = prevFog;
                 RenderTexture.active = prevActive;
             }

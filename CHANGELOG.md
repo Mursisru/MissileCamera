@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.27.3] — 2026-07-07
+
+### Fixed
+
+- Pink/magenta static and ground objects on missile camera feed: apply NO `ShaderGlobalManager` globals, terrain height window bake, and URP settings for manual feed render; restore main camera state after each frame.
+
 ## [0.27.2] — 2026-07-06
 
 ### Fixed
@@ -7,7 +13,6 @@
 - Telemetry **R** (range to target): use missile guidance `aimPoint` instead of stale HQ radar track; fallback to target actual position.
 
 ## [0.27.1] - 2026-06-30
-
 ### Changed
 - Documentation refresh: Developer header, badges, GitHub Alerts, Keywords, gitignore hygiene.
 
