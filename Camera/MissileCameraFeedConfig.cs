@@ -20,6 +20,14 @@ namespace MissileCamera
         internal static float TurnLookSmoothTime = 0.18f;
         internal static float PostExplosionHoldSeconds;
         internal static int RenderFps = 30;
+        internal static bool InfraredAutoEnabled = true;
+        internal static float InfraredDarkAmbientThreshold = 0.12f;
+        internal static float InfraredDarkAmbientHysteresis = 0.02f;
+        internal static float InfraredContrast = 1f;
+        internal static float InfraredBlackPoint = 0.05f;
+        internal static float InfraredWhitePoint = 0.95f;
+        internal static float InfraredRedWeight = 0.55f;
+        internal static float InfraredExposureBiasEv = 0f;
         internal static int Revision;
 
         internal static void Refresh(bool force = false)
@@ -43,6 +51,14 @@ namespace MissileCamera
             float turnLookSmoothTime = MissileCameraBepInConfig.TurnLookSmoothTime.Value;
             float postExplosionHoldSeconds = MissileCameraBepInConfig.PostExplosionHoldSeconds.Value;
             int renderFps = MissileCameraBepInConfig.RenderFps.Value;
+            bool infraredAutoEnabled = MissileCameraBepInConfig.InfraredAutoEnabled.Value;
+            float infraredDarkAmbientThreshold = MissileCameraBepInConfig.InfraredDarkAmbientThreshold.Value;
+            float infraredDarkAmbientHysteresis = MissileCameraBepInConfig.InfraredDarkAmbientHysteresis.Value;
+            float infraredContrast = MissileCameraBepInConfig.InfraredContrast.Value;
+            float infraredBlackPoint = MissileCameraBepInConfig.InfraredBlackPoint.Value;
+            float infraredWhitePoint = MissileCameraBepInConfig.InfraredWhitePoint.Value;
+            float infraredRedWeight = MissileCameraBepInConfig.InfraredRedWeight.Value;
+            float infraredExposureBiasEv = MissileCameraBepInConfig.InfraredExposureBiasEv.Value;
 
             if (!force
                 && enabled == Enabled
@@ -60,7 +76,15 @@ namespace MissileCamera
                 && turnLookSlewDegPerSec == TurnLookSlewDegPerSec
                 && turnLookSmoothTime == TurnLookSmoothTime
                 && postExplosionHoldSeconds == PostExplosionHoldSeconds
-                && renderFps == RenderFps)
+                && renderFps == RenderFps
+                && infraredAutoEnabled == InfraredAutoEnabled
+                && infraredDarkAmbientThreshold == InfraredDarkAmbientThreshold
+                && infraredDarkAmbientHysteresis == InfraredDarkAmbientHysteresis
+                && infraredContrast == InfraredContrast
+                && infraredBlackPoint == InfraredBlackPoint
+                && infraredWhitePoint == InfraredWhitePoint
+                && infraredRedWeight == InfraredRedWeight
+                && infraredExposureBiasEv == InfraredExposureBiasEv)
                 return;
 
             Enabled = enabled;
@@ -79,6 +103,14 @@ namespace MissileCamera
             TurnLookSmoothTime = turnLookSmoothTime;
             PostExplosionHoldSeconds = postExplosionHoldSeconds;
             RenderFps = renderFps;
+            InfraredAutoEnabled = infraredAutoEnabled;
+            InfraredDarkAmbientThreshold = infraredDarkAmbientThreshold;
+            InfraredDarkAmbientHysteresis = infraredDarkAmbientHysteresis;
+            InfraredContrast = infraredContrast;
+            InfraredBlackPoint = infraredBlackPoint;
+            InfraredWhitePoint = infraredWhitePoint;
+            InfraredRedWeight = infraredRedWeight;
+            InfraredExposureBiasEv = infraredExposureBiasEv;
             Revision++;
         }
     }

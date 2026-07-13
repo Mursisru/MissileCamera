@@ -7,52 +7,60 @@ namespace MissileCamera.Config
     {
         internal static bool IsBound { get; private set; }
 
-        internal static ConfigEntry<bool> LayoutEnabled { get; private set; }
-        internal static ConfigEntry<string> DisplayMode { get; private set; }
-        internal static ConfigEntry<float> OverlayMaxWidth { get; private set; }
-        internal static ConfigEntry<float> LeftWidth { get; private set; }
-        internal static ConfigEntry<float> MissilePanelBottom { get; private set; }
-        internal static ConfigEntry<float> WeaponsStripHeight { get; private set; }
-        internal static ConfigEntry<bool> ShowDivider { get; private set; }
-        internal static ConfigEntry<bool> DebugStub { get; private set; }
-        internal static ConfigEntry<string> StubLabel { get; private set; }
+        internal static ConfigEntry<bool> LayoutEnabled { get; private set; } = null!;
+        internal static ConfigEntry<string> DisplayMode { get; private set; } = null!;
+        internal static ConfigEntry<float> OverlayMaxWidth { get; private set; } = null!;
+        internal static ConfigEntry<float> LeftWidth { get; private set; } = null!;
+        internal static ConfigEntry<float> MissilePanelBottom { get; private set; } = null!;
+        internal static ConfigEntry<float> WeaponsStripHeight { get; private set; } = null!;
+        internal static ConfigEntry<bool> ShowDivider { get; private set; } = null!;
+        internal static ConfigEntry<bool> DebugStub { get; private set; } = null!;
+        internal static ConfigEntry<string> StubLabel { get; private set; } = null!;
 
-        internal static ConfigEntry<bool> FeedEnabled { get; private set; }
-        internal static ConfigEntry<float> NoseSkinInset { get; private set; }
-        internal static ConfigEntry<float> CameraBackOffset { get; private set; }
-        internal static ConfigEntry<float> Fov { get; private set; }
-        internal static ConfigEntry<int> FeedWidth { get; private set; }
-        internal static ConfigEntry<int> FeedHeight { get; private set; }
-        internal static ConfigEntry<bool> HorizonLock { get; private set; }
-        internal static ConfigEntry<float> TurnLookBankScale { get; private set; }
-        internal static ConfigEntry<float> MaxTurnLookDegrees { get; private set; }
-        internal static ConfigEntry<float> DefaultMissileGLimit { get; private set; }
-        internal static ConfigEntry<float> TurnLookGDeadband { get; private set; }
-        internal static ConfigEntry<float> TurnLookGFilterHz { get; private set; }
-        internal static ConfigEntry<float> TurnLookSlewDegPerSec { get; private set; }
-        internal static ConfigEntry<float> TurnLookSmoothTime { get; private set; }
-        internal static ConfigEntry<float> PostExplosionHoldSeconds { get; private set; }
-        internal static ConfigEntry<int> RenderFps { get; private set; }
+        internal static ConfigEntry<bool> FeedEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> NoseSkinInset { get; private set; } = null!;
+        internal static ConfigEntry<float> CameraBackOffset { get; private set; } = null!;
+        internal static ConfigEntry<float> Fov { get; private set; } = null!;
+        internal static ConfigEntry<int> FeedWidth { get; private set; } = null!;
+        internal static ConfigEntry<int> FeedHeight { get; private set; } = null!;
+        internal static ConfigEntry<bool> HorizonLock { get; private set; } = null!;
+        internal static ConfigEntry<float> TurnLookBankScale { get; private set; } = null!;
+        internal static ConfigEntry<float> MaxTurnLookDegrees { get; private set; } = null!;
+        internal static ConfigEntry<float> DefaultMissileGLimit { get; private set; } = null!;
+        internal static ConfigEntry<float> TurnLookGDeadband { get; private set; } = null!;
+        internal static ConfigEntry<float> TurnLookGFilterHz { get; private set; } = null!;
+        internal static ConfigEntry<float> TurnLookSlewDegPerSec { get; private set; } = null!;
+        internal static ConfigEntry<float> TurnLookSmoothTime { get; private set; } = null!;
+        internal static ConfigEntry<float> PostExplosionHoldSeconds { get; private set; } = null!;
+        internal static ConfigEntry<int> RenderFps { get; private set; } = null!;
+        internal static ConfigEntry<bool> InfraredAutoEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredDarkAmbientThreshold { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredDarkAmbientHysteresis { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredContrast { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredBlackPoint { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredWhitePoint { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredRedWeight { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredExposureBiasEv { get; private set; } = null!;
 
-        internal static ConfigEntry<bool> HudEnabled { get; private set; }
-        internal static ConfigEntry<float> SalvoWindowSeconds { get; private set; }
-        internal static ConfigEntry<bool> ShowCenterCluster { get; private set; }
-        internal static ConfigEntry<bool> ShowTargetMarker { get; private set; }
-        internal static ConfigEntry<string> InterceptColor { get; private set; }
-        internal static ConfigEntry<string> ReticleColor { get; private set; }
-        internal static ConfigEntry<string> HorizonColor { get; private set; }
-        internal static ConfigEntry<string> HorizonOutlineColor { get; private set; }
-        internal static ConfigEntry<string> MissileNameColor { get; private set; }
-        internal static ConfigEntry<string> TargetNameColor { get; private set; }
-        internal static ConfigEntry<string> LabelBackgroundColor { get; private set; }
-        internal static ConfigEntry<float> LabelBackgroundAlpha { get; private set; }
+        internal static ConfigEntry<bool> HudEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> SalvoWindowSeconds { get; private set; } = null!;
+        internal static ConfigEntry<bool> ShowCenterCluster { get; private set; } = null!;
+        internal static ConfigEntry<bool> ShowTargetMarker { get; private set; } = null!;
+        internal static ConfigEntry<string> InterceptColor { get; private set; } = null!;
+        internal static ConfigEntry<string> ReticleColor { get; private set; } = null!;
+        internal static ConfigEntry<string> HorizonColor { get; private set; } = null!;
+        internal static ConfigEntry<string> HorizonOutlineColor { get; private set; } = null!;
+        internal static ConfigEntry<string> MissileNameColor { get; private set; } = null!;
+        internal static ConfigEntry<string> TargetNameColor { get; private set; } = null!;
+        internal static ConfigEntry<string> LabelBackgroundColor { get; private set; } = null!;
+        internal static ConfigEntry<float> LabelBackgroundAlpha { get; private set; } = null!;
 
-        internal static ConfigEntry<bool> ControlsEnabled { get; private set; }
-        internal static ConfigEntry<float> ZoomStep { get; private set; }
-        internal static ConfigEntry<float> ZoomMin { get; private set; }
-        internal static ConfigEntry<float> ZoomMax { get; private set; }
-        internal static ConfigEntry<float> ZoomFovDegreesPerUnit { get; private set; }
-        internal static ConfigEntry<float> IndicatorSeconds { get; private set; }
+        internal static ConfigEntry<bool> ControlsEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> ZoomStep { get; private set; } = null!;
+        internal static ConfigEntry<float> ZoomMin { get; private set; } = null!;
+        internal static ConfigEntry<float> ZoomMax { get; private set; } = null!;
+        internal static ConfigEntry<float> ZoomFovDegreesPerUnit { get; private set; } = null!;
+        internal static ConfigEntry<float> IndicatorSeconds { get; private set; } = null!;
 
         internal static void Bind(ConfigFile config)
         {
@@ -105,6 +113,24 @@ namespace MissileCamera.Config
                 new ConfigDescription("Hold last frame after missile loss (0 = off).", new AcceptableValueRange<float>(0f, 10f)));
             RenderFps = config.Bind(feed, "RenderFps", 30,
                 new ConfigDescription("Feed refresh rate.", new AcceptableValueRange<int>(5, 60)));
+            InfraredAutoEnabled = config.Bind(feed, "InfraredAutoEnabled", true,
+                "Auto B/W IR feed at night (timeOfDay before 6 or after 18) or low ambient light.");
+            InfraredDarkAmbientThreshold = config.Bind(feed, "InfraredDarkAmbientThreshold", 0.12f,
+                new ConfigDescription("Ambient light threshold for daytime IR (on).", new AcceptableValueRange<float>(0.01f, 1f)));
+            InfraredDarkAmbientHysteresis = config.Bind(feed, "InfraredDarkAmbientHysteresis", 0.02f,
+                new ConfigDescription("Extra ambient margin before IR turns off (anti-flicker).", new AcceptableValueRange<float>(0f, 0.2f)));
+            InfraredContrast = config.Bind(feed, "InfraredContrast", 1f,
+                new ConfigDescription("IR contrast for RawImage material.", new AcceptableValueRange<float>(0f, 100f)));
+            InfraredBlackPoint = config.Bind(feed, "InfraredBlackPoint", 0.05f,
+                new ConfigDescription("IR black clip (0–1).", new AcceptableValueRange<float>(0f, 0.5f)));
+            InfraredWhitePoint = config.Bind(feed, "InfraredWhitePoint", 0.95f,
+                new ConfigDescription("IR white clip (0–1).", new AcceptableValueRange<float>(0.5f, 1f)));
+            InfraredRedWeight = config.Bind(feed, "InfraredRedWeight", 0.55f,
+                new ConfigDescription("Red luminance weight for IR.", new AcceptableValueRange<float>(0.1f, 0.9f)));
+            InfraredExposureBiasEv = config.Bind(feed, "InfraredExposureBiasEv", 0f,
+                new ConfigDescription(
+                    "Extra EV vs TargetCam IR (0 = match TargetCam; negative = darker). Highlight compress handles plume.",
+                    new AcceptableValueRange<float>(-4f, 2f)));
 
             const string hud = "MissileCameraHud";
             HudEnabled = config.Bind(hud, "Enabled", true, "HUD overlay on feed.");

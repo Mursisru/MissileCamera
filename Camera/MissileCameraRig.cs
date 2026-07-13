@@ -10,7 +10,10 @@ namespace MissileCamera
 
         private readonly GameObject _root;
         private readonly Camera _camera;
+        private readonly Volume _irVolume;
+        private readonly ColorAdjustments _colorAdjustments;
         private RenderTexture? _renderTexture;
+        private RenderTexture? _hdrRenderTexture;
         private Missile? _missile;
         private int _textureWidth;
         private int _textureHeight;
@@ -21,6 +24,28 @@ namespace MissileCamera
         private float _filteredLateralG;
         private float _filteredTurnSign;
         private float _zoomOffset;
+        private bool _infraredVolumeActive;
+        private bool _infraredVolumeEnabledDuringRender;
+        private bool _renderPostProcessingEnabled;
+        private float _infraredBlitExposure;
+        private float _infraredBlitContrast = 1f;
+        private bool _infraredSyncedFromVanilla;
+        private bool _lastFrameUsedBlit;
+        private float _lastPolicyExposure;
+        private InfraredExposureBreakdown _lastExposureBreakdown;
+
+        internal bool IsInfraredVolumePrimed => _infraredVolumeActive;
+        internal bool IsInfraredVolumeEnabledDuringRender => _infraredVolumeEnabledDuringRender;
+        internal bool IsRenderPostProcessingEnabled => _renderPostProcessingEnabled;
+        internal bool LastFrameUsedBlit => _lastFrameUsedBlit;
+        internal bool InfraredSyncedFromVanilla => _infraredSyncedFromVanilla;
+        internal float InfraredBlitExposure => _infraredBlitExposure;
+        internal float InfraredBlitContrast => _infraredBlitContrast;
+        internal float LastPolicyExposure => _lastPolicyExposure;
+        internal InfraredExposureBreakdown LastExposureBreakdown => _lastExposureBreakdown;
+        internal float InfraredSaturation => _infraredVolumeActive ? -100f : 0f;
+        internal float InfraredPostExposure => _infraredBlitExposure;
+        internal float InfraredContrast => _infraredBlitContrast;
 
         internal MissileCameraRig()
         {
@@ -46,6 +71,22 @@ namespace MissileCamera
             urp.requiresDepthOption = CameraOverrideOption.UsePipelineSettings;
             urp.renderShadows = true;
 
+            _irVolume = _root.AddComponent<Volume>();
+            _irVolume.isGlobal = false;
+            _irVolume.priority = 1000f;
+            _irVolume.blendDistance = 100000f;
+            _irVolume.enabled = false;
+            _irVolume.weight = 1f;
+
+            VolumeProfile profile = ScriptableObject.CreateInstance<VolumeProfile>();
+            profile.hideFlags = HideFlags.HideAndDontSave;
+            _colorAdjustments = profile.Add<ColorAdjustments>(true);
+            _colorAdjustments.saturation.Override(-100f);
+            _colorAdjustments.saturation.overrideState = false;
+            _colorAdjustments.postExposure.Override(0f);
+            _colorAdjustments.contrast.Override(1f);
+            _irVolume.profile = profile;
+
             ApplyConfig();
         }
 
@@ -59,6 +100,47 @@ namespace MissileCamera
         {
             _zoomOffset = offset;
             ApplyEffectiveFov();
+        }
+
+        /// <summary>
+        /// TargetCam IR parity: HDR scene render + blit ColorAdjustments (URP Volume on manual Render is unreliable).
+        /// </summary>
+        internal void SetInfraredVolume(bool infrared, float exposure)
+        {
+            if (!IsRootAlive)
+                return;
+
+            _infraredVolumeActive = infrared;
+            _lastPolicyExposure = exposure;
+            _irVolume.enabled = false;
+            _colorAdjustments.saturation.overrideState = false;
+
+            if (!infrared)
+            {
+                _infraredBlitExposure = 0f;
+                _infraredBlitContrast = 1f;
+                _infraredSyncedFromVanilla = false;
+                _lastExposureBreakdown = default;
+                return;
+            }
+
+            ResolveInfraredRenderParams(exposure);
+        }
+
+        private void ResolveInfraredRenderParams(float policyExposure)
+        {
+            float contrast = 1f;
+            if (TargetCamAccess.TryGetVanillaIrSnapshot(out bool vanillaIr, out _, out float vanillaContrast) && vanillaIr)
+                contrast = vanillaContrast;
+
+            float finalExposure = MissileCameraInfraredExposure.Resolve(
+                _camera,
+                policyExposure,
+                out _lastExposureBreakdown);
+
+            _infraredBlitExposure = finalExposure;
+            _infraredBlitContrast = contrast;
+            _infraredSyncedFromVanilla = _lastExposureBreakdown.SyncedVanilla;
         }
 
         internal void Attach(Missile missile)
@@ -120,14 +202,59 @@ namespace MissileCamera
 
             bool prevFog = RenderSettings.fog;
             RenderTexture? prevActive = RenderTexture.active;
+            RenderTexture? prevCameraTarget = _camera.targetTexture;
+            bool prevAllowHdr = _camera.allowHDR;
+            UniversalAdditionalCameraData? urp = null;
+            _infraredVolumeEnabledDuringRender = false;
+            _renderPostProcessingEnabled = false;
+            _lastFrameUsedBlit = false;
             try
             {
-                RenderSettings.fog = false;
-                MissileCameraRenderPrep.BeforeRender(_camera);
+                RenderSettings.fog = !_infraredVolumeActive;
+                if (_infraredVolumeActive)
+                {
+                    EnsureHdrTexture();
+                    _camera.allowHDR = true;
+                    _camera.targetTexture = _hdrRenderTexture;
+                }
+                else
+                {
+                    _camera.allowHDR = false;
+                    _camera.targetTexture = _renderTexture;
+                }
+
+                MissileCameraRenderPrep.BeforeRender(_camera, forceLdr: false);
+                if (_infraredVolumeActive)
+                {
+                    urp = _camera.GetUniversalAdditionalCameraData();
+                    urp.renderPostProcessing = false;
+                    _camera.allowHDR = true;
+                }
+
                 _camera.Render();
+
+                if (_infraredVolumeActive && _hdrRenderTexture != null && _renderTexture != null)
+                {
+                    MissileCameraInfraredBlit.Apply(
+                        _hdrRenderTexture,
+                        _renderTexture,
+                        _infraredBlitExposure,
+                        _infraredBlitContrast);
+                    _lastFrameUsedBlit = MissileCameraInfraredBlit.IsAvailable;
+                    MissileCameraInfraredAudit.LogAfterRender(this, _renderTexture);
+                }
             }
             finally
             {
+                if (urp != null)
+                    urp.renderPostProcessing = false;
+                if (_irVolume != null)
+                    _irVolume.enabled = false;
+
+                _camera.targetTexture = prevCameraTarget ?? _renderTexture;
+                _camera.allowHDR = prevAllowHdr;
+                _infraredVolumeEnabledDuringRender = false;
+                _renderPostProcessingEnabled = false;
                 MissileCameraRenderPrep.AfterRender();
                 RenderSettings.fog = prevFog;
                 RenderTexture.active = prevActive;
@@ -137,14 +264,15 @@ namespace MissileCamera
         internal void Destroy()
         {
             Detach();
+            SetInfraredVolume(false, 0f);
             ReleaseTexture();
+            MissileCameraInfraredBlit.Shutdown();
+            if (_irVolume != null && _irVolume.profile != null)
+                Object.Destroy(_irVolume.profile);
             if (_root != null)
                 Object.Destroy(_root);
         }
 
-        /// <summary>
-        /// Smooth bore-axis roll — call once per frame before render/HUD.
-        /// </summary>
         internal void AdvanceRoll(float deltaTime)
         {
             if (!IsRootAlive || _missile == null || deltaTime <= 0f)
@@ -260,6 +388,38 @@ namespace MissileCamera
             };
             _renderTexture.Create();
             _camera.targetTexture = _renderTexture;
+            ReleaseHdrTexture();
+        }
+
+        private void EnsureHdrTexture()
+        {
+            if (!IsRootAlive || _renderTexture == null)
+                return;
+
+            int w = _renderTexture.width;
+            int h = _renderTexture.height;
+            if (_hdrRenderTexture != null && _hdrRenderTexture.width == w && _hdrRenderTexture.height == h)
+                return;
+
+            ReleaseHdrTexture();
+            _hdrRenderTexture = new RenderTexture(w, h, 16, RenderTextureFormat.ARGBHalf)
+            {
+                name = "MissileCameraFeed.HDR",
+                antiAliasing = 1,
+                useMipMap = false,
+                autoGenerateMips = false
+            };
+            _hdrRenderTexture.Create();
+        }
+
+        private void ReleaseHdrTexture()
+        {
+            if (_hdrRenderTexture == null)
+                return;
+
+            _hdrRenderTexture.Release();
+            Object.Destroy(_hdrRenderTexture);
+            _hdrRenderTexture = null;
         }
 
         private void ReleaseTexture()
@@ -268,6 +428,7 @@ namespace MissileCamera
                 return;
 
             _camera.targetTexture = null;
+            ReleaseHdrTexture();
             _renderTexture.Release();
             Object.Destroy(_renderTexture);
             _renderTexture = null;

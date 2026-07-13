@@ -47,6 +47,7 @@ namespace MissileCamera
             TryUnbindAircraft();
             OwnedActive.Clear();
             MissileCameraSalvoTracker.Reset();
+            MissileCameraInfraredEffect.Shutdown();
             _manualFollowActive = false;
             _zoomOffset = 0f;
             _rig?.Destroy();
@@ -152,6 +153,9 @@ namespace MissileCamera
             rig.Attach(missile);
             rig.AdvanceRoll(Time.deltaTime);
 
+            bool infrared = MissileCameraInfraredPolicy.Evaluate(out float exposure);
+            MissileCameraInfraredEffect.Apply(_feedImage, rig, infrared, exposure);
+
             if (Time.unscaledTime >= _nextRenderTimeUnscaled)
             {
                 float interval = 1f / Mathf.Max(MissileCameraFeedConfig.RenderFps, 1);
@@ -173,6 +177,7 @@ namespace MissileCamera
         internal static void NotifyOverlayGone()
         {
             _overlayActive = false;
+            MissileCameraInfraredEffect.Clear(_feedImage, _rig);
             _feedImage = null;
             _telemetryText = null;
             _colorLabel = null;
@@ -296,7 +301,12 @@ namespace MissileCamera
             {
                 _feedImage.texture = texture;
                 _feedImage.enabled = texture != null;
+                if (missile != null && texture != null && MissileCameraInfraredPolicy.InfraredActive)
+                    MissileCameraInfraredEffect.Apply(_feedImage, _rig, infrared: true, exposure: MissileCameraInfraredPolicy.Exposure);
             }
+
+            if (missile == null || texture == null)
+                MissileCameraInfraredEffect.Apply(_feedImage, _rig, infrared: false, exposure: 0f);
 
             MissileCameraTelemetry.Update(_telemetryText, missile);
 

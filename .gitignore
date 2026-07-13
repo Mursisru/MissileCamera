@@ -2,6 +2,7 @@ bin/
 obj/
 libs/
 _buildroot/
+_unity_shader_build/
 .vs/
 .debug/
 *.user

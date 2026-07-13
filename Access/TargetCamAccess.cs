@@ -1,5 +1,7 @@
 using System.Reflection;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace MissileCamera
 {
@@ -24,6 +26,46 @@ namespace MissileCamera
 
         internal static Renderer? GetTargetScreenRenderer(TargetCam instance) =>
             GetField<Renderer>(instance, "targetScreenRenderer");
+
+        internal static Volume? GetScreenVolume(TargetCam instance) =>
+            GetField<Volume>(instance, "screenVolume");
+
+        internal static bool IsIrMode(TargetCam instance)
+        {
+            FieldInfo? field = instance.GetType().GetField("IRMode", InstanceAny);
+            return field?.GetValue(instance) is bool ir && ir;
+        }
+
+        internal static bool TryGetColorAdjustments(TargetCam instance, out ColorAdjustments? adjustments)
+        {
+            adjustments = GetField<ColorAdjustments>(instance, "colorAdjustments");
+            return adjustments != null;
+        }
+
+        /// <summary>
+        /// Live vanilla TargetCam IR state for audit / parity sync (local aircraft only).
+        /// </summary>
+        internal static bool TryGetVanillaIrSnapshot(out bool irMode, out float postExposure, out float contrast)
+        {
+            irMode = false;
+            postExposure = 0f;
+            contrast = 1f;
+
+            if (!GameManager.GetLocalAircraft(out Aircraft aircraft))
+                return false;
+
+            TargetCam? targetCam = GetTargetCam(aircraft);
+            if (targetCam == null)
+                return false;
+
+            irMode = IsIrMode(targetCam);
+            if (!TryGetColorAdjustments(targetCam, out ColorAdjustments? adjustments) || adjustments == null)
+                return false;
+
+            postExposure = adjustments.postExposure.value;
+            contrast = adjustments.contrast.value;
+            return true;
+        }
 
         internal static TargetCam.CamMode GetCurrentMode(TargetCam instance)
         {

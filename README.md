@@ -39,6 +39,7 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 
 * **MFD split-screen UI:** Splits the wide tactical MFD (Target view) into zones and embeds the missile feed in the weapons panel area.
 * **Seeker cam (missile nose cam):** Renders a live `RawImage` feed from your latest **player-owned** in-flight missile while it guides toward the target.
+* **Auto B/W IR:** At night or in low ambient light the feed switches to black-and-white IR via a RawImage material (no HUD indicator; same night window as vanilla tac IR). Disable with `InfraredAutoEnabled=false`.
 * **Tactical HUD overlay:** Telemetry (`SPD`, `ALT`, `RNG`), horizon reticle, salvo info, and target markers drawn on the live feed.
 * **Manual feed controls:** Cycle in-flight owned missiles and adjust camera zoom while the MFD overlay is active (see **Controls** below).
 * **Per-aircraft layout (`DisplayMode=auto`):**
@@ -136,6 +137,13 @@ BepInEx\config\com.at747.missilecamera.bepinex.cfg
 | `TurnLookSmoothTime` | `0.18` | Turn-look smoothing |
 | `PostExplosionHoldSeconds` | `0` | Hold last frame after missile loss (0 = off) |
 | `RenderFps` | `30` | Feed refresh rate |
+| `InfraredAutoEnabled` | `true` | Auto B/W IR at night or low ambient |
+| `InfraredDarkAmbientThreshold` | `0.12` | Ambient threshold for daytime IR (on) |
+| `InfraredDarkAmbientHysteresis` | `0.02` | Extra ambient margin before IR turns off |
+| `InfraredContrast` | `1` | IR contrast |
+| `InfraredBlackPoint` | `0.05` | IR black clip |
+| `InfraredWhitePoint` | `0.95` | IR white clip |
+| `InfraredRedWeight` | `0.55` | Red luminance weight |
 
 ### MissileCameraHud
 

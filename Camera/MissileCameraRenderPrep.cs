@@ -18,10 +18,10 @@ namespace MissileCamera
 
         private static Vector2Int _lastBakedWindow = new(int.MinValue, int.MinValue);
 
-        internal static void BeforeRender(Camera feedCamera)
+        internal static void BeforeRender(Camera feedCamera, bool forceLdr = false)
         {
             ApplyShaderGlobalsForCamera(feedCamera);
-            MirrorUrpFromMain(feedCamera);
+            MirrorUrpFromMain(feedCamera, forceLdr);
             BakeTerrainWindowForCamera(feedCamera);
         }
 
@@ -72,14 +72,14 @@ namespace MissileCamera
             Shader.SetGlobalTexture(BlockerMapId, terrainHeightMap.blockerMap);
         }
 
-        private static void MirrorUrpFromMain(Camera feedCamera)
+        private static void MirrorUrpFromMain(Camera feedCamera, bool forceLdr)
         {
             Camera? main = Camera.main;
             if (main == null)
                 return;
 
             feedCamera.cullingMask = main.cullingMask;
-            feedCamera.allowHDR = main.allowHDR;
+            feedCamera.allowHDR = forceLdr ? false : main.allowHDR;
 
             UniversalAdditionalCameraData feedUrp = feedCamera.GetUniversalAdditionalCameraData();
             UniversalAdditionalCameraData mainUrp = main.GetUniversalAdditionalCameraData();
