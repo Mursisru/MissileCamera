@@ -33,6 +33,8 @@ namespace MissileCamera
         private static MissileCameraTelemetryLayout _cachedTelemetryLayout = MissileCameraTelemetryLayout.BottomRow;
         private static float _lastDarkreachPortraitLogTime = -999f;
 
+        internal static bool IsLayoutActive => _layoutActive;
+
         internal static float ActiveStubContentRotationZ => _cachedStubContentRotationZ;
 
         internal static float ActiveStubFontRef => _cachedStubFontRef;
@@ -89,6 +91,9 @@ namespace MissileCamera
             if (targetCam != null && _activeTargetCam != null && _activeTargetCam != targetCam)
                 return;
 
+            if (ShouldRetainLayoutForMissileFeed())
+                return;
+
             ClearLayout("target_cam_disabled");
         }
 
@@ -139,7 +144,7 @@ namespace MissileCamera
         }
 
         private static bool ShouldRetainLayoutForMissileFeed() =>
-            MissileCameraFeedController.HasTrackableOwnedMissile();
+            MissileCameraFeedController.ShouldRetainLayoutForMissileFeed();
 
         internal static void TryApplyLayoutFromRetry(TargetCam targetCam)
         {
@@ -160,8 +165,13 @@ namespace MissileCamera
 
         internal static void OnSetLandingCam(TargetCam targetCam)
         {
-            if (_activeTargetCam == targetCam)
-                ClearLayout("landing_cam");
+            if (_activeTargetCam != targetCam)
+                return;
+
+            if (ShouldRetainLayoutForMissileFeed())
+                return;
+
+            ClearLayout("landing_cam");
         }
 
         internal static void OnCancelTarget(TargetCam targetCam)
@@ -194,16 +204,24 @@ namespace MissileCamera
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
                 return;
 
-            if (!MfdLayoutConfig.Enabled || TargetCamAccess.IsLandingMode(targetCam))
+            if (!MfdLayoutConfig.Enabled)
             {
                 if (_activeTargetCam == targetCam)
                     ClearLayout("disabled_or_landing");
                 return;
             }
 
-            screenUi ??= TargetCamAccess.GetTargetScreenUi(targetCam);
-            if (screenUi == null)
+            if (TargetCamAccess.IsLandingMode(targetCam))
+            {
+                if (ShouldRetainLayoutForMissileFeed())
+                    return;
+
+                if (_activeTargetCam == targetCam)
+                    ClearLayout("disabled_or_landing");
                 return;
+            }
+
+            screenUi ??= TargetCamAccess.GetTargetScreenUi(targetCam) ?? _activeScreenUi;
 
             MfdLayoutConfig.Refresh();
             int revision = MfdLayoutConfig.Revision;
@@ -288,7 +306,7 @@ namespace MissileCamera
 
         private static void TryApplyCricketEngineLayout(
             TargetCam targetCam,
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             TacScreen tacScreen,
             int revision)
         {
@@ -344,7 +362,7 @@ namespace MissileCamera
         private static bool EnsureTacOverlay(
             Canvas parentCanvas,
             RectTransform? overlayParent,
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             MissileCameraZone zone,
             bool suppressBottomDivider,
             bool showPanelBorder,
@@ -609,7 +627,7 @@ namespace MissileCamera
 
         private static void ApplyScaledStubLayout(
             RectTransform panelRt,
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             bool forceCanvasUpdate,
             float stubContentRotationZ = 0f,
             float stubFontRef = 0f,
@@ -715,7 +733,7 @@ namespace MissileCamera
             MissileCameraFeedLayout.Apply(layoutRt, usePortraitLayout, stubContentRotationZ);
         }
 
-        private static void ApplyStubText(Text target, TargetScreenUI screenUi, bool header = false)
+        private static void ApplyStubText(Text target, TargetScreenUI? screenUi, bool header = false)
         {
             TargetScreenUiStyle.ApplyLabel(target, screenUi, header);
             target.color = TargetScreenUiStyle.GetStubLabelColor(screenUi);
@@ -725,7 +743,7 @@ namespace MissileCamera
         }
 
         private static void UpdateTacOverlayLayout(
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             MissileCameraZone zone,
             bool suppressBottomDivider,
             bool showPanelBorder,
@@ -870,7 +888,7 @@ namespace MissileCamera
             panelRt.offsetMax = zone.OffsetMax;
         }
 
-        private static void CreateDivider(RectTransform parent, TargetScreenUI screenUi, float y, float xMin, float xMax)
+        private static void CreateDivider(RectTransform parent, TargetScreenUI? screenUi, float y, float xMin, float xMax)
         {
             var go = new GameObject("WeaponsBottomDivider", typeof(RectTransform), typeof(Image));
             go.transform.SetParent(parent, false);
@@ -891,7 +909,7 @@ namespace MissileCamera
 
         private static void EnsurePanelBorder(
             RectTransform overlayRoot,
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             MissileCameraZone zone,
             bool suppressBottomBorder)
         {

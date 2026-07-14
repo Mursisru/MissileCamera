@@ -43,13 +43,26 @@ namespace MissileCamera
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            if (IsMenuOrSystemScene(scene.path))
+            {
+                if (_missionReady)
+                    OnMissionUnload();
+                return;
+            }
+
             if (_missionReady)
                 return;
 
-            if (IsMenuOrSystemScene(scene.path))
-                return;
-
             ScheduleMissionStartup(scene.path);
+        }
+
+        private void OnMissionUnload()
+        {
+            MfdLog.Info("mission unload — reset per-mission fullscreen bootstrap");
+            MissileCameraFullscreenController.ResetForMissionUnload();
+            MissileCameraEffectsAvailability.Reset();
+            _missionReady = false;
+            _startupScheduled = false;
         }
 
         private void TryBootstrapCurrentScene()
@@ -85,6 +98,14 @@ namespace MissileCamera
             MissileCameraFeedConfig.Refresh(force: true);
             MissileCameraHudConfig.Refresh(force: true);
             MissileCameraControlsConfig.Refresh(force: true);
+            MissileCameraFullscreenConfig.Refresh(force: true);
+            MissileCameraTelemetryConfig.Refresh(force: true);
+            MissileCameraEffectsConfig.Refresh(force: true);
+            MissileCameraMarkersConfig.Refresh(force: true);
+            MissileCameraAircraftCamConfig.Refresh(force: true);
+
+            MissileAccess.WarmFieldCache();
+            MissileCameraPostFxStack.ProbeAvailabilityAtStartup();
 
             ApplyHarmonyPatches(logger);
             MissileCameraFeedDriverHost.Ensure();
@@ -130,6 +151,7 @@ namespace MissileCamera
         private void OnApplicationQuit()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            MissileCameraFullscreenController.ResetForMissionUnload();
             MissileCameraFeedDriverHost.Shutdown();
             _harmony?.UnpatchSelf();
             _harmony = null;

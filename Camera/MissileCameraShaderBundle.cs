@@ -21,6 +21,8 @@ namespace MissileCamera
         private static AssetBundle? _bundle;
         private static Shader? _infraredShader;
         private static Shader? _infraredBlitShader;
+        private static readonly System.Collections.Generic.Dictionary<string, Shader?> FxShaders =
+            new System.Collections.Generic.Dictionary<string, Shader?>(System.StringComparer.Ordinal);
 
         internal static Shader? InfraredShader
         {
@@ -38,6 +40,52 @@ namespace MissileCamera
                 EnsureLoaded();
                 return _infraredBlitShader;
             }
+        }
+
+        internal static bool TryGetFxShader(string findName, out Shader? shader)
+        {
+            EnsureLoaded();
+            if (FxShaders.TryGetValue(findName, out shader) && shader != null)
+                return true;
+
+            shader = Shader.Find(findName);
+            if (shader != null)
+            {
+                FxShaders[findName] = shader;
+                return true;
+            }
+
+            if (_bundle != null)
+            {
+                string shortName = findName;
+                int slash = findName.LastIndexOf('/');
+                if (slash >= 0 && slash + 1 < findName.Length)
+                    shortName = findName.Substring(slash + 1);
+
+                shader = _bundle.LoadAsset<Shader>(shortName);
+                if (shader == null)
+                {
+                    string[] names = _bundle.GetAllAssetNames();
+                    for (int i = 0; i < names.Length; i++)
+                    {
+                        if (names[i].IndexOf(shortName, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            shader = _bundle.LoadAsset<Shader>(names[i]);
+                            if (shader != null)
+                                break;
+                        }
+                    }
+                }
+
+                if (shader != null)
+                {
+                    FxShaders[findName] = shader;
+                    return true;
+                }
+            }
+
+            FxShaders[findName] = null;
+            return false;
         }
 
         internal static bool HasInfraredShader
@@ -130,6 +178,7 @@ namespace MissileCamera
         {
             _infraredShader = null;
             _infraredBlitShader = null;
+            FxShaders.Clear();
             if (_bundle != null)
             {
                 _bundle.Unload(false);

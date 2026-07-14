@@ -10,6 +10,12 @@ namespace MissileCamera
             UnityEngine.Debug.Log("[MissileCamera] " + message);
         }
 
+        internal static void Warning(string message)
+        {
+            MissileCameraPlugin.ModLogger?.LogWarning(message);
+            UnityEngine.Debug.LogWarning("[MissileCamera] " + message);
+        }
+
         internal static void Error(string message) =>
             MissileCameraPlugin.ModLogger?.LogError(message);
     }

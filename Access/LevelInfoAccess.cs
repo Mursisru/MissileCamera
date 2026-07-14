@@ -63,5 +63,30 @@ namespace MissileCamera
 
             return true;
         }
+
+        internal static bool TryGetDaylightFactor(Vector3 worldPosition, out float daylight)
+        {
+            daylight = 1f;
+            if (!TryGet(out LevelInfo levelInfo))
+                return false;
+
+            try
+            {
+                daylight = levelInfo.GetDaylightFactor(worldPosition);
+            }
+            catch
+            {
+                daylight = 1f;
+                return false;
+            }
+
+            if (float.IsNaN(daylight) || float.IsInfinity(daylight))
+            {
+                daylight = 1f;
+                return false;
+            }
+
+            return true;
+        }
     }
 }

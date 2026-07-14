@@ -64,6 +64,9 @@ namespace MissileCamera
             TargetScreenUI? screenUi,
             MissileCameraCornerHud.Rows rows)
         {
+            if (MissileCameraPanelMetrics.IsGameFullscreen)
+                return FitFullscreen(panel, snapshot, screenUi, rows);
+
             bool rightColumn = panel.UsesRightColumnTelemetry;
             float nameTextWidth = panel.NameTextWidth;
             float telemetryTextWidth = panel.TelemetryTextWidth;
@@ -141,6 +144,45 @@ namespace MissileCamera
                 fallback,
                 fallback,
                 rightColumn ? MissileCameraTelemetryLayout.RightColumn : MissileCameraTelemetryLayout.BottomRow,
+                panel.RightColumnBlockWidth,
+                panel.RightColumnTelemetryMaxWidth);
+        }
+
+        private static MissileCameraHudFit FitFullscreen(
+            MissileCameraPanelMetrics panel,
+            MissileCameraHudSnapshot snapshot,
+            TargetScreenUI? screenUi,
+            MissileCameraCornerHud.Rows rows)
+        {
+            int header = panel.GetFontSize(StubTextRole.Header);
+            int body = panel.GetFontSize(StubTextRole.Body);
+            int telemetry = panel.GetFontSize(StubTextRole.Telemetry);
+            float nameRowH = panel.FullscreenNameRowHeight;
+            float salvoRowH = Mathf.Max(RowHeight(body), 20f);
+            float telemetryRowH = panel.FullscreenTelemetryChipHeight;
+            float topBand = panel.TopBandHeight;
+            float bottomBand = panel.BottomBandHeight;
+            float nameTextWidth = panel.NameTextWidth;
+            float telemetryTextWidth = panel.TelemetryTextWidth;
+
+            ApplyFonts(rows, screenUi, panel, header, body, telemetry);
+            ApplyContent(rows, snapshot, nameTextWidth, forceCanvasUpdate: false);
+            float salvoBlockW = Mathf.Clamp(ComputeSalvoBlockWidth(panel, rows.Salvo), 48f, 96f);
+
+            return new MissileCameraHudFit(
+                topBand,
+                bottomBand,
+                nameRowH,
+                salvoRowH,
+                telemetryRowH,
+                nameTextWidth,
+                telemetryTextWidth,
+                salvoBlockW,
+                panel.RowGap,
+                header,
+                body,
+                telemetry,
+                MissileCameraTelemetryLayout.BottomRow,
                 panel.RightColumnBlockWidth,
                 panel.RightColumnTelemetryMaxWidth);
         }

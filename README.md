@@ -2,7 +2,7 @@
 
 [![Nuclear Option](https://img.shields.io/badge/Game-Nuclear%20Option-blue)](https://store.steampowered.com/app/2168680/Nuclear_Option/)
 [![BepInEx 5](https://img.shields.io/badge/Loader-BepInEx%205-orange)](https://docs.bepinex.dev/)
-[![Version](https://img.shields.io/badge/Version-0.27.1-green)](https://github.com/Mursisru/MissileCamera/releases/tag/v0.27.1)
+[![Version](https://img.shields.io/badge/Version-2.32.10-green)](https://github.com/Mursisru/MissileCamera/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](https://github.com/Mursisru/MissileCamera/blob/BepInExVersion/LICENSE)
 
 ---
@@ -38,9 +38,13 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 ## Features
 
 * **MFD split-screen UI:** Splits the wide tactical MFD (Target view) into zones and embeds the missile feed in the weapons panel area.
-* **Seeker cam (missile nose cam):** Renders a live `RawImage` feed from your latest **player-owned** in-flight missile while it guides toward the target.
-* **Auto B/W IR:** At night or in low ambient light the feed switches to black-and-white IR via a RawImage material (no HUD indicator; same night window as vanilla tac IR). Disable with `InfraredAutoEnabled=false`.
-* **Tactical HUD overlay:** Telemetry (`SPD`, `ALT`, `RNG`), horizon reticle, salvo info, and target markers drawn on the live feed.
+* **Seeker cam (missile nose cam):** Renders a live `RawImage` feed from your latest **player-owned** in-flight missile. **No selected target required** — dumb-fire / no-lock launches still open the MFD feed. On destruction, a brief TV-static burst plays before the panel closes.
+* **Fullscreen FLIR HUD:** green sensor chrome with live `— MSL —` / `— TGT —` telemetry, scrolling compass, dials; translucent unlabeled markers for all scene units — **fullscreen only**. MFD keeps the classic S/A/R corner HUD.
+* **Fullscreen feed:** `RightAlt+F` covers the game screen. Feed camera is **URP pipeline-driven** (same path as TargetCam — mirrors game AA/MSAA/postFX). Uncapped FPS. RT size via `MissileCameraFullscreen.FeedWidth` / `FeedHeight` (default **1920×1080**).
+* **Classic MFD HUD:** S/A/R corners + salvo (1.30.1 style).
+* **Post-FX:** optional scanlines / motion blur / chromatic / bloom (`MissileCameraEffects`) — inactive with a startup warning if shaders are missing from the embedded bundle.
+* **Aircraft mini-cam:** optional second feed (`MissileCameraAircraftCam`, default off). **No-op when `DisplayMode=skip`.**
+* **Auto B/W IR (WhiteHot):** When dark at the missile — low `GetDaylightFactor` (night / under thick clouds) or very low `GetAmbientLight` — the feed switches to black-and-white IR. Not a fixed clock window. Disable with `InfraredAutoEnabled=false`.
 * **Manual feed controls:** Cycle in-flight owned missiles and adjust camera zoom while the MFD overlay is active (see **Controls** below).
 * **Per-aircraft layout (`DisplayMode=auto`):**
   * **Dedicated split** (e.g. KR-67): wide target cam on the left, missile panel on the right.
@@ -136,10 +140,12 @@ BepInEx\config\com.at747.missilecamera.bepinex.cfg
 | `TurnLookSlewDegPerSec` | `120` | Turn-look slew rate (deg/s) |
 | `TurnLookSmoothTime` | `0.18` | Turn-look smoothing |
 | `PostExplosionHoldSeconds` | `0` | Hold last frame after missile loss (0 = off) |
+| `PostLossInterferenceSeconds` | `0.4` | TV-static burst after last missile lost (0 = off) |
 | `RenderFps` | `30` | Feed refresh rate |
-| `InfraredAutoEnabled` | `true` | Auto B/W IR at night or low ambient |
-| `InfraredDarkAmbientThreshold` | `0.12` | Ambient threshold for daytime IR (on) |
-| `InfraredDarkAmbientHysteresis` | `0.02` | Extra ambient margin before IR turns off |
+| `InfraredAutoEnabled` | `true` | Auto B/W IR from daylight/ambient lighting only |
+| `InfraredDaylightThreshold` | `0.35` | IR ON when `GetDaylightFactor` &lt; this |
+| `InfraredAmbientThreshold` | `0.12` | IR ON when `GetAmbientLight` &lt; this |
+| `InfraredLightHysteresis` | `0.03` | Extra light margin before IR turns off |
 | `InfraredContrast` | `1` | IR contrast |
 | `InfraredBlackPoint` | `0.05` | IR black clip |
 | `InfraredWhitePoint` | `0.95` | IR white clip |
@@ -150,14 +156,18 @@ BepInEx\config\com.at747.missilecamera.bepinex.cfg
 | Key | Default | Description |
 | :--- | :---: | :--- |
 | `Enabled` | `true` | HUD overlay on feed |
+| `Style` | `Tgp` | `Tgp` (sensor HUD) or `Classic` (S/A/R corners) |
 | `SalvoWindowSeconds` | `0.5` | Salvo grouping window (seconds) |
 | `ShowCenterCluster` | `true` | Center reticle / intercept ring |
 | `ShowTargetMarker` | `true` | Target diamond marker |
+| `CockpitPipEnabled` | `true` | TGP bottom-left cockpit PiP |
+| `CockpitPipFps` | `15` | Cockpit PiP render FPS |
 | `InterceptColor` | `0,1,0,1` | Intercept ring RGBA (0–1) |
-| `ReticleColor` | `0,0.4,1,1` | Reticle RGBA |
+| `ReticleColor` | `1,1,1,1` | Reticle RGBA |
 | `HorizonColor` | `0.05,0.35,0.08,1` | Horizon fill |
 | `HorizonOutlineColor` | `0.2,1,0.25,1` | Horizon outline |
-| `MissileNameColor` | `1,0,1,1` | Missile name label |
+| `MissileNameColor` | `1,0,1,1` | Classic missile name label |
+| `OwnshipNameColor` | `1,0.15,0.15,1` | TGP ownship name |
 | `TargetNameColor` | `0.4,0.9,1,1` | Target name label |
 | `LabelBackgroundColor` | `0.18,0.18,0.18,0.62` | Label backdrop |
 | `LabelBackgroundAlpha` | `0.62` | Backdrop alpha |
@@ -172,6 +182,18 @@ BepInEx\config\com.at747.missilecamera.bepinex.cfg
 | `ZoomMax` | `4` | Maximum zoom offset |
 | `ZoomFovDegreesPerUnit` | `5` | FOV delta (degrees) per offset unit |
 | `IndicatorSeconds` | `0.5` | Zoom HUD readout duration (seconds) |
+
+### MissileCameraFullscreen
+
+| Key | Default | Description |
+| :--- | :---: | :--- |
+| `Enabled` | `true` | Fullscreen missile feed (entire game viewport) |
+| `ToggleKey` | `F` | KeyCode (with RightAlt by default) |
+| `RequireRightAlt` | `true` | Require RightAlt with ToggleKey |
+| `FeedWidth` | `1920` | Fullscreen RenderTexture width |
+| `FeedHeight` | `1080` | Fullscreen RenderTexture height |
+| `BootstrapSeconds` | `0.6` | First-enter bootstrap duration |
+| `BootstrapSteps` | `4` | Bootstrap staged UI steps |
 
 ---
 

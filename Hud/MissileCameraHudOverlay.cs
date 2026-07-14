@@ -9,14 +9,17 @@ namespace MissileCamera
 
         private RectTransform? _root;
         private MissileCameraCornerHud? _corners;
+        private MissileCameraFlirHud? _flir;
         private MissileCameraAttitudeWidget? _attitude;
-        private MissileCameraTargetMarker? _targetMarker;
+        private MissileCameraMarkerSystem? _markers;
         private MissileCameraZoomIndicator? _zoomIndicator;
         private HudRingGraphic? _interceptRing;
         private RectTransform? _interceptRoot;
         private TargetScreenUI? _screenUi;
         private float _nextDynamicTime;
         private const float DynamicInterval = 1f / 15f;
+
+        internal RectTransform? Root => _root;
 
         internal void EnsureBuilt(RectTransform layoutRt, TargetScreenUI? screenUi)
         {
@@ -30,6 +33,7 @@ namespace MissileCamera
             {
                 _corners?.BindScreenUi(screenUi);
                 _zoomIndicator?.BindScreenUi(screenUi);
+                _markers?.EnsureBuilt(_root);
                 RectTransform? panelRt = FindMissileCameraPanel(layoutRt);
                 ApplyLegacyStubVisibility(panelRt ?? layoutRt, hide: MissileCameraHudConfig.Enabled);
                 return;
@@ -43,8 +47,10 @@ namespace MissileCamera
             Stretch(_root);
 
             _corners = MissileCameraCornerHud.Create(_root, screenUi);
+            _flir = MissileCameraFlirHud.Create(_root);
             _attitude = MissileCameraAttitudeWidget.Create(_root);
-            _targetMarker = MissileCameraTargetMarker.Create(_root);
+            _markers = new MissileCameraMarkerSystem();
+            _markers.EnsureBuilt(_root);
             _zoomIndicator = MissileCameraZoomIndicator.Create(_root, screenUi);
 
             var interceptGo = new GameObject("MissileCameraHudIntercept", typeof(RectTransform), typeof(HudRingGraphic));
@@ -68,7 +74,8 @@ namespace MissileCamera
             MissileCameraPanelMetrics panel,
             RectTransform? panelRt = null,
             bool updateCorners = true,
-            bool updateDynamic = false)
+            bool updateDynamic = false,
+            Missile? seekerMissile = null)
         {
             if (_root == null)
                 return;
@@ -78,33 +85,56 @@ namespace MissileCamera
             bool hudEnabled = MissileCameraHudConfig.Enabled;
             _root.gameObject.SetActive(hudEnabled && snapshot.HasFeed);
             if (!_root.gameObject.activeSelf)
+            {
+                MissileCameraCockpitPipController.Tick(null, panel);
                 return;
+            }
 
-            if (updateCorners)
+            bool flir = MissileCameraHudConfig.UseFullscreenFlirHud;
+            _corners?.SetVisible(!flir);
+            _flir?.SetVisible(flir);
+
+            if (flir)
+            {
+                // Fullscreen FLIR: live labels every Update tick (no throttle).
+                if (updateCorners || updateDynamic)
+                    _flir?.Update(snapshot, panel);
+            }
+            else if (updateCorners)
+            {
                 _corners?.Update(snapshot, panel);
+            }
+
+            MissileCameraCockpitPipController.Tick(null, panel);
 
             if (!updateDynamic)
                 return;
 
             _nextDynamicTime = Time.unscaledTime + DynamicInterval;
 
-            bool showCenter = MissileCameraHudConfig.ShowCenterCluster;
+            bool showCenter = MissileCameraHudConfig.ShowCenterCluster && !flir;
             _attitude?.SetVisible(showCenter);
             if (showCenter)
                 _attitude?.Update(snapshot, panel.MinSide);
 
             UpdateIntercept(snapshot, viewRt, feedCamera, panel.MinSide, showCenter);
 
-            bool showMarker = MissileCameraHudConfig.ShowTargetMarker && snapshot.HasTarget;
-            FeedProjection targetProjection = showMarker && feedCamera != null
-                ? FeedScreenProjector.Project(feedCamera, viewRt, snapshot.TargetPosition)
-                : FeedProjection.Invalid;
-            _targetMarker?.Update(targetProjection, panel.MinSide, showMarker);
+            bool showMarkers = MissileCameraHudConfig.ShowTargetMarker
+                || MissileCameraMarkersConfig.ShowAim
+                || MissileCameraMarkersConfig.ShowSceneUnits;
+            if (showMarkers)
+                _markers?.Update(snapshot, viewRt, feedCamera, panel.MinSide, seekerMissile);
+            else if (_markers != null)
+                _markers.Update(MissileCameraHudSnapshot.Empty, viewRt, feedCamera, panel.MinSide, null);
         }
 
         internal void InvalidateDynamicSchedule() => _nextDynamicTime = 0f;
 
-        internal void InvalidateCornerLayout() => _corners?.InvalidateLayout();
+        internal void InvalidateCornerLayout()
+        {
+            _corners?.InvalidateLayout();
+            _flir?.InvalidateLayout();
+        }
 
         internal void NotifyZoomChanged(float zoomOffset) => _zoomIndicator?.Show(zoomOffset);
 
@@ -112,13 +142,17 @@ namespace MissileCamera
 
         internal void Destroy()
         {
+            MissileCameraCockpitPipController.Shutdown();
+
             if (_root != null)
                 Object.Destroy(_root.gameObject);
 
             _root = null;
             _corners = null;
+            _flir = null;
             _attitude = null;
-            _targetMarker = null;
+            _markers?.Destroy();
+            _markers = null;
             _zoomIndicator = null;
             _interceptRing = null;
             _interceptRoot = null;

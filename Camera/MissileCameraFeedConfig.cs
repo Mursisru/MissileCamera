@@ -1,4 +1,5 @@
 using MissileCamera.Config;
+using UnityEngine;
 
 namespace MissileCamera
 {
@@ -19,10 +20,12 @@ namespace MissileCamera
         internal static float TurnLookSlewDegPerSec = 120f;
         internal static float TurnLookSmoothTime = 0.18f;
         internal static float PostExplosionHoldSeconds;
+        internal static float PostLossInterferenceSeconds = 0.4f;
         internal static int RenderFps = 30;
         internal static bool InfraredAutoEnabled = true;
-        internal static float InfraredDarkAmbientThreshold = 0.12f;
-        internal static float InfraredDarkAmbientHysteresis = 0.02f;
+        internal static float InfraredDaylightThreshold = 0.12f;
+        internal static float InfraredAmbientThreshold = 0.06f;
+        internal static float InfraredLightHysteresis = 0.03f;
         internal static float InfraredContrast = 1f;
         internal static float InfraredBlackPoint = 0.05f;
         internal static float InfraredWhitePoint = 0.95f;
@@ -50,10 +53,12 @@ namespace MissileCamera
             float turnLookSlewDegPerSec = MissileCameraBepInConfig.TurnLookSlewDegPerSec.Value;
             float turnLookSmoothTime = MissileCameraBepInConfig.TurnLookSmoothTime.Value;
             float postExplosionHoldSeconds = MissileCameraBepInConfig.PostExplosionHoldSeconds.Value;
+            float postLossInterferenceSeconds = MissileCameraBepInConfig.PostLossInterferenceSeconds.Value;
             int renderFps = MissileCameraBepInConfig.RenderFps.Value;
             bool infraredAutoEnabled = MissileCameraBepInConfig.InfraredAutoEnabled.Value;
-            float infraredDarkAmbientThreshold = MissileCameraBepInConfig.InfraredDarkAmbientThreshold.Value;
-            float infraredDarkAmbientHysteresis = MissileCameraBepInConfig.InfraredDarkAmbientHysteresis.Value;
+            float infraredDaylightThreshold = MissileCameraBepInConfig.InfraredDaylightThreshold.Value;
+            float infraredAmbientThreshold = MissileCameraBepInConfig.InfraredAmbientThreshold.Value;
+            float infraredLightHysteresis = MissileCameraBepInConfig.InfraredLightHysteresis.Value;
             float infraredContrast = MissileCameraBepInConfig.InfraredContrast.Value;
             float infraredBlackPoint = MissileCameraBepInConfig.InfraredBlackPoint.Value;
             float infraredWhitePoint = MissileCameraBepInConfig.InfraredWhitePoint.Value;
@@ -76,10 +81,12 @@ namespace MissileCamera
                 && turnLookSlewDegPerSec == TurnLookSlewDegPerSec
                 && turnLookSmoothTime == TurnLookSmoothTime
                 && postExplosionHoldSeconds == PostExplosionHoldSeconds
+                && postLossInterferenceSeconds == PostLossInterferenceSeconds
                 && renderFps == RenderFps
                 && infraredAutoEnabled == InfraredAutoEnabled
-                && infraredDarkAmbientThreshold == InfraredDarkAmbientThreshold
-                && infraredDarkAmbientHysteresis == InfraredDarkAmbientHysteresis
+                && infraredDaylightThreshold == InfraredDaylightThreshold
+                && infraredAmbientThreshold == InfraredAmbientThreshold
+                && infraredLightHysteresis == InfraredLightHysteresis
                 && infraredContrast == InfraredContrast
                 && infraredBlackPoint == InfraredBlackPoint
                 && infraredWhitePoint == InfraredWhitePoint
@@ -102,16 +109,39 @@ namespace MissileCamera
             TurnLookSlewDegPerSec = turnLookSlewDegPerSec;
             TurnLookSmoothTime = turnLookSmoothTime;
             PostExplosionHoldSeconds = postExplosionHoldSeconds;
+            PostLossInterferenceSeconds = postLossInterferenceSeconds;
             RenderFps = renderFps;
             InfraredAutoEnabled = infraredAutoEnabled;
-            InfraredDarkAmbientThreshold = infraredDarkAmbientThreshold;
-            InfraredDarkAmbientHysteresis = infraredDarkAmbientHysteresis;
+            InfraredDaylightThreshold = infraredDaylightThreshold;
+            InfraredAmbientThreshold = infraredAmbientThreshold;
+            InfraredLightHysteresis = infraredLightHysteresis;
             InfraredContrast = infraredContrast;
             InfraredBlackPoint = infraredBlackPoint;
             InfraredWhitePoint = infraredWhitePoint;
             InfraredRedWeight = infraredRedWeight;
             InfraredExposureBiasEv = infraredExposureBiasEv;
             Revision++;
+        }
+
+        /// <summary>
+        /// MFD feed uses cfg size; game-fullscreen uses MissileCameraFullscreen FeedWidth/Height (default 1920×1080).
+        /// </summary>
+        internal static void ResolveActiveFeedSize(out int width, out int height)
+        {
+            if (!MissileCameraFullscreenController.IsActive)
+            {
+                width = Mathf.Clamp(FeedWidth, 128, 2048);
+                height = Mathf.Clamp(FeedHeight, 128, 2048);
+                return;
+            }
+
+            MissileCameraFullscreenConfig.Refresh();
+            width = Mathf.Clamp(MissileCameraFullscreenConfig.FeedWidth, 640, 3840);
+            height = Mathf.Clamp(MissileCameraFullscreenConfig.FeedHeight, 360, 2160);
+            if ((width & 1) != 0)
+                width--;
+            if ((height & 1) != 0)
+                height--;
         }
     }
 }

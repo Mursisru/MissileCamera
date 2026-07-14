@@ -6,10 +6,39 @@ namespace MissileCamera
     {
         internal static void Process()
         {
+            if (!MissileCameraControlsConfig.Enabled && !MissileCameraFullscreenConfig.Enabled)
+                return;
+
+            MissileCameraFullscreenConfig.Refresh();
+            MissileCameraAircraftCamConfig.Refresh();
+            MissileCameraControlsConfig.Refresh();
+
+            // Fullscreen toggle must work even when Controls.Enabled is false.
+            if (MissileCameraFullscreenConfig.Enabled)
+            {
+                bool altOk = !MissileCameraFullscreenConfig.RequireRightAlt || Input.GetKey(KeyCode.RightAlt);
+                if (altOk && Input.GetKeyDown(MissileCameraFullscreenConfig.ToggleKey))
+                {
+                    MissileCameraFullscreenController.Toggle();
+                    return;
+                }
+            }
+
             if (!MissileCameraControlsConfig.Enabled)
                 return;
 
-            if (!MissileCameraFeedController.HasOverlayInputContext())
+            if (MissileCameraAircraftCamConfig.Enabled)
+            {
+                bool altOk = !MissileCameraAircraftCamConfig.RequireRightAlt || Input.GetKey(KeyCode.RightAlt);
+                if (altOk && Input.GetKeyDown(MissileCameraAircraftCamConfig.CycleKey))
+                {
+                    MissileCameraAircraftCamController.CycleMode();
+                    return;
+                }
+            }
+
+            if (!MissileCameraFeedController.HasOverlayInputContext()
+                && !MissileCameraFullscreenController.IsActive)
                 return;
 
             if (Input.GetKey(KeyCode.RightShift) && Input.GetKeyDown(KeyCode.Period))

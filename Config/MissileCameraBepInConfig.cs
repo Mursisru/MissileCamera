@@ -32,10 +32,12 @@ namespace MissileCamera.Config
         internal static ConfigEntry<float> TurnLookSlewDegPerSec { get; private set; } = null!;
         internal static ConfigEntry<float> TurnLookSmoothTime { get; private set; } = null!;
         internal static ConfigEntry<float> PostExplosionHoldSeconds { get; private set; } = null!;
+        internal static ConfigEntry<float> PostLossInterferenceSeconds { get; private set; } = null!;
         internal static ConfigEntry<int> RenderFps { get; private set; } = null!;
         internal static ConfigEntry<bool> InfraredAutoEnabled { get; private set; } = null!;
-        internal static ConfigEntry<float> InfraredDarkAmbientThreshold { get; private set; } = null!;
-        internal static ConfigEntry<float> InfraredDarkAmbientHysteresis { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredDaylightThreshold { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredAmbientThreshold { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredLightHysteresis { get; private set; } = null!;
         internal static ConfigEntry<float> InfraredContrast { get; private set; } = null!;
         internal static ConfigEntry<float> InfraredBlackPoint { get; private set; } = null!;
         internal static ConfigEntry<float> InfraredWhitePoint { get; private set; } = null!;
@@ -43,14 +45,18 @@ namespace MissileCamera.Config
         internal static ConfigEntry<float> InfraredExposureBiasEv { get; private set; } = null!;
 
         internal static ConfigEntry<bool> HudEnabled { get; private set; } = null!;
+        internal static ConfigEntry<string> HudStyle { get; private set; } = null!;
         internal static ConfigEntry<float> SalvoWindowSeconds { get; private set; } = null!;
         internal static ConfigEntry<bool> ShowCenterCluster { get; private set; } = null!;
         internal static ConfigEntry<bool> ShowTargetMarker { get; private set; } = null!;
+        internal static ConfigEntry<bool> HudCockpitPipEnabled { get; private set; } = null!;
+        internal static ConfigEntry<int> HudCockpitPipFps { get; private set; } = null!;
         internal static ConfigEntry<string> InterceptColor { get; private set; } = null!;
         internal static ConfigEntry<string> ReticleColor { get; private set; } = null!;
         internal static ConfigEntry<string> HorizonColor { get; private set; } = null!;
         internal static ConfigEntry<string> HorizonOutlineColor { get; private set; } = null!;
         internal static ConfigEntry<string> MissileNameColor { get; private set; } = null!;
+        internal static ConfigEntry<string> OwnshipNameColor { get; private set; } = null!;
         internal static ConfigEntry<string> TargetNameColor { get; private set; } = null!;
         internal static ConfigEntry<string> LabelBackgroundColor { get; private set; } = null!;
         internal static ConfigEntry<float> LabelBackgroundAlpha { get; private set; } = null!;
@@ -61,6 +67,61 @@ namespace MissileCamera.Config
         internal static ConfigEntry<float> ZoomMax { get; private set; } = null!;
         internal static ConfigEntry<float> ZoomFovDegreesPerUnit { get; private set; } = null!;
         internal static ConfigEntry<float> IndicatorSeconds { get; private set; } = null!;
+
+        internal static ConfigEntry<bool> FullscreenEnabled { get; private set; } = null!;
+        internal static ConfigEntry<string> FullscreenToggleKey { get; private set; } = null!;
+        internal static ConfigEntry<bool> FullscreenRequireRightAlt { get; private set; } = null!;
+        internal static ConfigEntry<float> FullscreenBootstrapSeconds { get; private set; } = null!;
+        internal static ConfigEntry<int> FullscreenBootstrapSteps { get; private set; } = null!;
+        internal static ConfigEntry<int> FullscreenFeedWidth { get; private set; } = null!;
+        internal static ConfigEntry<int> FullscreenFeedHeight { get; private set; } = null!;
+
+        internal static ConfigEntry<bool> TelemetryShowG { get; private set; } = null!;
+        internal static ConfigEntry<bool> TelemetryShowFuel { get; private set; } = null!;
+        internal static ConfigEntry<bool> TelemetryShowGuidance { get; private set; } = null!;
+        internal static ConfigEntry<bool> TelemetryShowMach { get; private set; } = null!;
+        internal static ConfigEntry<bool> TelemetryShowTargetRange { get; private set; } = null!;
+        internal static ConfigEntry<bool> TelemetryShowTargetAngle { get; private set; } = null!;
+        internal static ConfigEntry<float> TelemetrySmoothHz { get; private set; } = null!;
+
+        internal static ConfigEntry<bool> FxInfraredEnabled { get; private set; } = null!;
+        internal static ConfigEntry<bool> FxScanlinesEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> FxScanlinesIntensity { get; private set; } = null!;
+        internal static ConfigEntry<bool> FxMotionBlurEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> FxMotionBlurIntensity { get; private set; } = null!;
+        internal static ConfigEntry<bool> FxChromaticEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> FxChromaticIntensity { get; private set; } = null!;
+        internal static ConfigEntry<bool> FxBloomEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> FxBloomIntensity { get; private set; } = null!;
+
+        internal static ConfigEntry<int> MarkersMax { get; private set; } = null!;
+        internal static ConfigEntry<bool> MarkersShowTarget { get; private set; } = null!;
+        internal static ConfigEntry<bool> MarkersShowAim { get; private set; } = null!;
+        internal static ConfigEntry<bool> MarkersShowSceneUnits { get; private set; } = null!;
+        internal static ConfigEntry<float> MarkersSceneUnitAlpha { get; private set; } = null!;
+        internal static ConfigEntry<bool> MarkersShowThreat { get; private set; } = null!;
+        internal static ConfigEntry<bool> MarkersShowAlly { get; private set; } = null!;
+        internal static ConfigEntry<bool> MarkersShowWaypoint { get; private set; } = null!;
+        internal static ConfigEntry<bool> MarkersShowJam { get; private set; } = null!;
+        internal static ConfigEntry<string> MarkersTargetColor { get; private set; } = null!;
+        internal static ConfigEntry<string> MarkersAimColor { get; private set; } = null!;
+        internal static ConfigEntry<string> MarkersThreatColor { get; private set; } = null!;
+        internal static ConfigEntry<string> MarkersAllyColor { get; private set; } = null!;
+        internal static ConfigEntry<string> MarkersWaypointColor { get; private set; } = null!;
+        internal static ConfigEntry<string> MarkersJamColor { get; private set; } = null!;
+
+        internal static ConfigEntry<bool> AircraftCamEnabled { get; private set; } = null!;
+        internal static ConfigEntry<string> AircraftCamMode { get; private set; } = null!;
+        internal static ConfigEntry<int> AircraftCamFps { get; private set; } = null!;
+        internal static ConfigEntry<int> AircraftCamWidth { get; private set; } = null!;
+        internal static ConfigEntry<int> AircraftCamHeight { get; private set; } = null!;
+        internal static ConfigEntry<float> AircraftCamAnchorMinX { get; private set; } = null!;
+        internal static ConfigEntry<float> AircraftCamAnchorMinY { get; private set; } = null!;
+        internal static ConfigEntry<float> AircraftCamAnchorMaxX { get; private set; } = null!;
+        internal static ConfigEntry<float> AircraftCamAnchorMaxY { get; private set; } = null!;
+        internal static ConfigEntry<bool> AircraftCamHideInFullscreen { get; private set; } = null!;
+        internal static ConfigEntry<string> AircraftCamCycleKey { get; private set; } = null!;
+        internal static ConfigEntry<bool> AircraftCamRequireRightAlt { get; private set; } = null!;
 
         internal static void Bind(ConfigFile config)
         {
@@ -111,14 +172,26 @@ namespace MissileCamera.Config
                 new ConfigDescription("Turn-look smoothing time (seconds).", new AcceptableValueRange<float>(0.02f, 1.5f)));
             PostExplosionHoldSeconds = config.Bind(feed, "PostExplosionHoldSeconds", 0f,
                 new ConfigDescription("Hold last frame after missile loss (0 = off).", new AcceptableValueRange<float>(0f, 10f)));
+            PostLossInterferenceSeconds = config.Bind(feed, "PostLossInterferenceSeconds", 0.4f,
+                new ConfigDescription(
+                    "TV-static burst after the last followed missile is destroyed (0 = off).",
+                    new AcceptableValueRange<float>(0f, 2f)));
             RenderFps = config.Bind(feed, "RenderFps", 30,
                 new ConfigDescription("Feed refresh rate.", new AcceptableValueRange<int>(5, 60)));
             InfraredAutoEnabled = config.Bind(feed, "InfraredAutoEnabled", true,
-                "Auto B/W IR feed at night (timeOfDay before 6 or after 18) or low ambient light.");
-            InfraredDarkAmbientThreshold = config.Bind(feed, "InfraredDarkAmbientThreshold", 0.12f,
-                new ConfigDescription("Ambient light threshold for daytime IR (on).", new AcceptableValueRange<float>(0.01f, 1f)));
-            InfraredDarkAmbientHysteresis = config.Bind(feed, "InfraredDarkAmbientHysteresis", 0.02f,
-                new ConfigDescription("Extra ambient margin before IR turns off (anti-flicker).", new AcceptableValueRange<float>(0f, 0.2f)));
+                "Auto B/W IR from lighting only: low GetDaylightFactor (night / thick clouds) or low GetAmbientLight. Not a fixed clock window.");
+            InfraredDaylightThreshold = config.Bind(feed, "InfraredDaylightThreshold", 0.12f,
+                new ConfigDescription(
+                    "IR ON when GetDaylightFactor at the missile is below this (night / under thick cloud). Lower = rarer IR.",
+                    new AcceptableValueRange<float>(0.01f, 1f)));
+            InfraredAmbientThreshold = config.Bind(feed, "InfraredAmbientThreshold", 0.06f,
+                new ConfigDescription(
+                    "IR ON when GetAmbientLight is below this (truly dark ambient). Lower = rarer IR.",
+                    new AcceptableValueRange<float>(0.01f, 1f)));
+            InfraredLightHysteresis = config.Bind(feed, "InfraredLightHysteresis", 0.03f,
+                new ConfigDescription(
+                    "Extra light margin before IR turns off (anti-flicker).",
+                    new AcceptableValueRange<float>(0f, 0.2f)));
             InfraredContrast = config.Bind(feed, "InfraredContrast", 1f,
                 new ConfigDescription("IR contrast for RawImage material.", new AcceptableValueRange<float>(0f, 100f)));
             InfraredBlackPoint = config.Bind(feed, "InfraredBlackPoint", 0.05f,
@@ -134,15 +207,23 @@ namespace MissileCamera.Config
 
             const string hud = "MissileCameraHud";
             HudEnabled = config.Bind(hud, "Enabled", true, "HUD overlay on feed.");
+            HudStyle = config.Bind(hud, "Style", "Classic",
+                new ConfigDescription(
+                    "MFD always uses Classic. Fullscreen uses FLIR overlay (Style kept for compatibility).",
+                    new AcceptableValueList<string>("Tgp", "Classic")));
             SalvoWindowSeconds = config.Bind(hud, "SalvoWindowSeconds", 0.5f,
                 new ConfigDescription("Salvo grouping window (seconds).", new AcceptableValueRange<float>(0.05f, 5f)));
             ShowCenterCluster = config.Bind(hud, "ShowCenterCluster", true, "Center reticle / intercept ring.");
             ShowTargetMarker = config.Bind(hud, "ShowTargetMarker", true, "Target diamond marker.");
+            HudCockpitPipEnabled = config.Bind(hud, "CockpitPipEnabled", true, "TGP bottom-left cockpit PiP (TOR: Cockpit View).");
+            HudCockpitPipFps = config.Bind(hud, "CockpitPipFps", 15,
+                new ConfigDescription("Cockpit PiP render FPS.", new AcceptableValueRange<int>(5, 30)));
             InterceptColor = config.Bind(hud, "InterceptColor", "0,1,0,1", "Intercept ring RGBA (0–1), comma-separated.");
-            ReticleColor = config.Bind(hud, "ReticleColor", "0,0.4,1,1", "Reticle RGBA (0–1), comma-separated.");
+            ReticleColor = config.Bind(hud, "ReticleColor", "1,1,1,1", "Reticle RGBA (0–1), comma-separated.");
             HorizonColor = config.Bind(hud, "HorizonColor", "0.05,0.35,0.08,1", "Horizon fill RGBA.");
             HorizonOutlineColor = config.Bind(hud, "HorizonOutlineColor", "0.2,1,0.25,1", "Horizon outline RGBA.");
-            MissileNameColor = config.Bind(hud, "MissileNameColor", "1,0,1,1", "Missile name label RGBA.");
+            MissileNameColor = config.Bind(hud, "MissileNameColor", "1,0,1,1", "Classic missile name label RGBA.");
+            OwnshipNameColor = config.Bind(hud, "OwnshipNameColor", "1,0.15,0.15,1", "TGP ownship name RGBA.");
             TargetNameColor = config.Bind(hud, "TargetNameColor", "0.4,0.9,1,1", "Target name label RGBA.");
             LabelBackgroundColor = config.Bind(hud, "LabelBackgroundColor", "0.18,0.18,0.18,0.62", "Label backdrop RGBA.");
             LabelBackgroundAlpha = config.Bind(hud, "LabelBackgroundAlpha", 0.62f,
@@ -160,6 +241,90 @@ namespace MissileCamera.Config
                 new ConfigDescription("FOV delta (degrees) per zoom offset unit.", new AcceptableValueRange<float>(0.5f, 30f)));
             IndicatorSeconds = config.Bind(controls, "IndicatorSeconds", 0.5f,
                 new ConfigDescription("Zoom HUD readout duration (seconds).", new AcceptableValueRange<float>(0.1f, 3f)));
+
+            const string fullscreen = "MissileCameraFullscreen";
+            FullscreenEnabled = config.Bind(fullscreen, "Enabled", true, "Allow fullscreen missile feed (entire game viewport, not MFD-only).");
+            FullscreenToggleKey = config.Bind(fullscreen, "ToggleKey", "F", "KeyCode name for fullscreen toggle.");
+            FullscreenRequireRightAlt = config.Bind(fullscreen, "RequireRightAlt", true, "Require RightAlt held with ToggleKey.");
+            FullscreenBootstrapSeconds = config.Bind(fullscreen, "BootstrapSeconds", 0.6f,
+                new ConfigDescription("First-enter-per-mission bootstrap duration.", new AcceptableValueRange<float>(0.05f, 3f)));
+            FullscreenBootstrapSteps = config.Bind(fullscreen, "BootstrapSteps", 4,
+                new ConfigDescription("Bootstrap staged UI steps.", new AcceptableValueRange<int>(1, 8)));
+            FullscreenFeedWidth = config.Bind(fullscreen, "FeedWidth", 1920,
+                new ConfigDescription(
+                    "Fullscreen feed RenderTexture width (independent of MFD FeedWidth).",
+                    new AcceptableValueRange<int>(640, 3840)));
+            FullscreenFeedHeight = config.Bind(fullscreen, "FeedHeight", 1080,
+                new ConfigDescription(
+                    "Fullscreen feed RenderTexture height (independent of MFD FeedHeight).",
+                    new AcceptableValueRange<int>(360, 2160)));
+
+            const string telemetry = "MissileCameraTelemetry";
+            TelemetryShowG = config.Bind(telemetry, "ShowG", false, "Reserved extended G readout (off = classic MFD HUD like 1.30.1).");
+            TelemetryShowFuel = config.Bind(telemetry, "ShowFuel", false, "Reserved extended fuel readout (off = classic MFD HUD).");
+            TelemetryShowGuidance = config.Bind(telemetry, "ShowGuidance", false, "Reserved guidance status on HUD (off = classic MFD HUD).");
+            TelemetryShowMach = config.Bind(telemetry, "ShowMach", false, "Reserved Mach readout (off = classic MFD HUD).");
+            TelemetryShowTargetRange = config.Bind(telemetry, "ShowTargetRange", true, "Use aim/target range for R: label (classic).");
+            TelemetryShowTargetAngle = config.Bind(telemetry, "ShowTargetAngle", false, "Reserved off-bore angle on HUD (off = classic MFD HUD).");
+            TelemetrySmoothHz = config.Bind(telemetry, "SmoothHz", 12f,
+                new ConfigDescription("Telemetry smoothing Hz (capped by RenderFps).", new AcceptableValueRange<float>(1f, 60f)));
+
+            const string fx = "MissileCameraEffects";
+            FxInfraredEnabled = config.Bind(fx, "InfraredEnabled", true, "Allow IR stage (applied in rig; availability probed at startup).");
+            FxScanlinesEnabled = config.Bind(fx, "ScanlinesEnabled", false, "Scanlines post-FX (requires shader bundle).");
+            FxScanlinesIntensity = config.Bind(fx, "ScanlinesIntensity", 0.35f,
+                new ConfigDescription("Scanlines intensity 0–1.", new AcceptableValueRange<float>(0f, 1f)));
+            FxMotionBlurEnabled = config.Bind(fx, "MotionBlurEnabled", false, "Motion blur post-FX (requires shader bundle).");
+            FxMotionBlurIntensity = config.Bind(fx, "MotionBlurIntensity", 0.25f,
+                new ConfigDescription("Motion blur intensity 0–1.", new AcceptableValueRange<float>(0f, 1f)));
+            FxChromaticEnabled = config.Bind(fx, "ChromaticEnabled", false, "Chromatic aberration (requires shader bundle).");
+            FxChromaticIntensity = config.Bind(fx, "ChromaticIntensity", 0.2f,
+                new ConfigDescription("Chromatic intensity 0–1.", new AcceptableValueRange<float>(0f, 1f)));
+            FxBloomEnabled = config.Bind(fx, "BloomEnabled", false, "Bloom post-FX (requires shader bundle).");
+            FxBloomIntensity = config.Bind(fx, "BloomIntensity", 0.3f,
+                new ConfigDescription("Bloom intensity 0–1.", new AcceptableValueRange<float>(0f, 1f)));
+
+            const string markers = "MissileCameraMarkers";
+            MarkersMax = config.Bind(markers, "MaxMarkers", 48,
+                new ConfigDescription("Max pooled markers projected per frame.", new AcceptableValueRange<int>(1, 64)));
+            MarkersShowTarget = config.Bind(markers, "ShowTarget", true, "Show locked target marker from HudSnapshot.");
+            MarkersShowAim = config.Bind(markers, "ShowAim", true, "Show aim/intercept marker from HudSnapshot.");
+            MarkersShowSceneUnits = config.Bind(markers, "ShowSceneUnits", true,
+                "Show translucent unlabeled markers for all other scene units.");
+            MarkersSceneUnitAlpha = config.Bind(markers, "SceneUnitAlpha", 0.4f,
+                new ConfigDescription("Alpha for ambient unit markers (no labels).", new AcceptableValueRange<float>(0.1f, 1f)));
+            MarkersShowThreat = config.Bind(markers, "ShowThreat", false, "Reserved threat markers.");
+            MarkersShowAlly = config.Bind(markers, "ShowAlly", false, "Reserved ally markers.");
+            MarkersShowWaypoint = config.Bind(markers, "ShowWaypoint", false, "Reserved waypoint markers.");
+            MarkersShowJam = config.Bind(markers, "ShowJam", false, "Reserved jam markers.");
+            MarkersTargetColor = config.Bind(markers, "TargetColor", "0.35,0.95,1,1", "Target marker RGBA (cyan).");
+            MarkersAimColor = config.Bind(markers, "AimColor", "1,0.75,0.12,1", "Aim/IP marker RGBA (amber).");
+            MarkersThreatColor = config.Bind(markers, "ThreatColor", "1,0.22,0.18,1", "Threat marker RGBA (red).");
+            MarkersAllyColor = config.Bind(markers, "AllyColor", "0.35,1,0.45,1", "Ally marker RGBA (green).");
+            MarkersWaypointColor = config.Bind(markers, "WaypointColor", "0.95,0.55,1,1", "Waypoint marker RGBA (violet).");
+            MarkersJamColor = config.Bind(markers, "JamColor", "1,0.45,0.05,1", "Jam marker RGBA (orange).");
+
+            const string aircraftCam = "MissileCameraAircraftCam";
+            AircraftCamEnabled = config.Bind(aircraftCam, "Enabled", false, "Aircraft mini-cam (off by default). No-op when DisplayMode=skip.");
+            AircraftCamMode = config.Bind(aircraftCam, "Mode", "Rear",
+                new ConfigDescription("Rear / TopDown / Chase.", new AcceptableValueList<string>("Rear", "TopDown", "Chase")));
+            AircraftCamFps = config.Bind(aircraftCam, "RenderFps", 15,
+                new ConfigDescription("Mini-cam FPS.", new AcceptableValueRange<int>(5, 30)));
+            AircraftCamWidth = config.Bind(aircraftCam, "Width", 256,
+                new ConfigDescription("Mini-cam RT width.", new AcceptableValueRange<int>(64, 1024)));
+            AircraftCamHeight = config.Bind(aircraftCam, "Height", 256,
+                new ConfigDescription("Mini-cam RT height.", new AcceptableValueRange<int>(64, 1024)));
+            AircraftCamAnchorMinX = config.Bind(aircraftCam, "AnchorMinX", 0.72f,
+                new ConfigDescription("Normalized rect min X.", new AcceptableValueRange<float>(0f, 1f)));
+            AircraftCamAnchorMinY = config.Bind(aircraftCam, "AnchorMinY", 0.72f,
+                new ConfigDescription("Normalized rect min Y.", new AcceptableValueRange<float>(0f, 1f)));
+            AircraftCamAnchorMaxX = config.Bind(aircraftCam, "AnchorMaxX", 0.98f,
+                new ConfigDescription("Normalized rect max X.", new AcceptableValueRange<float>(0f, 1f)));
+            AircraftCamAnchorMaxY = config.Bind(aircraftCam, "AnchorMaxY", 0.98f,
+                new ConfigDescription("Normalized rect max Y.", new AcceptableValueRange<float>(0f, 1f)));
+            AircraftCamHideInFullscreen = config.Bind(aircraftCam, "HideInFullscreen", false, "Hide mini-cam while fullscreen.");
+            AircraftCamCycleKey = config.Bind(aircraftCam, "CycleKey", "V", "KeyCode to cycle mini-cam mode.");
+            AircraftCamRequireRightAlt = config.Bind(aircraftCam, "RequireRightAlt", true, "Require RightAlt with CycleKey.");
 
             IsBound = true;
         }

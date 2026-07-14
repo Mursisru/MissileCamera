@@ -53,8 +53,23 @@ namespace MissileCamera
             _driver = go.AddComponent<MissileCameraFeedDriver>();
         }
 
+        internal static Coroutine? StartCoroutineSafe(IEnumerator routine)
+        {
+            Ensure();
+            return _driver != null ? _driver.StartCoroutine(routine) : null;
+        }
+
+        internal static void StopCoroutineSafe(Coroutine? routine)
+        {
+            if (_driver == null || routine == null)
+                return;
+
+            _driver.StopCoroutine(routine);
+        }
+
         internal static void Shutdown()
         {
+            MissileCameraFullscreenBootstrap.ResetForMissionUnload();
             MissileCameraFeedController.Shutdown();
             if (_driver == null)
                 return;

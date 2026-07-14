@@ -52,8 +52,6 @@ Shader "Hidden/MissileCamera/InfraredBlit"
                 return o;
             }
 
-            // Mirrors URP ColorAdjustments: desaturate + postExposure + soft highlight roll-off.
-            // Soft compress replaces full Reinhard so midtones stay TargetCam-bright while plume does not blow the frame.
             fixed4 frag(v2f i) : SV_Target
             {
                 half3 linRgb = tex2D(_MainTex, i.uv).rgb;

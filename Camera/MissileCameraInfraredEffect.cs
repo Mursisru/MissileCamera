@@ -46,7 +46,10 @@ namespace MissileCamera
                 if (!_loggedPath || !_lastInfrared)
                 {
                     _loggedPath = true;
-                    MfdLog.Info($"IR on path=hdr+blit finalExp={rig.InfraredBlitExposure:F2} (TargetCam EV)");
+                    if (rig.IsPipelineDriven)
+                        MfdLog.Info($"IR on path=urp-volume finalExp={rig.InfraredBlitExposure:F2} (TargetCam parity)");
+                    else
+                        MfdLog.Info($"IR on path=hdr+blit finalExp={rig.InfraredBlitExposure:F2} (TargetCam EV)");
                 }
 
                 _lastInfrared = true;

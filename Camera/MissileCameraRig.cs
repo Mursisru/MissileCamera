@@ -33,6 +33,7 @@ namespace MissileCamera
         private bool _lastFrameUsedBlit;
         private float _lastPolicyExposure;
         private InfraredExposureBreakdown _lastExposureBreakdown;
+        private bool _pipelineDriven;
 
         internal bool IsInfraredVolumePrimed => _infraredVolumeActive;
         internal bool IsInfraredVolumeEnabledDuringRender => _infraredVolumeEnabledDuringRender;
@@ -59,17 +60,13 @@ namespace MissileCamera
             _camera.nearClipPlane = 0.15f;
             _camera.farClipPlane = FarClipPlane;
             _camera.useOcclusionCulling = false;
-            _camera.allowHDR = false;
-            _camera.allowMSAA = false;
             _camera.clearFlags = CameraClearFlags.Skybox;
 
             UniversalAdditionalCameraData urp = _camera.GetUniversalAdditionalCameraData();
             urp.renderType = CameraRenderType.Base;
-            urp.renderPostProcessing = false;
-            urp.antialiasing = AntialiasingMode.None;
             urp.requiresColorOption = CameraOverrideOption.UsePipelineSettings;
             urp.requiresDepthOption = CameraOverrideOption.UsePipelineSettings;
-            urp.renderShadows = true;
+            urp.volumeTrigger = _camera.transform;
 
             _irVolume = _root.AddComponent<Volume>();
             _irVolume.isGlobal = false;
@@ -94,7 +91,10 @@ namespace MissileCamera
         internal Missile? Missile => _missile;
         internal Camera FeedCamera => _camera;
         internal float BoreRollDeg => _boreRollDeg;
+        internal bool IsPipelineDriven => _pipelineDriven;
         internal HorizonFrame LastHorizonFrame { get; private set; } = HorizonFrame.Empty;
+
+        internal float ZoomOffset => _zoomOffset;
 
         internal void SetZoomOffset(float offset)
         {
@@ -103,7 +103,47 @@ namespace MissileCamera
         }
 
         /// <summary>
-        /// TargetCam IR parity: HDR scene render + blit ColorAdjustments (URP Volume on manual Render is unreliable).
+        /// Fullscreen: enable camera so URP processes it like TargetCam. MFD: disabled + manual RenderFrame.
+        /// </summary>
+        internal void SetPipelineDriven(bool enabled)
+        {
+            if (!IsRootAlive)
+                return;
+
+            if (_pipelineDriven == enabled)
+            {
+                if (enabled)
+                {
+                    ApplyConfigIfNeeded();
+                    ApplyPose();
+                    ApplyPipelineInfraredState();
+                    MissileCameraRenderPrep.SetPipelineDriven(
+                        _camera, true, forceLdr: false, infrared: _infraredVolumeActive);
+                }
+
+                return;
+            }
+
+            _pipelineDriven = enabled;
+            if (!enabled)
+            {
+                MissileCameraRenderPrep.SetPipelineDriven(null, false);
+                _camera.enabled = false;
+                ApplyPipelineInfraredState();
+                return;
+            }
+
+            ApplyConfigIfNeeded();
+            ApplyPose();
+            _camera.targetTexture = _renderTexture;
+            ApplyPipelineInfraredState();
+            MissileCameraRenderPrep.SetPipelineDriven(
+                _camera, true, forceLdr: false, infrared: _infraredVolumeActive);
+            _camera.enabled = true;
+        }
+
+        /// <summary>
+        /// TargetCam IR parity. Pipeline mode uses URP Volume (like vanilla). MFD uses HDR blit.
         /// </summary>
         internal void SetInfraredVolume(bool infrared, float exposure)
         {
@@ -112,8 +152,6 @@ namespace MissileCamera
 
             _infraredVolumeActive = infrared;
             _lastPolicyExposure = exposure;
-            _irVolume.enabled = false;
-            _colorAdjustments.saturation.overrideState = false;
 
             if (!infrared)
             {
@@ -121,10 +159,58 @@ namespace MissileCamera
                 _infraredBlitContrast = 1f;
                 _infraredSyncedFromVanilla = false;
                 _lastExposureBreakdown = default;
+                _irVolume.enabled = false;
+                _colorAdjustments.saturation.overrideState = false;
+                MissileCameraRenderPrep.SetPipelineInfrared(false);
                 return;
             }
 
             ResolveInfraredRenderParams(exposure);
+            ApplyPipelineInfraredState();
+        }
+
+        private void ApplyPipelineInfraredState()
+        {
+            if (!IsRootAlive)
+                return;
+
+            if (_pipelineDriven && _infraredVolumeActive)
+            {
+                // Local volume + volumeTrigger only — never global (would tint main cam / stick IR look).
+                _irVolume.isGlobal = false;
+                _irVolume.enabled = true;
+                _colorAdjustments.saturation.Override(-100f);
+                _colorAdjustments.saturation.overrideState = true;
+                _colorAdjustments.postExposure.Override(_infraredBlitExposure);
+                _colorAdjustments.postExposure.overrideState = true;
+                _colorAdjustments.contrast.Override(_infraredBlitContrast);
+                _colorAdjustments.contrast.overrideState = true;
+                UniversalAdditionalCameraData urp = _camera.GetUniversalAdditionalCameraData();
+                urp.renderPostProcessing = true;
+                urp.volumeTrigger = _camera.transform;
+                _infraredVolumeEnabledDuringRender = true;
+                _renderPostProcessingEnabled = true;
+                MissileCameraRenderPrep.SetPipelineInfrared(true);
+                return;
+            }
+
+            _irVolume.isGlobal = false;
+            _irVolume.enabled = false;
+            _colorAdjustments.saturation.Override(0f);
+            _colorAdjustments.saturation.overrideState = false;
+            _colorAdjustments.postExposure.Override(0f);
+            _colorAdjustments.postExposure.overrideState = false;
+            _colorAdjustments.contrast.Override(0f);
+            _colorAdjustments.contrast.overrideState = false;
+            _infraredVolumeEnabledDuringRender = false;
+            _renderPostProcessingEnabled = false;
+            if (_pipelineDriven)
+            {
+                // COLOR: do not inherit TargetCam IR post stack — feed stays full color.
+                UniversalAdditionalCameraData urp = _camera.GetUniversalAdditionalCameraData();
+                urp.renderPostProcessing = false;
+                MissileCameraRenderPrep.SetPipelineInfrared(false);
+            }
         }
 
         private void ResolveInfraredRenderParams(float policyExposure)
@@ -192,8 +278,11 @@ namespace MissileCamera
                 _root.transform.SetParent(null, true);
         }
 
-        internal void RenderFrame()
+        internal void RenderFrame(bool managePrep = true)
         {
+            if (_pipelineDriven)
+                return;
+
             if (!IsRootAlive || _missile == null || _missile.disabled || _missile.rb == null || _renderTexture == null)
                 return;
 
@@ -223,7 +312,9 @@ namespace MissileCamera
                     _camera.targetTexture = _renderTexture;
                 }
 
-                MissileCameraRenderPrep.BeforeRender(_camera, forceLdr: false);
+                if (managePrep)
+                    MissileCameraRenderPrep.BeforeRender(_camera, forceLdr: false);
+
                 if (_infraredVolumeActive)
                 {
                     urp = _camera.GetUniversalAdditionalCameraData();
@@ -255,7 +346,8 @@ namespace MissileCamera
                 _camera.allowHDR = prevAllowHdr;
                 _infraredVolumeEnabledDuringRender = false;
                 _renderPostProcessingEnabled = false;
-                MissileCameraRenderPrep.AfterRender();
+                if (managePrep)
+                    MissileCameraRenderPrep.AfterRender();
                 RenderSettings.fog = prevFog;
                 RenderTexture.active = prevActive;
             }
@@ -263,6 +355,7 @@ namespace MissileCamera
 
         internal void Destroy()
         {
+            SetPipelineDriven(false);
             Detach();
             SetInfraredVolume(false, 0f);
             ReleaseTexture();
@@ -347,8 +440,7 @@ namespace MissileCamera
             if (!IsRootAlive)
                 return;
 
-            int w = MissileCameraFeedConfig.FeedWidth;
-            int h = MissileCameraFeedConfig.FeedHeight;
+            MissileCameraFeedConfig.ResolveActiveFeedSize(out int w, out int h);
             if (_renderTexture != null && _textureWidth == w && _textureHeight == h)
             {
                 ApplyEffectiveFov();
@@ -373,18 +465,20 @@ namespace MissileCamera
             if (!IsRootAlive)
                 return;
 
-            _textureWidth = MissileCameraFeedConfig.FeedWidth;
-            _textureHeight = MissileCameraFeedConfig.FeedHeight;
+            MissileCameraFeedConfig.ResolveActiveFeedSize(out _textureWidth, out _textureHeight);
             ApplyEffectiveFov();
             _camera.nearClipPlane = 0.15f;
 
             ReleaseTexture();
+            int msaa = MissileCameraRenderPrep.ResolvePipelineMsaaSampleCount();
+            bool fullscreen = MissileCameraFullscreenController.IsActive;
             _renderTexture = new RenderTexture(_textureWidth, _textureHeight, 16, RenderTextureFormat.ARGB32)
             {
                 name = "MissileCameraFeed",
-                antiAliasing = 1,
+                antiAliasing = msaa,
                 useMipMap = false,
-                autoGenerateMips = false
+                autoGenerateMips = false,
+                filterMode = fullscreen ? FilterMode.Point : FilterMode.Bilinear
             };
             _renderTexture.Create();
             _camera.targetTexture = _renderTexture;
