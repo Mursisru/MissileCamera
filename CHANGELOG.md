@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.2.0] — 2026-07-26
+
+### Changed
+
+- **Versioning:** clean numeric semver only (`MAJOR.MINOR.PATCH`). Removed letter suffixes (`QV`, channels, `Build` tails). `AppVersion.DisplayVersion` matches `[BepInPlugin]` (`2.2.0`).
+- **Loss / switch / exit flash:** black screen with bordered **NO SIGNAL** (replaces TV static).
+- **Documentation:** README aligned to Mursisru standards (`Developer: Mursisru`, badges, GitHub Alerts, Keywords).
+
+### Fixed
+
+- **Cockpit camera fly-out on fullscreen exit:** fullscreen never writes `CameraStateManager` / `cameraPivot` / `mainCamera` (`Fullscreen/CAMERA_SAFETY.md`). Feed is RT → `RawImage` only.
+- **Fullscreen markers stuck at center:** CombatHUD contacts reprojected via seeker feed `WorldToViewportPoint` → Overlay screen.
+- **Bootstrap hid the feed:** first-enter staging no longer forces `MissileCameraFeed` alpha to 0.
+
+## [2.32.26] — 2026-07-26
+
+### Changed
+
+- **Loss / switch / exit flash:** TV static replaced by black screen with bordered **NO SIGNAL** label (fullscreen Overlay + MFD cover). Same triggers and duration (`PostLossInterferenceSeconds`).
+
+## [2.32.25] — 2026-07-26
+
+### Fixed
+
+- **Fullscreen markers stuck at screen center:** after vanilla `HUDUnitMarker.UpdatePosition` (cockpit `mainCamera`), reproject contacts through the seeker feed via `WorldToViewportPoint` → Overlay screen. Does not move `CameraStateManager`. Selected-target edge pin uses the same feed mapping.
+
 ## [2.32.24] — 2026-07-26
 
 ### Fixed
@@ -374,7 +400,7 @@
 - Documentation refresh: Developer header, badges, GitHub Alerts, Keywords, gitignore hygiene.
 
 
-All notable changes to **MissileCamera** (BepInEx) are documented here. Release semver in `AppVersion.ReleaseBase` / `[BepInPlugin]`; engine build string in `DisplayVersion`.
+All notable changes to **MissileCamera** (BepInEx) are documented here. Public version is clean semver in `AppVersion.ReleaseBase` / `DisplayVersion` / `[BepInPlugin]` (identical strings, no letter suffixes).
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 

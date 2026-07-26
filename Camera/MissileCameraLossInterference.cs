@@ -4,15 +4,20 @@ using UnityEngine.UI;
 namespace MissileCamera
 {
     /// <summary>
-    /// TV-static burst: fullscreen overlay (preferred) or MFD RawImage fallback.
-    /// Switch / destroy / exit-no-missile — default 0.5s.
+    /// Loss / switch / exit burst: black screen + "NO SIGNAL" in a bordered rectangle.
+    /// Fullscreen uses Overlay canvas; MFD covers the feed RawImage.
     /// </summary>
     internal static class MissileCameraLossInterference
     {
-        private const int NoiseWidth = 128;
-        private const int NoiseHeight = 96;
-        private const int FullscreenNoiseSortingOrder = 200;
-        private const string FullscreenNoiseName = "MissileCamera.FullscreenInterference";
+        private const int OverlaySortingOrder = 200;
+        private const string FullscreenHostName = "MissileCamera.NoSignalOverlay";
+        private const string MfdHostName = "MissileCamera.NoSignalMfd";
+        private const string SignalLabel = "NO SIGNAL";
+        private const float BoxWidth = 420f;
+        private const float BoxHeight = 120f;
+        private const float BorderThickness = 3f;
+        private static readonly Color BorderColor = new Color(0.92f, 0.92f, 0.92f, 1f);
+        private static readonly Color LabelColor = new Color(0.95f, 0.95f, 0.95f, 1f);
 
         internal enum BurstKind : byte
         {
@@ -22,14 +27,10 @@ namespace MissileCamera
             ExitShutdown = 3
         }
 
-        private static Texture2D? _texture;
-        private static Color32[]? _pixels;
         private static float _endsAtUnscaled = -1f;
-        private static float _durationSeconds = 0.5f;
-        private static uint _rngState = 1u;
         private static BurstKind _kind = BurstKind.None;
-        private static GameObject? _fullscreenNoiseGo;
-        private static RawImage? _fullscreenNoiseImage;
+        private static GameObject? _fullscreenGo;
+        private static GameObject? _mfdGo;
         private static bool _exitCompletionPending;
 
         internal static bool IsActive =>
@@ -61,21 +62,13 @@ namespace MissileCamera
                 return;
             }
 
-            EnsureBuffers();
             _kind = kind;
-            _durationSeconds = durationSeconds;
             _endsAtUnscaled = Time.unscaledTime + durationSeconds;
             _exitCompletionPending = false;
-            _rngState ^= (uint)(Time.frameCount * 2654435761u + 1u);
-            if (_rngState == 0u)
-                _rngState = 1u;
-
-            if (MissileCameraFullscreenController.IsActive || kind == BurstKind.ExitShutdown)
-                EnsureFullscreenNoiseVisible(true);
         }
 
         /// <summary>
-        /// Paint noise. Returns true while burst is still playing.
+        /// Keep NO SIGNAL visible. Returns true while burst is still playing.
         /// When ExitShutdown ends, sets completion flag for FullscreenController.
         /// </summary>
         internal static bool Tick(RawImage? mfdFeedImage)
@@ -86,7 +79,7 @@ namespace MissileCamera
             if (Time.unscaledTime >= _endsAtUnscaled)
             {
                 BurstKind finished = _kind;
-                StopVisual();
+                StopVisual(mfdFeedImage);
                 _kind = BurstKind.None;
                 _endsAtUnscaled = -1f;
                 if (finished == BurstKind.ExitShutdown)
@@ -94,8 +87,7 @@ namespace MissileCamera
                 return false;
             }
 
-            RawImage? target = ResolveTarget(mfdFeedImage);
-            ApplyNoiseFrame(target);
+            Show(mfdFeedImage);
             return true;
         }
 
@@ -110,7 +102,7 @@ namespace MissileCamera
 
         internal static void Stop()
         {
-            StopVisual();
+            StopVisual(null);
             _endsAtUnscaled = -1f;
             _kind = BurstKind.None;
             _exitCompletionPending = false;
@@ -119,169 +111,184 @@ namespace MissileCamera
         internal static void Shutdown()
         {
             Stop();
-            DestroyFullscreenNoise();
-            if (_texture != null)
-            {
-                Object.Destroy(_texture);
-                _texture = null;
-            }
-
-            _pixels = null;
+            DestroyFullscreenHost();
+            DestroyMfdHost();
         }
 
-        private static RawImage? ResolveTarget(RawImage? mfdFeedImage)
+        private static void Show(RawImage? mfdFeedImage)
         {
-            if (MissileCameraFullscreenController.IsActive || _kind == BurstKind.ExitShutdown)
-            {
-                EnsureFullscreenNoiseVisible(true);
-                return _fullscreenNoiseImage;
-            }
+            bool useFullscreen = MissileCameraFullscreenController.IsActive
+                || _kind == BurstKind.ExitShutdown;
 
-            EnsureFullscreenNoiseVisible(false);
-            return mfdFeedImage;
-        }
-
-        private static void EnsureFullscreenNoiseVisible(bool visible)
-        {
-            if (!visible)
+            if (useFullscreen)
             {
-                if (_fullscreenNoiseGo != null)
-                    _fullscreenNoiseGo.SetActive(false);
+                HideMfdHost();
+                EnsureFullscreenHost();
+                if (_fullscreenGo != null)
+                    _fullscreenGo.SetActive(true);
                 return;
             }
 
-            EnsureFullscreenNoiseHost();
-            if (_fullscreenNoiseGo != null)
-                _fullscreenNoiseGo.SetActive(true);
-        }
-
-        private static void EnsureFullscreenNoiseHost()
-        {
-            if (_fullscreenNoiseGo != null && _fullscreenNoiseImage != null)
+            HideFullscreenHost();
+            if (mfdFeedImage == null)
                 return;
 
-            DestroyFullscreenNoise();
+            mfdFeedImage.enabled = false;
+            EnsureMfdHost(mfdFeedImage);
+            if (_mfdGo != null)
+                _mfdGo.SetActive(true);
+        }
 
-            _fullscreenNoiseGo = new GameObject(FullscreenNoiseName);
-            Object.DontDestroyOnLoad(_fullscreenNoiseGo);
-            _fullscreenNoiseGo.hideFlags = HideFlags.HideAndDontSave;
+        private static void StopVisual(RawImage? mfdFeedImage)
+        {
+            HideFullscreenHost();
+            HideMfdHost();
+            _ = mfdFeedImage;
+        }
 
-            Canvas canvas = _fullscreenNoiseGo.AddComponent<Canvas>();
+        private static void HideFullscreenHost()
+        {
+            if (_fullscreenGo != null)
+                _fullscreenGo.SetActive(false);
+        }
+
+        private static void HideMfdHost()
+        {
+            if (_mfdGo != null)
+                _mfdGo.SetActive(false);
+        }
+
+        private static void EnsureFullscreenHost()
+        {
+            if (_fullscreenGo != null)
+                return;
+
+            _fullscreenGo = new GameObject(FullscreenHostName);
+            Object.DontDestroyOnLoad(_fullscreenGo);
+            _fullscreenGo.hideFlags = HideFlags.HideAndDontSave;
+
+            Canvas canvas = _fullscreenGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.overrideSorting = true;
-            canvas.sortingOrder = FullscreenNoiseSortingOrder;
+            canvas.sortingOrder = OverlaySortingOrder;
             canvas.pixelPerfect = false;
 
-            var scaler = _fullscreenNoiseGo.AddComponent<CanvasScaler>();
+            var scaler = _fullscreenGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
 
-            var imageGo = new GameObject("Noise", typeof(RectTransform), typeof(RawImage));
-            imageGo.transform.SetParent(_fullscreenNoiseGo.transform, false);
-            RectTransform rt = imageGo.GetComponent<RectTransform>();
+            BuildNoSignalVisual(_fullscreenGo.transform, fullscreenLayout: true);
+            _fullscreenGo.SetActive(false);
+        }
+
+        private static void EnsureMfdHost(RawImage feedImage)
+        {
+            Transform? parent = feedImage.transform.parent;
+            if (parent == null)
+                return;
+
+            if (_mfdGo != null)
+            {
+                if (_mfdGo.transform.parent != parent)
+                    _mfdGo.transform.SetParent(parent, false);
+                StretchFull(_mfdGo.GetComponent<RectTransform>());
+                _mfdGo.transform.SetAsLastSibling();
+                return;
+            }
+
+            _mfdGo = new GameObject(MfdHostName, typeof(RectTransform));
+            _mfdGo.transform.SetParent(parent, false);
+            _mfdGo.hideFlags = HideFlags.HideAndDontSave;
+            StretchFull(_mfdGo.GetComponent<RectTransform>());
+            BuildNoSignalVisual(_mfdGo.transform, fullscreenLayout: false);
+            _mfdGo.transform.SetAsLastSibling();
+            _mfdGo.SetActive(false);
+        }
+
+        private static void BuildNoSignalVisual(Transform root, bool fullscreenLayout)
+        {
+            var bgGo = new GameObject("BlackBg", typeof(RectTransform), typeof(Image));
+            bgGo.transform.SetParent(root, false);
+            StretchFull(bgGo.GetComponent<RectTransform>());
+            Image bg = bgGo.GetComponent<Image>();
+            bg.color = Color.black;
+            bg.raycastTarget = false;
+
+            float boxW = fullscreenLayout ? BoxWidth : BoxWidth * 0.72f;
+            float boxH = fullscreenLayout ? BoxHeight : BoxHeight * 0.72f;
+            int fontSize = fullscreenLayout ? 42 : 28;
+
+            var frameGo = new GameObject("SignalBox", typeof(RectTransform));
+            frameGo.transform.SetParent(root, false);
+            RectTransform frameRt = frameGo.GetComponent<RectTransform>();
+            frameRt.anchorMin = new Vector2(0.5f, 0.5f);
+            frameRt.anchorMax = new Vector2(0.5f, 0.5f);
+            frameRt.pivot = new Vector2(0.5f, 0.5f);
+            frameRt.anchoredPosition = Vector2.zero;
+            frameRt.sizeDelta = new Vector2(boxW, boxH);
+
+            var borderGo = new GameObject("Border", typeof(RectTransform), typeof(Image));
+            borderGo.transform.SetParent(frameGo.transform, false);
+            StretchFull(borderGo.GetComponent<RectTransform>());
+            Image border = borderGo.GetComponent<Image>();
+            border.color = BorderColor;
+            border.raycastTarget = false;
+
+            var innerGo = new GameObject("Inner", typeof(RectTransform), typeof(Image));
+            innerGo.transform.SetParent(frameGo.transform, false);
+            RectTransform innerRt = innerGo.GetComponent<RectTransform>();
+            StretchFull(innerRt);
+            float inset = BorderThickness;
+            innerRt.offsetMin = new Vector2(inset, inset);
+            innerRt.offsetMax = new Vector2(-inset, -inset);
+            Image inner = innerGo.GetComponent<Image>();
+            inner.color = Color.black;
+            inner.raycastTarget = false;
+
+            var labelGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
+            labelGo.transform.SetParent(frameGo.transform, false);
+            StretchFull(labelGo.GetComponent<RectTransform>());
+            Text label = labelGo.GetComponent<Text>();
+            label.font = HudFontHelper.GetFont();
+            label.text = SignalLabel;
+            label.fontSize = fontSize;
+            label.fontStyle = FontStyle.Bold;
+            label.alignment = TextAnchor.MiddleCenter;
+            label.color = LabelColor;
+            label.horizontalOverflow = HorizontalWrapMode.Overflow;
+            label.verticalOverflow = VerticalWrapMode.Overflow;
+            label.raycastTarget = false;
+        }
+
+        private static void StretchFull(RectTransform rt)
+        {
             rt.anchorMin = Vector2.zero;
             rt.anchorMax = Vector2.one;
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
             rt.pivot = new Vector2(0.5f, 0.5f);
-
-            _fullscreenNoiseImage = imageGo.GetComponent<RawImage>();
-            _fullscreenNoiseImage.raycastTarget = false;
-            _fullscreenNoiseImage.color = Color.white;
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = Vector2.zero;
         }
 
-        private static void DestroyFullscreenNoise()
+        private static void DestroyFullscreenHost()
         {
-            if (_fullscreenNoiseGo != null)
+            if (_fullscreenGo != null)
             {
-                Object.Destroy(_fullscreenNoiseGo);
-                _fullscreenNoiseGo = null;
+                Object.Destroy(_fullscreenGo);
+                _fullscreenGo = null;
             }
-
-            _fullscreenNoiseImage = null;
         }
 
-        private static void StopVisual()
+        private static void DestroyMfdHost()
         {
-            EnsureFullscreenNoiseVisible(false);
-        }
-
-        private static void ApplyNoiseFrame(RawImage? feedImage)
-        {
-            if (feedImage == null)
-                return;
-
-            EnsureBuffers();
-            Color32[] pixels = _pixels!;
-            Texture2D texture = _texture!;
-
-            float progress = 1f - Mathf.Clamp01((_endsAtUnscaled - Time.unscaledTime)
-                / Mathf.Max(_durationSeconds, 0.001f));
-            byte snowFloor = (byte)Mathf.RoundToInt(Mathf.Lerp(18f, 8f, progress));
-            byte snowCeil = (byte)Mathf.RoundToInt(Mathf.Lerp(235f, 160f, progress));
-
-            int tearRow = (int)(NextFloat() * NoiseHeight);
-            int tearHeight = 1 + (int)(NextFloat() * 4f);
-            byte tearValue = NextFloat() > 0.5f ? (byte)255 : (byte)0;
-
-            int bandCol = (int)(NextFloat() * NoiseWidth);
-            int bandWidth = 2 + (int)(NextFloat() * 6f);
-
-            for (int y = 0; y < NoiseHeight; y++)
+            if (_mfdGo != null)
             {
-                bool inTear = y >= tearRow && y < tearRow + tearHeight;
-                int row = y * NoiseWidth;
-                for (int x = 0; x < NoiseWidth; x++)
-                {
-                    byte v;
-                    if (inTear)
-                    {
-                        v = tearValue;
-                    }
-                    else if (x >= bandCol && x < bandCol + bandWidth && NextFloat() > 0.35f)
-                    {
-                        v = (byte)(NextFloat() > 0.5f ? 255 : 0);
-                    }
-                    else
-                    {
-                        v = (byte)(snowFloor + (int)(NextFloat() * (snowCeil - snowFloor + 1)));
-                    }
-
-                    pixels[row + x] = new Color32(v, v, v, 255);
-                }
+                Object.Destroy(_mfdGo);
+                _mfdGo = null;
             }
-
-            texture.SetPixels32(pixels);
-            texture.Apply(updateMipmaps: false, makeNoLongerReadable: false);
-
-            feedImage.texture = texture;
-            feedImage.enabled = true;
-            feedImage.color = Color.white;
-        }
-
-        private static void EnsureBuffers()
-        {
-            if (_pixels == null)
-                _pixels = new Color32[NoiseWidth * NoiseHeight];
-
-            if (_texture != null)
-                return;
-
-            _texture = new Texture2D(NoiseWidth, NoiseHeight, TextureFormat.RGB24, mipChain: false)
-            {
-                name = "MissileCamera.InterferenceNoise",
-                filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp,
-                hideFlags = HideFlags.HideAndDontSave
-            };
-        }
-
-        private static float NextFloat()
-        {
-            _rngState = _rngState * 1664525u + 1013904223u;
-            return (_rngState & 0x00FFFFFFu) / 16777216f;
         }
     }
 }

@@ -6,7 +6,7 @@ namespace MissileCamera
     /// <summary>
     /// Fullscreen missile feed host. On pause / maximized map — Exit() (restore panel to MFD)
     /// so vanilla UI is never covered and the feed is never stolen into a hidden canvas.
-    /// Exit with no missiles: 0.5s fullscreen static, then auto-disable.
+    /// Exit with no missiles: 0.5s NO SIGNAL, then auto-disable.
     /// Never touches CameraStateManager (see CAMERA_SAFETY.md).
     /// </summary>
     internal static class MissileCameraFullscreenController
@@ -81,7 +81,7 @@ namespace MissileCamera
 
         private static void RequestExit()
         {
-            // No live missiles → static then auto-off. Otherwise leave immediately.
+            // No live missiles → NO SIGNAL then auto-off. Otherwise leave immediately.
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
             {
                 BeginDeferredExit();

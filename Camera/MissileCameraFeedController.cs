@@ -123,7 +123,7 @@ namespace MissileCamera
             RefreshConfigsIfDue();
             MissileCameraFullscreenController.TickYieldToVanillaUi();
 
-            // Fullscreen/MFD TV static (switch / destroy / exit-no-missile).
+            // Fullscreen/MFD NO SIGNAL burst (switch / destroy / exit-no-missile).
             MissileCameraLossInterference.Tick(_feedImage);
             MissileCameraFullscreenController.TickDeferredExit();
 
@@ -195,7 +195,7 @@ namespace MissileCamera
 
             if (fullscreen && MissileCameraLossInterference.IsActive)
             {
-                // Fullscreen noise layer owns the flash; keep feed clearing IR only.
+                // Fullscreen NO SIGNAL overlay owns the flash; keep feed clearing IR only.
                 MissileCameraInfraredEffect.Clear(_feedImage, rig);
             }
             else if (fullscreen)
@@ -422,12 +422,12 @@ namespace MissileCamera
                 if (MissileCameraLossInterference.IsActive
                     && MissileCameraLossInterference.ActiveKind == MissileCameraLossInterference.BurstKind.ExitShutdown)
                 {
-                    // ExitShutdown uses dedicated fullscreen noise canvas; hide feed flash.
+                    // ExitShutdown uses dedicated fullscreen NO SIGNAL canvas; hide feed.
                     _feedImage.enabled = false;
                 }
                 else if (MissileCameraLossInterference.IsActive || _postLossSequenceActive)
                 {
-                    // Destroy/switch static may use feed or fullscreen noise layer.
+                    // Destroy/switch NO SIGNAL covers feed (MFD host or fullscreen overlay).
                 }
                 else
                 {
@@ -656,7 +656,7 @@ namespace MissileCamera
                 _feedImage.enabled = false;
             }
 
-            // After impact static: leave fullscreen (cockpit camera was never hijacked).
+            // After impact NO SIGNAL: leave fullscreen (cockpit camera was never hijacked).
             MissileCameraFullscreenController.ExitIfActive();
 
             UpdateDisplay(null);
@@ -690,7 +690,7 @@ namespace MissileCamera
                 MfdLayoutController.ReleaseLayoutIfNoMissileFeed();
         }
 
-        /// <summary>Keep MFD overlay while missiles fly or post-loss static/hold plays.</summary>
+        /// <summary>Keep MFD overlay while missiles fly or post-loss NO SIGNAL/hold plays.</summary>
         internal static bool ShouldRetainLayoutForMissileFeed() =>
             HasTrackableOwnedMissile()
             || _postLossSequenceActive

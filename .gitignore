@@ -6,9 +6,16 @@ _unity_shader_build/
 .vs/
 .debug/
 *.user
+*.suo
+*.userosscache
+*.sln.docstates
 Directory.Build.props
 Directory.Build.user.props
 .cursorrules
 .cursor/
 ffmpeg.exe
 local_build_scripts/
+*.log
+*.tmp
+Thumbs.db
+Desktop.ini

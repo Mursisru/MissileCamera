@@ -127,4 +127,23 @@ namespace MissileCamera.Patches
             MissileCameraVanillaHudBridge.LateTickMarkers();
         }
     }
+
+    /// <summary>
+    /// Fullscreen: vanilla UpdatePosition projects via cockpit mainCamera (center-stuck).
+    /// Reproject onto seeker feed viewport → Overlay screen. CSM untouched.
+    /// </summary>
+    [HarmonyPatch]
+    internal static class HUDUnitMarker_UpdatePosition_Patch
+    {
+        internal static MethodBase TargetMethod() =>
+            AccessTools.Method(GameAssembly.RequireType("HUDUnitMarker"), "UpdatePosition")
+            ?? throw new InvalidOperationException("HUDUnitMarker.UpdatePosition not found.");
+
+        [HarmonyPostfix]
+        internal static void Postfix(object __instance)
+        {
+            if (__instance is HUDUnitMarker marker)
+                MissileCameraCombatHudMarkerProjection.ReprojectIfFullscreen(marker);
+        }
+    }
 }

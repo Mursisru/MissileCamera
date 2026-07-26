@@ -16,6 +16,12 @@ Fullscreen missile video = `MissileCameraRig` RenderTexture → panel `RawImage`
 
 `MissileCameraFullscreenBootstrap` must keep `MissileCameraFeed` **CanvasGroup.alpha = 1** (never 0 — that was the old “hide RawImage because mainCamera is the view” path).
 
+## Markers (CombatHUD)
+
+Vanilla `HUDUnitMarker.UpdatePosition` uses `mainCamera.WorldToScreenPoint` (cockpit). With RawImage fullscreen that pins icons near screen center.
+
+**Fix:** Harmony postfix reprojects via **feed camera** `WorldToViewportPoint` → `Screen` (do **not** use feed `WorldToScreenPoint` — that returns RT pixels). See `MissileCameraCombatHudMarkerProjection`.
+
 ## Why
 
 Pose-overlay and `SetParent(missile)` / `SnapToCockpit` left `cameraPivot` with huge local offsets (FloatingOrigin + `cockpitViewPoint`). On exit the stock cockpit camera flew out of bounds.
