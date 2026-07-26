@@ -3,28 +3,24 @@ using UnityEngine;
 namespace MissileCamera
 {
     /// <summary>
-    /// Fullscreen: drive vanilla CameraStateManager.mainCamera to the missile nose
-    /// (same pivot parenting idea as CameraCockpitState), not RT + RawImage.
+    /// Fullscreen view without reparenting cameraPivot onto the missile (that stuck the camera on exit).
+    /// Dump: CameraCockpitState.UpdateState always runs and snaps pivot to cockpitViewPoint.
+    /// We only overwrite world pose AFTER vanilla LateUpdate; Exit = stop overwriting.
     /// </summary>
     internal static class MissileCameraFullscreenViewDriver
     {
-        private static bool _hijacked;
-        private static Transform? _savedPivotParent;
-        private static Vector3 _savedPivotLocalPos;
-        private static Quaternion _savedPivotLocalRot;
-        private static Vector3 _savedCamLocalPos;
-        private static Quaternion _savedCamLocalRot;
+        private static bool _active;
         private static float _savedFov;
         private static float _savedNear;
         private static float _localNoseZ = 0.5f;
         private static Missile? _missile;
         private static float _zoomOffset;
 
-        internal static bool IsHijacked => _hijacked;
+        internal static bool IsActive => _active;
 
         internal static void Enter(Missile? missile)
         {
-            if (_hijacked)
+            if (_active)
                 return;
 
             CameraStateManager? csm = SceneSingleton<CameraStateManager>.i;
@@ -40,110 +36,126 @@ namespace MissileCamera
                 return;
             }
 
-            _savedPivotParent = csm.cameraPivot.parent;
-            _savedPivotLocalPos = csm.cameraPivot.localPosition;
-            _savedPivotLocalRot = csm.cameraPivot.localRotation;
-            _savedCamLocalPos = csm.transform.localPosition;
-            _savedCamLocalRot = csm.transform.localRotation;
             _savedFov = csm.mainCamera.fieldOfView;
             _savedNear = csm.mainCamera.nearClipPlane;
-
             MissileCameraNoseResolveResult nose = MissileCameraNoseResolver.Resolve(missile);
             _localNoseZ = nose.CameraLocalZ;
             _missile = missile;
-            _hijacked = true;
+            _zoomOffset = 0f;
+            _active = true;
 
-            ApplyPose(csm, missile);
+            ApplyWorldPose(csm, missile);
             csm.mainCamera.nearClipPlane = 0.15f;
-            MfdLog.Info("fullscreen view: mainCamera → missile nose (vanilla path)");
+            MfdLog.Info("fullscreen view: pose overlay on (no reparent)");
         }
 
-        internal static void Tick(Missile? missile, float zoomOffset)
+        internal static void TickZoom(float zoomOffset) => _zoomOffset = zoomOffset;
+
+        /// <summary>
+        /// Runs in CameraStateManager.LateUpdate Postfix — AFTER vanilla UpdateState.
+        /// Toggle is processed here so Exit stops pose write in the same LateUpdate.
+        /// </summary>
+        internal static void LateTick()
         {
-            if (!_hijacked)
+            // Toggle first: Exit clears _active before we would ApplyWorldPose.
+            MissileCameraFeedInput.ProcessFullscreenToggle();
+
+            if (!_active)
                 return;
 
-            _zoomOffset = zoomOffset;
             CameraStateManager? csm = SceneSingleton<CameraStateManager>.i;
             if (csm == null || csm.mainCamera == null || csm.cameraPivot == null)
                 return;
 
+            Missile? missile = _missile;
             if (missile == null || missile.disabled)
-                return;
-
-            if (!ReferenceEquals(_missile, missile))
             {
-                _missile = missile;
-                MissileCameraNoseResolveResult nose = MissileCameraNoseResolver.Resolve(missile);
-                _localNoseZ = nose.CameraLocalZ;
+                // Never leave pose-overlay stuck after missile death.
+                MissileCameraFullscreenController.ExitIfActive();
+                return;
             }
 
-            ApplyPose(csm, missile);
-            csm.mainCamera.fieldOfView = MissileCameraControlsConfig.ComputeEffectiveFov(
-                MissileCameraFeedConfig.Fov,
-                zoomOffset);
-            csm.mainCamera.nearClipPlane = 0.15f;
-        }
+            // Prefer live followed missile from feed controller when available.
+            Missile? followed = MissileCameraFeedController.TryGetFollowedMissile();
+            if (followed != null && !followed.disabled)
+            {
+                if (!ReferenceEquals(_missile, followed))
+                {
+                    _missile = followed;
+                    MissileCameraNoseResolveResult nose = MissileCameraNoseResolver.Resolve(followed);
+                    _localNoseZ = nose.CameraLocalZ;
+                }
 
-        /// <summary>Re-apply after LateUpdate if needed (blocked UpdateState path).</summary>
-        internal static void LateTick()
-        {
-            if (!_hijacked || _missile == null || _missile.disabled)
-                return;
+                missile = followed;
+            }
 
-            CameraStateManager? csm = SceneSingleton<CameraStateManager>.i;
-            if (csm == null || csm.mainCamera == null)
-                return;
-
-            ApplyPose(csm, _missile);
+            ApplyWorldPose(csm, missile);
             csm.mainCamera.fieldOfView = MissileCameraControlsConfig.ComputeEffectiveFov(
                 MissileCameraFeedConfig.Fov,
                 _zoomOffset);
+            csm.mainCamera.nearClipPlane = 0.15f;
         }
 
         internal static void Exit()
         {
-            if (!_hijacked)
+            if (!_active)
                 return;
 
+            _active = false;
+            _missile = null;
+
             CameraStateManager? csm = SceneSingleton<CameraStateManager>.i;
-            if (csm != null && csm.cameraPivot != null)
+            if (csm != null)
             {
-                csm.cameraPivot.SetParent(_savedPivotParent, false);
-                csm.cameraPivot.localPosition = _savedPivotLocalPos;
-                csm.cameraPivot.localRotation = _savedPivotLocalRot;
-                csm.transform.localPosition = _savedCamLocalPos;
-                csm.transform.localRotation = _savedCamLocalRot;
+                // Vanilla UpdateState already ran this LateUpdate (cockpit snap) before Postfix
+                // when Exit is called from LateTick toggle. If Exit is called from EndOfFrame /
+                // other paths, nudge FOV/near; next LateUpdate UpdateState restores pivot.
                 if (csm.mainCamera != null)
                 {
-                    csm.mainCamera.fieldOfView = _savedFov;
-                    csm.mainCamera.nearClipPlane = _savedNear;
+                    float fov = _savedFov > 1f ? _savedFov : PlayerSettings.defaultFoV;
+                    csm.mainCamera.fieldOfView = fov;
+                    csm.mainCamera.nearClipPlane = _savedNear > 0.01f ? _savedNear : 0.2f;
+                    try
+                    {
+                        csm.SetDesiredFoV(PlayerSettings.defaultFoV, fov);
+                    }
+                    catch
+                    {
+                        // ignore
+                    }
                 }
+
+                if (csm.cockpitCamRender != null)
+                    csm.cockpitCamRender.enabled = true;
+
+                CameraStateManager.cameraMode = CameraMode.cockpit;
             }
 
-            _hijacked = false;
-            _missile = null;
-            _savedPivotParent = null;
-            MfdLog.Info("fullscreen view: mainCamera restored");
+            MfdLog.Info("fullscreen view: pose overlay off → vanilla cockpit");
         }
 
-        internal static bool ShouldBlockVanillaCameraState() => _hijacked;
-
-        private static void ApplyPose(CameraStateManager csm, Missile missile)
+        /// <summary>World pose only — never SetParent(missile). Parent stays vanilla cockpit chain.</summary>
+        private static void ApplyWorldPose(CameraStateManager csm, Missile missile)
         {
-            Transform missileTransform = missile.transform;
-            csm.cameraPivot.SetParent(missileTransform, false);
-            csm.cameraPivot.localPosition = new Vector3(0f, 0f, _localNoseZ);
-            csm.cameraPivot.localRotation = Quaternion.identity;
-            csm.transform.localPosition = Vector3.zero;
-
+            Transform body = missile.transform;
+            Vector3 noseWorld = body.TransformPoint(new Vector3(0f, 0f, _localNoseZ));
             float boreRoll = MissileCameraFeedController.TryGetBoreRollDeg();
             Quaternion desiredWorld = HorizonFrame.BuildCameraWorldRotation(
-                missileTransform,
+                body,
                 boreRoll,
                 MissileCameraFeedConfig.HorizonLock);
-            Quaternion bodyWorld = missileTransform.rotation;
-            csm.transform.localRotation = Quaternion.Inverse(bodyWorld) * desiredWorld;
+
+            Transform pivot = csm.cameraPivot;
+            pivot.position = noseWorld;
+            pivot.rotation = desiredWorld;
+
+            Transform cam = csm.transform;
+            if (cam.parent != pivot)
+                cam.SetParent(pivot, false);
+
+            cam.localPosition = Vector3.zero;
+            cam.localRotation = Quaternion.identity;
+            cam.localScale = Vector3.one;
         }
     }
 }

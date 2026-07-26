@@ -1,6 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -112,34 +110,9 @@ namespace MissileCamera.Patches
     }
 
     /// <summary>
-    /// Fullscreen owns CameraStateManager pivot — block vanilla cockpit/orbit/etc. UpdateState.
+    /// After vanilla UpdateState snaps cockpit, optionally overlay missile nose pose.
+    /// Never blocks UpdateState — that caused sticky missile camera on exit.
     /// </summary>
-    [HarmonyPatch]
-    internal static class CameraBaseState_UpdateState_Block_Patch
-    {
-        internal static IEnumerable<MethodBase> TargetMethods()
-        {
-            Type baseType = GameAssembly.RequireType("CameraBaseState");
-            foreach (Type type in baseType.Assembly.GetTypes())
-            {
-                if (type.IsAbstract || !baseType.IsAssignableFrom(type))
-                    continue;
-
-                MethodInfo? update = AccessTools.Method(type, "UpdateState");
-                if (update != null)
-                    yield return update;
-
-                MethodInfo? fixedUpdate = AccessTools.Method(type, "FixedUpdateState");
-                if (fixedUpdate != null)
-                    yield return fixedUpdate;
-            }
-        }
-
-        [HarmonyPrefix]
-        internal static bool Prefix() =>
-            !MissileCameraFullscreenViewDriver.ShouldBlockVanillaCameraState();
-    }
-
     [HarmonyPatch]
     internal static class CameraStateManager_LateUpdate_Patch
     {

@@ -141,6 +141,8 @@ namespace MissileCamera
 
             MissileCameraFeedInput.Process();
 
+            bool fullscreen = MissileCameraFullscreenController.IsActive;
+
             Missile? missile = ResolveFollowedMissile();
             if (missile == null)
             {
@@ -167,15 +169,13 @@ namespace MissileCamera
             Vector3 missilePos = missile.transform.position;
             bool infrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
 
-            bool fullscreen = MissileCameraFullscreenController.IsActive;
-            // Fullscreen uses vanilla mainCamera — keep MFD rig for IR policy/bore only, not as the view.
+            // Fullscreen: vanilla mainCamera pose overlay (ViewDriver.LateTick). MFD rig = IR/bore only.
             rig.SetPipelineDriven(false);
 
             if (fullscreen)
             {
-                MissileCameraFullscreenViewDriver.Tick(missile, _zoomOffset);
+                MissileCameraFullscreenViewDriver.TickZoom(_zoomOffset);
                 MissileCameraVanillaHudBridge.TickHideStubs();
-                // Hide RT feed: scene comes from mainCamera.
                 if (_feedImage != null)
                 {
                     _feedImage.enabled = false;
@@ -563,6 +563,9 @@ namespace MissileCamera
 
         private static void HandleMissileLost()
         {
+            // Pose-overlay must not stay active without a missile (sticky mainCamera).
+            MissileCameraFullscreenController.ExitIfActive();
+
             if (!_overlayActive)
             {
                 FinishPostLossCleanup();

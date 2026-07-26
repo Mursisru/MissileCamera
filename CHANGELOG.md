@@ -1,5 +1,38 @@
 # Changelog
 
+## [2.32.21] — 2026-07-26
+
+### Fixed
+
+- **Fullscreen camera exit (audit):** removed `cameraPivot.SetParent(missile)` and Harmony block of `UpdateState` (root cause of sticky missile view). Fullscreen only overwrites world pose after vanilla cockpit LateUpdate; Exit stops the overlay. Toggle runs in that LateUpdate before pose write. Missile loss auto-exits fullscreen.
+
+## [2.32.20] — 2026-07-26
+
+### Fixed
+
+- **Fullscreen exit camera freeze:** toggle is handled before missile pose Tick (same-frame re-parent race); Exit calls `SwitchState(cockpitState)` + hard `SnapToCockpit` and keeps snapping for 8 LateUpdate frames.
+
+## [2.32.19] — 2026-07-26
+
+### Fixed
+
+- **ILS leftovers on fullscreen:** every LateUpdate suppresses `FlightHud.velocityVector` / HUDCenter (Update re-enables them), disables `ObjectiveOverlayManager` + mission pointers under `iconLayer`, and hides `targetDesignator` Image (GO kept for TargetSelect).
+
+## [2.32.18] — 2026-07-26
+
+### Fixed
+
+- **Fullscreen exit camera freeze:** unblock hijack first, then rebind `cameraPivot` to `cockpitViewPoint` like vanilla `CameraCockpitState.EnterState`.
+- **Markers only:** hide HMD/ILS, HUDAppManager, weapon-state chrome and trim all non-marker branches under the elevated CombatHUD canvas; keep only `iconLayer` + `targetDesignator` (+ target arrow).
+
+## [2.32.17] — 2026-07-26
+
+### Fixed
+
+- **Markers survive fullscreen toggle:** no longer reparent/destroy `CombatHUD.iconLayer` (that permanently broke markers after exit). Canvas is elevated to Overlay sorting 120 instead.
+- **Target select:** keep vanilla `targetDesignator` active — dump `TargetSelect` ranges markers against it.
+- **FLIR overlay:** `blocksRaycasts=false` so Select input is not eaten by the fullscreen chrome.
+
 ## [2.32.16] — 2026-07-26
 
 ### Fixed

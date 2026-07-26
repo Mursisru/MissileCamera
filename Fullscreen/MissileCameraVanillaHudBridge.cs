@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.UI;
@@ -5,15 +7,13 @@ using UnityEngine.UI;
 namespace MissileCamera
 {
     /// <summary>
-    /// Fullscreen: only CombatHUD unit markers (dump: HUDUnitMarker → mainCamera.WorldToScreenPoint).
-    /// iconLayer lifted to Overlay sorting 120 (above FLIR Overlay 50).
-    /// CombatHUD.UpdateMarkers forced after camera LateTick — FlightHud.EnableCanvas(false)
-    /// can park CombatHUD under an inactive canvas and stop LateUpdate.
+    /// Fullscreen: ONLY CombatHUD unit markers (HUDUnitMarker on iconLayer).
+    /// Dump: FlightHud.Update re-enables velocityVector; ObjectiveOverlay.UpdateOverlay re-enables mission pointers;
+    /// targetDesignator is the aiming pipper — hide Image, keep GO for TargetSelect position.
     /// </summary>
     internal static class MissileCameraVanillaHudBridge
     {
         private const int MarkersSortingOrder = 120;
-        private const string MarkersHostName = "MissileCamera.VanillaMarkersHost";
 
         private static readonly FieldInfo? TopRightPanelField =
             AccessToolsField(typeof(CombatHUD), "topRightPanel");
@@ -23,96 +23,89 @@ namespace MissileCamera
             AccessToolsField(typeof(CombatHUD), "weaponStatus");
         private static readonly FieldInfo? CountermeasureBgField =
             AccessToolsField(typeof(CombatHUD), "countermeasureBackground");
-        private static readonly FieldInfo? TargetDesignatorField =
-            AccessToolsField(typeof(CombatHUD), "targetDesignator");
         private static readonly FieldInfo? TargetInfoField =
             AccessToolsField(typeof(CombatHUD), "targetInfo");
         private static readonly FieldInfo? TargetArrowField =
             AccessToolsField(typeof(CombatHUD), "targetArrow");
         private static readonly FieldInfo? TargetTextField =
             AccessToolsField(typeof(CombatHUD), "targetText");
+        private static readonly FieldInfo? WeaponStateField =
+            AccessToolsField(typeof(CombatHUD), "weaponState");
+        private static readonly FieldInfo? ObjectiveOverlayField =
+            AccessToolsField(typeof(CombatHUD), "objectiveOverlay");
+        private static readonly FieldInfo? MarkersField =
+            AccessToolsField(typeof(CombatHUD), "markers");
+        private static readonly FieldInfo? HitMarkersField =
+            AccessToolsField(typeof(CombatHUD), "hitMarkers");
         private static readonly FieldInfo? FlightHudCanvasField =
             AccessToolsField(typeof(FlightHud), "canvas");
+        private static readonly FieldInfo? FlightHudCenterField =
+            AccessToolsField(typeof(FlightHud), "HUDCenter");
+        private static readonly FieldInfo? ObjectiveOverlaysField =
+            AccessToolsField(typeof(ObjectiveOverlayManager), "overlays");
+        private static readonly MethodInfo? ObjectiveHideOverlayMethod =
+            HarmonyLib.AccessTools.Method(typeof(ObjectiveOverlay), "HideOverlay");
         private static readonly MethodInfo? UpdateMarkersMethod =
             HarmonyLib.AccessTools.Method(typeof(CombatHUD), "UpdateMarkers");
-        private static readonly MethodInfo? UpdateHitMarkersMethod =
-            HarmonyLib.AccessTools.Method(typeof(CombatHUD), "UpdateHitMarkers");
 
         private static bool _flightHudWasActive;
         private static bool _mapWasActive;
-        private static bool _flightHudSoftHide;
-        private static readonly System.Collections.Generic.List<(GameObject go, bool wasActive)> _hiddenChrome =
-            new System.Collections.Generic.List<(GameObject, bool)>(32);
+        private static bool _objectiveMgrWasEnabled;
+        private static bool _designatorWasEnabled;
+        private static readonly List<(GameObject go, bool wasActive)> _hiddenChrome =
+            new List<(GameObject, bool)>(64);
+        private static readonly HashSet<Transform> _unitMarkerKeep = new HashSet<Transform>();
 
-        private static GameObject? _markersHostGo;
-        private static RectTransform? _markersRoot;
-        private static Transform? _iconLayer;
-        private static Transform? _iconOriginalParent;
-        private static int _iconOriginalSibling;
-        private static bool _iconReparented;
-        private static Transform? _arrowRoot;
-        private static Transform? _arrowOriginalParent;
-        private static int _arrowOriginalSibling;
-        private static bool _arrowReparented;
+        private static Canvas? _combatCanvas;
+        private static bool _canvasElevated;
+        private static RenderMode _savedRenderMode;
+        private static int _savedSortingOrder;
+        private static bool _savedOverrideSorting;
+        private static Camera? _savedWorldCamera;
+        private static bool _savedPixelPerfect;
 
         internal static void OnFullscreenEntered()
         {
             _hiddenChrome.Clear();
+            _unitMarkerKeep.Clear();
+            _objectiveMgrWasEnabled = false;
+            _designatorWasEnabled = false;
+
             HideStubsOnMissilePanel();
-            SoftOrHardHideFlightHud();
             SoftHideDynamicMap();
-            HideCombatHudChromeExceptMarkers();
-            BorrowIconLayerAboveOverlay();
+            ElevateCombatHudCanvas();
+            ApplyMarkersOnlyVisibility();
+            SuppressIlsAndObjectives();
             ForceCombatHudMarkerPass();
             MfdLog.Info("fullscreen markers-only"
-                + (_iconReparented ? " iconLayer↑" : " iconLayer miss")
-                + (_flightHudSoftHide ? " flightHud soft" : " flightHud hard"));
+                + (_canvasElevated ? " canvas↑" : " canvas miss")
+                + $" hidden={_hiddenChrome.Count}");
         }
 
         internal static void OnFullscreenExited()
         {
-            RestoreIconLayer();
-            RestoreCombatHudChrome();
-
-            try
-            {
-                if (_flightHudWasActive && !_flightHudSoftHide)
-                    FlightHud.EnableCanvas(true);
-            }
-            catch
-            {
-                // ignore
-            }
-
-            try
-            {
-                if (_mapWasActive)
-                    DynamicMap.EnableCanvas(true);
-                else if (SceneSingleton<CameraStateManager>.i != null
-                         && CameraStateManager.cameraMode == CameraMode.cockpit
-                         && SceneSingleton<CombatHUD>.i?.aircraft != null)
-                {
-                    DynamicMap.EnableCanvas(true);
-                }
-            }
-            catch
-            {
-                // ignore
-            }
+            RestoreObjectiveManager();
+            RestoreDesignatorVisual();
+            RestoreCombatHudCanvas();
+            RestoreHiddenChrome();
+            RestoreFlightHud();
+            RestoreDynamicMap();
+            ForceCombatHudMarkerPass();
 
             _flightHudWasActive = false;
             _mapWasActive = false;
-            _flightHudSoftHide = false;
+            _unitMarkerKeep.Clear();
         }
 
         internal static void ResetForMissionUnload()
         {
-            RestoreIconLayer();
-            RestoreCombatHudChrome();
-            DestroyMarkersHost();
+            RestoreObjectiveManager();
+            RestoreDesignatorVisual();
+            RestoreCombatHudCanvas();
+            RestoreHiddenChrome();
             _flightHudWasActive = false;
             _mapWasActive = false;
-            _flightHudSoftHide = false;
+            _unitMarkerKeep.Clear();
         }
 
         internal static void TickHideStubs()
@@ -123,50 +116,14 @@ namespace MissileCamera
             HideStubsOnMissilePanel();
         }
 
-        /// <summary>After ViewDriver.LateTick — dump CombatHUD.LateUpdate → UpdateMarkers.</summary>
         internal static void LateTickMarkers()
         {
             if (!MissileCameraFullscreenController.IsActive)
                 return;
 
-            if (_markersHostGo != null)
-                _markersHostGo.SetActive(true);
-
+            // FlightHud / ObjectiveOverlay re-enable themselves in Update — suppress every LateUpdate.
+            SuppressIlsAndObjectives();
             ForceCombatHudMarkerPass();
-        }
-
-        private static void SoftOrHardHideFlightHud()
-        {
-            _flightHudSoftHide = false;
-            try
-            {
-                FlightHud? flightHud = SceneSingleton<FlightHud>.i;
-                _flightHudWasActive = IsCanvasActive(flightHud, "canvas");
-                if (flightHud == null)
-                    return;
-
-                CombatHUD? combatHud = SceneSingleton<CombatHUD>.i;
-                Canvas? flightCanvas = FlightHudCanvasField?.GetValue(flightHud) as Canvas;
-                bool combatUnderFlight = combatHud != null
-                    && flightCanvas != null
-                    && (combatHud.transform == flightCanvas.transform
-                        || combatHud.transform.IsChildOf(flightCanvas.transform));
-
-                if (combatUnderFlight && flightCanvas != null)
-                {
-                    // Keep canvas alive so CombatHUD.LateUpdate still runs; hide ILS chrome only.
-                    _flightHudSoftHide = true;
-                    HideFlightHudVisuals(flightHud, flightCanvas.transform, combatHud!.transform);
-                }
-                else if (_flightHudWasActive)
-                {
-                    FlightHud.EnableCanvas(false);
-                }
-            }
-            catch
-            {
-                _flightHudWasActive = false;
-            }
         }
 
         private static void SoftHideDynamicMap()
@@ -183,30 +140,380 @@ namespace MissileCamera
             }
         }
 
-        private static void HideFlightHudVisuals(FlightHud flightHud, Transform canvasRoot, Transform combatHudRoot)
+        private static void RestoreFlightHud()
         {
-            for (int i = 0; i < canvasRoot.childCount; i++)
+            try
             {
-                Transform child = canvasRoot.GetChild(i);
-                if (child == combatHudRoot || combatHudRoot.IsChildOf(child) || child.IsChildOf(combatHudRoot))
+                if (_flightHudWasActive
+                    || (SceneSingleton<CombatHUD>.i?.aircraft != null
+                        && CameraStateManager.cameraMode == CameraMode.cockpit))
+                {
+                    FlightHud.EnableCanvas(true);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        private static void RestoreDynamicMap()
+        {
+            try
+            {
+                if (_mapWasActive
+                    || (SceneSingleton<CombatHUD>.i?.aircraft != null
+                        && CameraStateManager.cameraMode == CameraMode.cockpit))
+                {
+                    DynamicMap.EnableCanvas(true);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        private static void ApplyMarkersOnlyVisibility()
+        {
+            CombatHUD? hud = SceneSingleton<CombatHUD>.i;
+            if (hud == null)
+                return;
+
+            // Keep ONLY iconLayer in the branch walk — designator/arrow are visuals to kill.
+            var keep = new HashSet<Transform>();
+            AddKeep(keep, hud.iconLayer);
+
+            try
+            {
+                FlightHud? flightHud = SceneSingleton<FlightHud>.i;
+                _flightHudWasActive = IsCanvasActive(flightHud, "canvas");
+                Canvas? flightCanvas = flightHud != null
+                    ? FlightHudCanvasField?.GetValue(flightHud) as Canvas
+                    : null;
+                Canvas? combatCanvas = _combatCanvas ?? ResolveCombatCanvas(hud);
+
+                if (flightCanvas != null && combatCanvas != null && flightCanvas == combatCanvas)
+                {
+                    HideBranchesExcept(flightCanvas.transform, keep);
+                }
+                else if (_flightHudWasActive)
+                {
+                    FlightHud.EnableCanvas(false);
+                }
+            }
+            catch
+            {
+                _flightHudWasActive = false;
+            }
+
+            try
+            {
+                HeadMountedDisplay? hmd = SceneSingleton<HeadMountedDisplay>.i;
+                if (hmd != null)
+                    HideGo(hmd.gameObject);
+            }
+            catch
+            {
+                // ignore
+            }
+
+            try
+            {
+                HUDAppManager? apps = SceneSingleton<HUDAppManager>.i;
+                if (apps != null)
+                    HideGo(apps.gameObject);
+            }
+            catch
+            {
+                // ignore
+            }
+
+            if (_combatCanvas != null)
+                HideBranchesExcept(_combatCanvas.transform, keep);
+
+            HideGo(TopRightPanelField?.GetValue(hud) as GameObject);
+            HideComponent(ThreatListField?.GetValue(hud) as Component);
+            HideComponent(WeaponStatusField?.GetValue(hud) as Component);
+            HideGo(CountermeasureBgField?.GetValue(hud) as GameObject);
+            HideComponent(TargetInfoField?.GetValue(hud) as Component);
+            HideComponent(WeaponStateField?.GetValue(hud) as Component);
+
+            if (TargetArrowField?.GetValue(hud) is Image arrow && arrow != null)
+                HideGo(arrow.gameObject);
+            if (TargetTextField?.GetValue(hud) is Text arrowText && arrowText != null)
+                HideGo(arrowText.gameObject);
+
+            // Aiming pipper: keep transform alive for TargetSelect, kill Image draw.
+            if (hud.targetDesignator != null)
+            {
+                _designatorWasEnabled = hud.targetDesignator.enabled;
+                hud.targetDesignator.enabled = false;
+                Color c = hud.targetDesignator.color;
+                c.a = 0f;
+                hud.targetDesignator.color = c;
+            }
+
+            if (hud.iconLayer != null)
+                hud.iconLayer.gameObject.SetActive(true);
+
+            DisableObjectiveManager(hud);
+        }
+
+        private static void DisableObjectiveManager(CombatHUD hud)
+        {
+            if (ObjectiveOverlayField?.GetValue(hud) is not ObjectiveOverlayManager mgr || mgr == null)
+                return;
+
+            _objectiveMgrWasEnabled = mgr.enabled;
+            mgr.enabled = false;
+            HideObjectiveOverlays(mgr);
+        }
+
+        private static void RestoreObjectiveManager()
+        {
+            try
+            {
+                CombatHUD? hud = SceneSingleton<CombatHUD>.i;
+                if (hud == null)
+                    return;
+
+                if (ObjectiveOverlayField?.GetValue(hud) is ObjectiveOverlayManager mgr && mgr != null)
+                    mgr.enabled = _objectiveMgrWasEnabled;
+            }
+            catch
+            {
+                // ignore
+            }
+
+            _objectiveMgrWasEnabled = false;
+        }
+
+        private static void RestoreDesignatorVisual()
+        {
+            try
+            {
+                CombatHUD? hud = SceneSingleton<CombatHUD>.i;
+                if (hud?.targetDesignator == null)
+                    return;
+
+                hud.targetDesignator.enabled = _designatorWasEnabled;
+                Color c = hud.targetDesignator.color;
+                c.a = 1f;
+                hud.targetDesignator.color = c;
+            }
+            catch
+            {
+                // ignore
+            }
+
+            _designatorWasEnabled = false;
+        }
+
+        private static void HideObjectiveOverlays(ObjectiveOverlayManager mgr)
+        {
+            if (ObjectiveOverlaysField?.GetValue(mgr) is not IList overlays)
+                return;
+
+            for (int i = 0; i < overlays.Count; i++)
+            {
+                if (overlays[i] is not ObjectiveOverlay overlay || overlay == null)
                     continue;
+
+                try
+                {
+                    ObjectiveHideOverlayMethod?.Invoke(overlay, null);
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                HideGo(overlay.gameObject);
+            }
+        }
+
+        /// <summary>
+        /// Per-frame: FlightHud.Update turns velocityVector back on; ObjectiveOverlay re-enables mission icons.
+        /// </summary>
+        private static void SuppressIlsAndObjectives()
+        {
+            try
+            {
+                FlightHud? flightHud = SceneSingleton<FlightHud>.i;
+                if (flightHud != null)
+                {
+                    ForceOff(flightHud.velocityVector != null ? flightHud.velocityVector.gameObject : null);
+                    ForceOff(flightHud.waterline != null ? flightHud.waterline.gameObject : null);
+                    ForceOff(flightHud.virtualJoystickPos != null ? flightHud.virtualJoystickPos.gameObject : null);
+                    if (FlightHudCenterField?.GetValue(flightHud) is Transform hudCenter)
+                        ForceOff(hudCenter.gameObject);
+                    ForceOff(AccessToolsField(typeof(FlightHud), "compass")?.GetValue(flightHud) as Component);
+                    ForceOff(AccessToolsField(typeof(FlightHud), "pitchCompass")?.GetValue(flightHud) as Component);
+                    object? pitchCenter = AccessToolsField(typeof(FlightHud), "pitchCompassCenter")?.GetValue(flightHud);
+                    if (pitchCenter is GameObject pitchGo)
+                        ForceOff(pitchGo);
+                    else if (pitchCenter is Component pitchComp)
+                        ForceOff(pitchComp.gameObject);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            CombatHUD? hud = SceneSingleton<CombatHUD>.i;
+            if (hud == null)
+                return;
+
+            if (hud.targetDesignator != null)
+            {
+                hud.targetDesignator.enabled = false;
+                Color c = hud.targetDesignator.color;
+                if (c.a > 0.01f)
+                {
+                    c.a = 0f;
+                    hud.targetDesignator.color = c;
+                }
+            }
+
+            if (TargetArrowField?.GetValue(hud) is Image arrow && arrow != null)
+            {
+                arrow.enabled = false;
+                ForceOff(arrow.gameObject);
+            }
+
+            if (ObjectiveOverlayField?.GetValue(hud) is ObjectiveOverlayManager mgr && mgr != null)
+            {
+                if (mgr.enabled)
+                    mgr.enabled = false;
+                HideObjectiveOverlays(mgr);
+            }
+
+            TrimIconLayerToUnitMarkersOnly(hud);
+            HideHitMarkers(hud);
+        }
+
+        private static void TrimIconLayerToUnitMarkersOnly(CombatHUD hud)
+        {
+            if (hud.iconLayer == null)
+                return;
+
+            _unitMarkerKeep.Clear();
+            if (MarkersField?.GetValue(hud) is IList markers)
+            {
+                for (int i = 0; i < markers.Count; i++)
+                {
+                    if (markers[i] is HUDUnitMarker unitMarker && unitMarker != null && unitMarker.image != null)
+                        _unitMarkerKeep.Add(unitMarker.image.transform);
+                }
+            }
+
+            Transform layer = hud.iconLayer;
+            for (int i = 0; i < layer.childCount; i++)
+            {
+                Transform child = layer.GetChild(i);
+                if (IsUnitMarkerBranch(child, _unitMarkerKeep))
+                    continue;
+
+                ForceOff(child.gameObject);
+            }
+        }
+
+        private static bool IsUnitMarkerBranch(Transform node, HashSet<Transform> markerRoots)
+        {
+            foreach (Transform root in markerRoots)
+            {
+                if (root == null)
+                    continue;
+                if (node == root || node.IsChildOf(root) || root.IsChildOf(node))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static void HideHitMarkers(CombatHUD hud)
+        {
+            if (HitMarkersField?.GetValue(hud) is not IList hitMarkers)
+                return;
+
+            for (int i = 0; i < hitMarkers.Count; i++)
+            {
+                object? entry = hitMarkers[i];
+                if (entry == null)
+                    continue;
+
+                FieldInfo? markerField = entry.GetType().GetField(
+                    "marker",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (markerField?.GetValue(entry) is GameObject markerGo)
+                    ForceOff(markerGo);
+            }
+        }
+
+        private static void ForceOff(Component? c)
+        {
+            if (c != null)
+                ForceOff(c.gameObject);
+        }
+
+        private static void ForceOff(GameObject? go)
+        {
+            if (go != null && go.activeSelf)
+                go.SetActive(false);
+        }
+
+        private static void AddKeep(HashSet<Transform> keep, Transform? t)
+        {
+            if (t != null)
+                keep.Add(t);
+        }
+
+        private static void HideBranchesExcept(Transform root, HashSet<Transform> keep)
+        {
+            if (root == null || keep.Count == 0)
+                return;
+
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform child = root.GetChild(i);
+                if (IsKeepOrUnderKeep(child, keep))
+                    continue;
+
+                if (IsAncestorOfKeep(child, keep))
+                {
+                    HideBranchesExcept(child, keep);
+                    continue;
+                }
 
                 HideGo(child.gameObject);
             }
-
-            HideComponent(flightHud.velocityVector);
-            HideComponent(flightHud.waterline);
-            HideComponent(flightHud.virtualJoystickPos);
-            HideComponent(GetFlightHudField(flightHud, "virtualJoystickVector") as Component);
-            HideComponent(GetFlightHudField(flightHud, "compass") as Component);
-            HideComponent(GetFlightHudField(flightHud, "pitchCompass") as Component);
-            HideGo(GetFlightHudField(flightHud, "pitchCompassCenter") as GameObject);
-            if (GetFlightHudField(flightHud, "HUDCenter") is Transform hudCenter)
-                HideGo(hudCenter.gameObject);
         }
 
-        private static object? GetFlightHudField(FlightHud flightHud, string name) =>
-            AccessToolsField(typeof(FlightHud), name)?.GetValue(flightHud);
+        private static bool IsKeepOrUnderKeep(Transform node, HashSet<Transform> keep)
+        {
+            foreach (Transform k in keep)
+            {
+                if (k == null)
+                    continue;
+                if (node == k || node.IsChildOf(k))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool IsAncestorOfKeep(Transform node, HashSet<Transform> keep)
+        {
+            foreach (Transform k in keep)
+            {
+                if (k != null && k.IsChildOf(node))
+                    return true;
+            }
+
+            return false;
+        }
 
         private static void HideStubsOnMissilePanel()
         {
@@ -215,7 +522,6 @@ namespace MissileCamera
                 return;
 
             MissileCameraHudOverlay.ApplyLegacyStubVisibility(panelRt, hide: true);
-
             ForceStubGone(panelRt, "MissileCameraTitle");
             ForceStubGone(panelRt, "MissileCameraColor");
             ForceStubGone(panelRt, "MissileTelemetry");
@@ -247,87 +553,60 @@ namespace MissileCamera
             }
         }
 
-        private static void BorrowIconLayerAboveOverlay()
+        private static Canvas? ResolveCombatCanvas(CombatHUD? hud)
+        {
+            if (hud == null)
+                return null;
+
+            if (hud.iconLayer != null)
+            {
+                Canvas? fromIcons = hud.iconLayer.GetComponentInParent<Canvas>();
+                if (fromIcons != null)
+                    return fromIcons;
+            }
+
+            return hud.GetComponentInParent<Canvas>();
+        }
+
+        private static void ElevateCombatHudCanvas()
         {
             CombatHUD? hud = SceneSingleton<CombatHUD>.i;
-            if (hud == null || hud.iconLayer == null)
+            Canvas? canvas = ResolveCombatCanvas(hud);
+            if (canvas == null)
                 return;
 
-            EnsureMarkersHost();
-            if (_markersRoot == null)
+            _combatCanvas = canvas;
+            _savedRenderMode = canvas.renderMode;
+            _savedSortingOrder = canvas.sortingOrder;
+            _savedOverrideSorting = canvas.overrideSorting;
+            _savedWorldCamera = canvas.worldCamera;
+            _savedPixelPerfect = canvas.pixelPerfect;
+
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = MarkersSortingOrder;
+            canvas.pixelPerfect = false;
+            _canvasElevated = true;
+        }
+
+        private static void RestoreCombatHudCanvas()
+        {
+            if (!_canvasElevated || _combatCanvas == null)
+            {
+                _canvasElevated = false;
+                _combatCanvas = null;
                 return;
-
-            _iconLayer = hud.iconLayer;
-            _iconOriginalParent = _iconLayer.parent;
-            _iconOriginalSibling = _iconLayer.GetSiblingIndex();
-            ReparentForScreenOverlay(_iconLayer, _markersRoot);
-            _iconLayer.gameObject.SetActive(true);
-            _iconReparented = true;
-
-            if (TargetArrowField?.GetValue(hud) is Image arrow && arrow != null)
-            {
-                Transform borrow = arrow.transform;
-                if (TargetTextField?.GetValue(hud) is Text text
-                    && text != null
-                    && text.transform.parent != null
-                    && text.transform.parent == arrow.transform.parent)
-                {
-                    borrow = arrow.transform.parent;
-                }
-
-                _arrowRoot = borrow;
-                _arrowOriginalParent = borrow.parent;
-                _arrowOriginalSibling = borrow.GetSiblingIndex();
-                ReparentForScreenOverlay(borrow, _markersRoot);
-                borrow.gameObject.SetActive(true);
-                _arrowReparented = true;
-            }
-        }
-
-        private static void ReparentForScreenOverlay(Transform node, Transform parent)
-        {
-            // worldPositionStays:false — dump markers assign screen pixels to .position each LateUpdate.
-            node.SetParent(parent, worldPositionStays: false);
-            node.localPosition = Vector3.zero;
-            node.localRotation = Quaternion.identity;
-            node.localScale = Vector3.one;
-
-            if (node is RectTransform rt)
-            {
-                rt.anchorMin = Vector2.zero;
-                rt.anchorMax = Vector2.one;
-                rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.anchoredPosition = Vector2.zero;
-                rt.offsetMin = Vector2.zero;
-                rt.offsetMax = Vector2.zero;
-            }
-        }
-
-        private static void RestoreIconLayer()
-        {
-            if (_iconReparented && _iconLayer != null && _iconOriginalParent != null)
-            {
-                _iconLayer.SetParent(_iconOriginalParent, worldPositionStays: false);
-                _iconLayer.localScale = Vector3.one;
-                int max = Mathf.Max(0, _iconOriginalParent.childCount - 1);
-                _iconLayer.SetSiblingIndex(Mathf.Clamp(_iconOriginalSibling, 0, max));
             }
 
-            if (_arrowReparented && _arrowRoot != null && _arrowOriginalParent != null)
-            {
-                _arrowRoot.SetParent(_arrowOriginalParent, worldPositionStays: false);
-                _arrowRoot.localScale = Vector3.one;
-                int max = Mathf.Max(0, _arrowOriginalParent.childCount - 1);
-                _arrowRoot.SetSiblingIndex(Mathf.Clamp(_arrowOriginalSibling, 0, max));
-            }
+            _combatCanvas.renderMode = _savedRenderMode;
+            _combatCanvas.sortingOrder = _savedSortingOrder;
+            _combatCanvas.overrideSorting = _savedOverrideSorting;
+            _combatCanvas.worldCamera = _savedWorldCamera;
+            _combatCanvas.pixelPerfect = _savedPixelPerfect;
 
-            _iconLayer = null;
-            _iconOriginalParent = null;
-            _iconReparented = false;
-            _arrowRoot = null;
-            _arrowOriginalParent = null;
-            _arrowReparented = false;
-            DestroyMarkersHost();
+            _canvasElevated = false;
+            _combatCanvas = null;
+            _savedWorldCamera = null;
         }
 
         private static void ForceCombatHudMarkerPass()
@@ -336,77 +615,24 @@ namespace MissileCamera
             if (hud == null || hud.aircraft == null)
                 return;
 
-            // Ensure the behaviour can run even if a parent canvas was soft-disabled wrongly.
-            if (!hud.gameObject.activeInHierarchy)
+            if (!hud.gameObject.activeSelf)
                 hud.gameObject.SetActive(true);
+
+            if (hud.iconLayer != null && !hud.iconLayer.gameObject.activeSelf)
+                hud.iconLayer.gameObject.SetActive(true);
+
+            // Designator GO must stay active for TargetSelect range checks (dump).
+            if (hud.targetDesignator != null && !hud.targetDesignator.gameObject.activeSelf)
+                hud.targetDesignator.gameObject.SetActive(true);
 
             try
             {
                 UpdateMarkersMethod?.Invoke(hud, null);
-                UpdateHitMarkersMethod?.Invoke(hud, null);
             }
             catch
             {
-                // ignore reflection failures
+                // ignore
             }
-        }
-
-        private static void EnsureMarkersHost()
-        {
-            if (_markersHostGo != null && _markersRoot != null)
-            {
-                _markersHostGo.SetActive(true);
-                return;
-            }
-
-            DestroyMarkersHost();
-
-            _markersHostGo = new GameObject(MarkersHostName);
-            Object.DontDestroyOnLoad(_markersHostGo);
-            _markersHostGo.hideFlags = HideFlags.HideAndDontSave;
-
-            Canvas canvas = _markersHostGo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.overrideSorting = true;
-            canvas.sortingOrder = MarkersSortingOrder;
-            canvas.pixelPerfect = false;
-
-            var scaler = _markersHostGo.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ConstantPixelSize;
-            scaler.scaleFactor = 1f;
-
-            var rootGo = new GameObject("MarkersRoot", typeof(RectTransform));
-            rootGo.transform.SetParent(_markersHostGo.transform, false);
-            _markersRoot = rootGo.GetComponent<RectTransform>();
-            _markersRoot.anchorMin = Vector2.zero;
-            _markersRoot.anchorMax = Vector2.one;
-            _markersRoot.offsetMin = Vector2.zero;
-            _markersRoot.offsetMax = Vector2.zero;
-        }
-
-        private static void DestroyMarkersHost()
-        {
-            if (_markersHostGo != null)
-            {
-                Object.Destroy(_markersHostGo);
-                _markersHostGo = null;
-            }
-
-            _markersRoot = null;
-        }
-
-        private static void HideCombatHudChromeExceptMarkers()
-        {
-            CombatHUD? hud = SceneSingleton<CombatHUD>.i;
-            if (hud == null)
-                return;
-
-            HideGo(TopRightPanelField?.GetValue(hud) as GameObject);
-            HideComponent(ThreatListField?.GetValue(hud) as Component);
-            HideComponent(WeaponStatusField?.GetValue(hud) as Component);
-            HideGo(CountermeasureBgField?.GetValue(hud) as GameObject);
-            HideComponent(TargetDesignatorField?.GetValue(hud) as Component);
-            HideComponent(TargetInfoField?.GetValue(hud) as Component);
         }
 
         private static void HideComponent(Component? c)
@@ -420,12 +646,18 @@ namespace MissileCamera
             if (go == null)
                 return;
 
+            for (int i = 0; i < _hiddenChrome.Count; i++)
+            {
+                if (_hiddenChrome[i].go == go)
+                    return;
+            }
+
             _hiddenChrome.Add((go, go.activeSelf));
             if (go.activeSelf)
                 go.SetActive(false);
         }
 
-        private static void RestoreCombatHudChrome()
+        private static void RestoreHiddenChrome()
         {
             for (int i = 0; i < _hiddenChrome.Count; i++)
             {

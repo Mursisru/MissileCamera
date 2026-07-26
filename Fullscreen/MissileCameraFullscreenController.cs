@@ -147,8 +147,26 @@ namespace MissileCamera
 
         private static void Exit(bool force)
         {
-            MissileCameraFullscreenBootstrap.Abort();
-            MissileCameraFullscreenViewDriver.Exit();
+            // Always clear active first so Tick/LateTick stop driving the missile pose.
+            _active = false;
+
+            try
+            {
+                MissileCameraFullscreenBootstrap.Abort();
+            }
+            catch
+            {
+                // ignore
+            }
+
+            try
+            {
+                MissileCameraFullscreenViewDriver.Exit();
+            }
+            catch (System.Exception ex)
+            {
+                MfdLog.Info("fullscreen view exit error: " + ex.Message);
+            }
 
             RectTransform? panelRt = MissileCameraFeedController.TryGetPanelRt();
             if (panelRt != null && _panelOriginalParent != null)
@@ -170,8 +188,15 @@ namespace MissileCamera
             if (_overlayCanvas != null)
                 _overlayCanvas.enabled = true;
 
-            _active = false;
-            MissileCameraVanillaHudBridge.OnFullscreenExited();
+            try
+            {
+                MissileCameraVanillaHudBridge.OnFullscreenExited();
+            }
+            catch (System.Exception ex)
+            {
+                MfdLog.Info("fullscreen hud exit error: " + ex.Message);
+            }
+
             MissileCameraFeedController.NotifyFullscreenChanged();
             if (!force)
                 MfdLog.Info("fullscreen exit");
@@ -180,7 +205,10 @@ namespace MissileCamera
         private static void EnsureOverlayHost()
         {
             if (_overlayGo != null && _fullscreenRoot != null && _overlayCanvas != null)
+            {
+                EnsureOverlayDoesNotBlockRaycasts();
                 return;
+            }
 
             DestroyOverlayHost();
 
@@ -193,6 +221,8 @@ namespace MissileCamera
             _overlayCanvas.sortingOrder = OverlaySortingOrder;
             _overlayCanvas.pixelPerfect = false;
             _overlayCanvas.overrideSorting = true;
+
+            EnsureOverlayDoesNotBlockRaycasts();
 
             var scaler = _overlayGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -214,6 +244,19 @@ namespace MissileCamera
             // Transparent: scene is rendered by vanilla mainCamera, not a RawImage feed.
             bg.color = new Color(0f, 0f, 0f, 0f);
             bg.raycastTarget = false;
+        }
+
+        private static void EnsureOverlayDoesNotBlockRaycasts()
+        {
+            if (_overlayGo == null)
+                return;
+
+            CanvasGroup group = _overlayGo.GetComponent<CanvasGroup>();
+            if (group == null)
+                group = _overlayGo.AddComponent<CanvasGroup>();
+
+            group.interactable = false;
+            group.blocksRaycasts = false;
         }
 
         private static void DestroyOverlayHost()
