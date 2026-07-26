@@ -237,6 +237,11 @@ namespace MissileCamera
                 MfdLog.Info("fullscreen hud exit error: " + ex.Message);
             }
 
+            MissileCameraFullscreenConfig.Refresh();
+            if (MissileCameraFullscreenConfig.ZoomResetOnExit)
+                MissileCameraFeedController.ResetFullscreenMagnification();
+
+            MissileCameraVisionModeController.Reset();
             MissileCameraFeedController.NotifyFullscreenChanged();
             if (!force)
                 MfdLog.Info("fullscreen exit");

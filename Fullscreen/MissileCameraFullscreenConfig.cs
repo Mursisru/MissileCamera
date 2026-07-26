@@ -12,6 +12,10 @@ namespace MissileCamera
         internal static int BootstrapSteps = 4;
         internal static int FeedWidth = 1920;
         internal static int FeedHeight = 1080;
+        internal static float ZoomMax = 50f;
+        internal static float ZoomWheelFactor = 1.12f;
+        internal static KeyCode VisionCycleKey = KeyCode.J;
+        internal static bool ZoomResetOnExit = true;
         internal static int Revision;
 
         internal static void Refresh(bool force = false)
@@ -26,6 +30,10 @@ namespace MissileCamera
             int bootstrapSteps = MissileCameraBepInConfig.FullscreenBootstrapSteps.Value;
             int feedWidth = MissileCameraBepInConfig.FullscreenFeedWidth.Value;
             int feedHeight = MissileCameraBepInConfig.FullscreenFeedHeight.Value;
+            float zoomMax = MissileCameraBepInConfig.FullscreenZoomMax.Value;
+            float zoomWheelFactor = MissileCameraBepInConfig.FullscreenZoomWheelFactor.Value;
+            KeyCode visionCycleKey = ParseKey(MissileCameraBepInConfig.FullscreenVisionCycleKey.Value, KeyCode.J);
+            bool zoomResetOnExit = MissileCameraBepInConfig.FullscreenZoomResetOnExit.Value;
 
             if (!force
                 && enabled == Enabled
@@ -34,7 +42,11 @@ namespace MissileCamera
                 && bootstrapSeconds == BootstrapSeconds
                 && bootstrapSteps == BootstrapSteps
                 && feedWidth == FeedWidth
-                && feedHeight == FeedHeight)
+                && feedHeight == FeedHeight
+                && zoomMax == ZoomMax
+                && zoomWheelFactor == ZoomWheelFactor
+                && visionCycleKey == VisionCycleKey
+                && zoomResetOnExit == ZoomResetOnExit)
                 return;
 
             Enabled = enabled;
@@ -44,6 +56,10 @@ namespace MissileCamera
             BootstrapSteps = bootstrapSteps;
             FeedWidth = feedWidth;
             FeedHeight = feedHeight;
+            ZoomMax = Mathf.Clamp(zoomMax, 2f, 50f);
+            ZoomWheelFactor = Mathf.Clamp(zoomWheelFactor, 1.02f, 1.5f);
+            VisionCycleKey = visionCycleKey;
+            ZoomResetOnExit = zoomResetOnExit;
             Revision++;
         }
 

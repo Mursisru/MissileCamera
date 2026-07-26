@@ -124,7 +124,7 @@ namespace MissileCamera
         }
 
         /// <summary>
-        /// MFD feed uses cfg size; game-fullscreen uses MissileCameraFullscreen FeedWidth/Height (default 1920×1080).
+        /// MFD feed uses cfg size; fullscreen uses FeedWidth/Height scaled by optical mag buckets (cap 3840).
         /// </summary>
         internal static void ResolveActiveFeedSize(out int width, out int height)
         {
@@ -136,12 +136,32 @@ namespace MissileCamera
             }
 
             MissileCameraFullscreenConfig.Refresh();
-            width = Mathf.Clamp(MissileCameraFullscreenConfig.FeedWidth, 640, 3840);
-            height = Mathf.Clamp(MissileCameraFullscreenConfig.FeedHeight, 360, 2160);
-            if ((width & 1) != 0)
-                width--;
-            if ((height & 1) != 0)
-                height--;
+            int baseW = Mathf.Clamp(MissileCameraFullscreenConfig.FeedWidth, 640, 3840);
+            int baseH = Mathf.Clamp(MissileCameraFullscreenConfig.FeedHeight, 360, 2160);
+            float scale = ResolveFullscreenQualityScale(MissileCameraFeedController.FullscreenMagnification);
+            width = EvenClamp(Mathf.RoundToInt(baseW * scale), 640, 3840);
+            height = EvenClamp(Mathf.RoundToInt(baseH * scale), 360, 2160);
+        }
+
+        internal static float ResolveFullscreenQualityScale(float magnification)
+        {
+            float mag = Mathf.Max(magnification, 1f);
+            float raw = Mathf.Sqrt(mag);
+            if (raw < 1.25f)
+                return 1f;
+            if (raw < 1.75f)
+                return 1.5f;
+            if (raw < 2.25f)
+                return 2f;
+            return 2.5f;
+        }
+
+        private static int EvenClamp(int value, int min, int max)
+        {
+            int v = Mathf.Clamp(value, min, max);
+            if ((v & 1) != 0)
+                v--;
+            return Mathf.Max(v, min);
         }
     }
 }

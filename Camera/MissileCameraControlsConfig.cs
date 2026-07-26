@@ -1,9 +1,13 @@
 using MissileCamera.Config;
+using UnityEngine;
 
 namespace MissileCamera
 {
     internal static class MissileCameraControlsConfig
     {
+        private const float MfdMinFov = 10f;
+        private const float MfdMaxFov = 120f;
+
         internal static bool Enabled = true;
         internal static float ZoomStep = 0.5f;
         internal static float ZoomMin = -4f;
@@ -48,7 +52,25 @@ namespace MissileCamera
         internal static float ComputeEffectiveFov(float baseFov, float zoomOffset)
         {
             float fov = baseFov - zoomOffset * ZoomFovDegreesPerUnit;
-            return fov < 10f ? 10f : fov > 120f ? 120f : fov;
+            return fov < MfdMinFov ? MfdMinFov : fov > MfdMaxFov ? MfdMaxFov : fov;
+        }
+
+        /// <summary>Fullscreen optical zoom: fov = baseFov / mag, mag in [1, ZoomMax].</summary>
+        internal static float ComputeFullscreenFov(float baseFov, float magnification)
+        {
+            float maxMag = Mathf.Max(MissileCameraFullscreenConfig.ZoomMax, 1f);
+            float mag = Mathf.Clamp(magnification, 1f, maxMag);
+            float safeBase = Mathf.Max(baseFov, 1f);
+            float minFov = safeBase / maxMag;
+            float maxFov = Mathf.Min(MfdMaxFov, safeBase);
+            float fov = safeBase / mag;
+            return Mathf.Clamp(fov, minFov, maxFov);
+        }
+
+        internal static float ClampFullscreenMagnification(float magnification)
+        {
+            float maxMag = Mathf.Max(MissileCameraFullscreenConfig.ZoomMax, 1f);
+            return Mathf.Clamp(magnification, 1f, maxMag);
         }
     }
 }

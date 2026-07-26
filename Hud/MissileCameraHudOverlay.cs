@@ -111,7 +111,13 @@ namespace MissileCamera
             if (showCenter)
                 _attitude?.Update(snapshot, panel.MinSide);
 
-            UpdateIntercept(snapshot, viewRt, feedCamera, panel.MinSide, showCenter);
+            // Intercept ring is independent of classic center cluster / FLIR chrome.
+            UpdateIntercept(
+                snapshot,
+                viewRt,
+                feedCamera,
+                panel.MinSide,
+                MissileCameraHudConfig.ShowCenterCluster);
         }
 
         internal void InvalidateDynamicSchedule() => _nextDynamicTime = 0f;
@@ -196,12 +202,12 @@ namespace MissileCamera
                 UiImageHelper.ApplySolid(panelImage, TargetScreenUiStyle.GetStubPanelColor(screenUi));
         }
 
-        private void UpdateIntercept(MissileCameraHudSnapshot snapshot, RectTransform viewRt, Camera? feedCamera, float minSide, bool showCenter)
+        private void UpdateIntercept(MissileCameraHudSnapshot snapshot, RectTransform viewRt, Camera? feedCamera, float minSide, bool showIntercept)
         {
             if (_interceptRing == null || _interceptRoot == null)
                 return;
 
-            bool show = showCenter && snapshot.HasAimPoint && feedCamera != null;
+            bool show = showIntercept && snapshot.HasAimPoint && feedCamera != null;
             if (!show)
             {
                 _interceptRoot.gameObject.SetActive(false);
@@ -218,9 +224,9 @@ namespace MissileCamera
             _interceptRoot.gameObject.SetActive(true);
             _interceptRoot.anchoredPosition = projection.AnchoredPosition;
 
-            float radius = Mathf.Clamp(minSide * 0.028f, 4f, 12f);
-            float thickness = Mathf.Max(1.2f, radius * 0.35f);
-            _interceptRing.SetRing(radius, thickness, MissileCameraHudConfig.InterceptColor, filled: true);
+            float radius = Mathf.Clamp(minSide * 0.022f, 4f, 10f);
+            float thickness = Mathf.Max(1.2f, radius * 0.18f);
+            _interceptRing.SetRing(radius, thickness, MissileCameraHudConfig.InterceptColor, filled: false);
         }
 
         private static void SetChildActiveDeep(RectTransform layoutRt, string childName, bool active)

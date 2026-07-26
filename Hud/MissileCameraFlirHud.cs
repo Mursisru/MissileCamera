@@ -304,13 +304,18 @@ namespace MissileCamera
             _northArrow.text = "-N->";
             _northArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, -ownHdg);
 
-            string polarity = snapshot.InfraredActive ? "C WH DDE" : "C COLOR";
-            string foc = Mathf.Abs(snapshot.ZoomOffset) < ZoomAutoEpsilon
+            MissileCameraVisionMode vision = MissileCameraVisionModeController.Mode;
+            string polarity = MissileCameraVisionModeController.FlirPolarityLabel(vision);
+            string foc = mag <= 1f + ZoomAutoEpsilon
                 ? "FOC AUTO"
-                : "FOC MAN z" + string.Format(CultureInfo.InvariantCulture, "{0:+0.0;-0.0}", snapshot.ZoomOffset);
-            string exp = snapshot.InfraredActive
-                ? "EXP " + string.Format(CultureInfo.InvariantCulture, "{0:F2}", snapshot.InfraredExposure)
-                : "EXP DAY";
+                : "FOC MAN x" + string.Format(CultureInfo.InvariantCulture, "{0:F1}", mag);
+            string exp;
+            if (MissileCameraVisionModeController.UsesInfraredBlit(vision))
+                exp = "EXP " + string.Format(CultureInfo.InvariantCulture, "{0:F2}", snapshot.InfraredExposure);
+            else if (MissileCameraVisionModeController.UsesNightVisionVolume(vision))
+                exp = "EXP NVG";
+            else
+                exp = "EXP DAY";
             _modes.text = "HDIR " + string.Format(CultureInfo.InvariantCulture, "{0:F0}°T", ownHdg)
                 + "\n" + polarity
                 + "\n" + foc

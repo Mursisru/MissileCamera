@@ -20,6 +20,7 @@ namespace MissileCamera
         private static Missile? _followedMissile;
         private static bool _manualFollowActive;
         private static float _zoomOffset;
+        private static float _fullscreenMagnification = 1f;
         private static float _restoreAfterLossAtUnscaled = -1f;
         private static bool _postLossSequenceActive;
         private static float _nextRenderTimeUnscaled;
@@ -57,6 +58,8 @@ namespace MissileCamera
             _postLossSequenceActive = false;
             _manualFollowActive = false;
             _zoomOffset = 0f;
+            _fullscreenMagnification = 1f;
+            MissileCameraVisionModeController.Reset();
             _rig?.Destroy();
             _rig = null;
         }
@@ -92,9 +95,11 @@ namespace MissileCamera
             MissileCameraLossInterference.BeginSwitch(seconds);
         }
 
+        internal static float FullscreenMagnification => _fullscreenMagnification;
+
         internal static void AdjustZoom(float delta)
         {
-            if (!_overlayActive)
+            if (!_overlayActive || MissileCameraFullscreenController.IsActive)
                 return;
 
             float newOffset = MissileCameraControlsConfig.ClampZoomOffset(_zoomOffset + delta);
@@ -108,7 +113,7 @@ namespace MissileCamera
 
         internal static void ResetZoom()
         {
-            if (!_overlayActive)
+            if (!_overlayActive || MissileCameraFullscreenController.IsActive)
                 return;
 
             _zoomOffset = 0f;
@@ -116,6 +121,48 @@ namespace MissileCamera
                 _rig.SetZoomOffset(_zoomOffset);
 
             HudOverlay.NotifyZoomChanged(_zoomOffset);
+        }
+
+        internal static void MultiplyFullscreenMagnification(float multiplier)
+        {
+            if (!_overlayActive || !MissileCameraFullscreenController.IsActive)
+                return;
+
+            if (multiplier <= 0f || float.IsNaN(multiplier) || float.IsInfinity(multiplier))
+                return;
+
+            float next = MissileCameraControlsConfig.ClampFullscreenMagnification(_fullscreenMagnification * multiplier);
+            if (Mathf.Approximately(next, _fullscreenMagnification))
+                return;
+
+            _fullscreenMagnification = next;
+            ApplyFullscreenOptics();
+            HudOverlay.NotifyZoomChanged(_fullscreenMagnification);
+        }
+
+        internal static void ResetFullscreenMagnification()
+        {
+            if (!Mathf.Approximately(_fullscreenMagnification, 1f))
+            {
+                _fullscreenMagnification = 1f;
+                if (_overlayActive && MissileCameraFullscreenController.IsActive)
+                {
+                    ApplyFullscreenOptics();
+                    HudOverlay.NotifyZoomChanged(_fullscreenMagnification);
+                }
+            }
+            else if (_overlayActive && MissileCameraFullscreenController.IsActive)
+            {
+                ApplyFullscreenOptics();
+            }
+        }
+
+        private static void ApplyFullscreenOptics()
+        {
+            MissileCameraRig rig = EnsureRig();
+            rig.SetFullscreenMagnification(_fullscreenMagnification);
+            _nextRenderTimeUnscaled = 0f;
+            NotifyFullscreenChanged();
         }
 
         internal static void Tick()
@@ -177,12 +224,15 @@ namespace MissileCamera
             }
 
             MissileCameraRig rig = EnsureRig();
-            rig.SetZoomOffset(_zoomOffset);
+            if (fullscreen)
+                rig.SetFullscreenMagnification(_fullscreenMagnification);
+            else
+                rig.SetZoomOffset(_zoomOffset);
             rig.Attach(missile);
             rig.AdvanceRoll(Time.deltaTime);
 
             Vector3 missilePos = missile.transform.position;
-            bool infrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
+            bool autoInfrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
 
             // MFD and fullscreen both use dedicated feed camera → RawImage.
             // NEVER drive CameraStateManager.mainCamera (see Fullscreen/CAMERA_SAFETY.md).
@@ -190,17 +240,22 @@ namespace MissileCamera
 
             if (fullscreen)
                 MissileCameraVanillaHudBridge.TickHideStubs();
-            else
-                MissileCameraInfraredEffect.Apply(_feedImage, rig, infrared, exposure);
 
             if (fullscreen && MissileCameraLossInterference.IsActive)
             {
-                // Fullscreen NO SIGNAL overlay owns the flash; keep feed clearing IR only.
                 MissileCameraInfraredEffect.Clear(_feedImage, rig);
             }
             else if (fullscreen)
             {
-                MissileCameraInfraredEffect.Apply(_feedImage, rig, infrared, exposure);
+                MissileCameraInfraredEffect.ApplyFullscreenVision(
+                    _feedImage,
+                    rig,
+                    MissileCameraVisionModeController.Mode,
+                    exposure);
+            }
+            else
+            {
+                MissileCameraInfraredEffect.Apply(_feedImage, rig, autoInfrared, exposure);
             }
 
             MissileCameraAircraftCamController.Tick();

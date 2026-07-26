@@ -8,10 +8,16 @@ namespace MissileCamera
     {
         private const float FarClipPlane = 60000f;
 
+        private const float NvgGainMin = 0.5f;
+        private const float NvgGainMax = 3f;
+        private const float NvgBloomThresholdMin = 0.2f;
+        private const float NvgBloomThresholdMax = 1.2f;
+
         private readonly GameObject _root;
         private readonly Camera _camera;
         private readonly Volume _irVolume;
         private readonly ColorAdjustments _colorAdjustments;
+        private readonly Bloom _bloom;
         private RenderTexture? _renderTexture;
         private RenderTexture? _hdrRenderTexture;
         private Missile? _missile;
@@ -24,7 +30,10 @@ namespace MissileCamera
         private float _filteredLateralG;
         private float _filteredTurnSign;
         private float _zoomOffset;
+        private float _fullscreenMagnification = 1f;
+        private MissileCameraVisionMode _visionMode = MissileCameraVisionMode.Color;
         private bool _infraredVolumeActive;
+        private bool _nightVisionActive;
         private bool _infraredVolumeEnabledDuringRender;
         private bool _renderPostProcessingEnabled;
         private float _infraredBlitExposure;
@@ -32,6 +41,7 @@ namespace MissileCamera
         private bool _infraredSyncedFromVanilla;
         private bool _lastFrameUsedBlit;
         private float _lastPolicyExposure;
+        private float _nvgGainLastUpdated = -100f;
         private InfraredExposureBreakdown _lastExposureBreakdown;
         private bool _pipelineDriven;
 
@@ -82,6 +92,11 @@ namespace MissileCamera
             _colorAdjustments.saturation.overrideState = false;
             _colorAdjustments.postExposure.Override(0f);
             _colorAdjustments.contrast.Override(1f);
+            _bloom = profile.Add<Bloom>(true);
+            _bloom.threshold.Override(0.9f);
+            _bloom.intensity.Override(0.35f);
+            _bloom.threshold.overrideState = false;
+            _bloom.intensity.overrideState = false;
             _irVolume.profile = profile;
 
             ApplyConfig();
@@ -95,11 +110,55 @@ namespace MissileCamera
         internal HorizonFrame LastHorizonFrame { get; private set; } = HorizonFrame.Empty;
 
         internal float ZoomOffset => _zoomOffset;
+        internal float FullscreenMagnification => _fullscreenMagnification;
+        internal MissileCameraVisionMode VisionMode => _visionMode;
 
         internal void SetZoomOffset(float offset)
         {
             _zoomOffset = offset;
             ApplyEffectiveFov();
+        }
+
+        internal void SetFullscreenMagnification(float magnification)
+        {
+            _fullscreenMagnification = MissileCameraControlsConfig.ClampFullscreenMagnification(magnification);
+            ApplyEffectiveFov();
+        }
+
+        internal void SetVisionMode(MissileCameraVisionMode mode, float infraredExposure)
+        {
+            if (!IsRootAlive)
+                return;
+
+            bool blitIr = MissileCameraVisionModeController.UsesInfraredBlit(mode);
+            bool nvg = MissileCameraVisionModeController.UsesNightVisionVolume(mode);
+
+            if (_visionMode == mode)
+            {
+                if (blitIr)
+                    SetInfraredVolume(true, infraredExposure);
+                return;
+            }
+
+            _visionMode = mode;
+            _nightVisionActive = nvg;
+            if (blitIr)
+            {
+                SetInfraredVolume(true, infraredExposure);
+                DisableNightVisionVolume();
+            }
+            else if (nvg)
+            {
+                SetInfraredVolume(false, 0f);
+                EnableNightVisionVolume();
+            }
+            else
+            {
+                SetInfraredVolume(false, 0f);
+                DisableNightVisionVolume();
+            }
+
+            MissileCameraRenderPrep.SetPipelineNightVision(nvg);
         }
 
         /// <summary>
@@ -289,6 +348,11 @@ namespace MissileCamera
             ApplyConfigIfNeeded();
             ApplyPose();
 
+            bool useBlit = _infraredVolumeActive
+                && MissileCameraVisionModeController.UsesInfraredBlit(_visionMode);
+            bool useNvg = _nightVisionActive
+                && MissileCameraVisionModeController.UsesNightVisionVolume(_visionMode);
+
             bool prevFog = RenderSettings.fog;
             RenderTexture? prevActive = RenderTexture.active;
             RenderTexture? prevCameraTarget = _camera.targetTexture;
@@ -299,8 +363,8 @@ namespace MissileCamera
             _lastFrameUsedBlit = false;
             try
             {
-                RenderSettings.fog = !_infraredVolumeActive;
-                if (_infraredVolumeActive)
+                RenderSettings.fog = !useBlit;
+                if (useBlit)
                 {
                     EnsureHdrTexture();
                     _camera.allowHDR = true;
@@ -308,29 +372,48 @@ namespace MissileCamera
                 }
                 else
                 {
-                    _camera.allowHDR = false;
+                    _camera.allowHDR = useNvg;
                     _camera.targetTexture = _renderTexture;
                 }
 
                 if (managePrep)
                     MissileCameraRenderPrep.BeforeRender(_camera, forceLdr: false);
 
-                if (_infraredVolumeActive)
+                urp = _camera.GetUniversalAdditionalCameraData();
+                if (useBlit)
                 {
-                    urp = _camera.GetUniversalAdditionalCameraData();
                     urp.renderPostProcessing = false;
                     _camera.allowHDR = true;
+                    if (_irVolume != null)
+                        _irVolume.enabled = false;
+                }
+                else if (useNvg)
+                {
+                    TickNightVisionGain();
+                    if (_irVolume != null)
+                        _irVolume.enabled = true;
+                    urp.renderPostProcessing = true;
+                    urp.volumeTrigger = _camera.transform;
+                    _renderPostProcessingEnabled = true;
+                    _infraredVolumeEnabledDuringRender = true;
+                }
+                else
+                {
+                    if (_irVolume != null)
+                        _irVolume.enabled = false;
+                    urp.renderPostProcessing = false;
                 }
 
                 _camera.Render();
 
-                if (_infraredVolumeActive && _hdrRenderTexture != null && _renderTexture != null)
+                if (useBlit && _hdrRenderTexture != null && _renderTexture != null)
                 {
                     MissileCameraInfraredBlit.Apply(
                         _hdrRenderTexture,
                         _renderTexture,
                         _infraredBlitExposure,
-                        _infraredBlitContrast);
+                        _infraredBlitContrast,
+                        _visionMode);
                     _lastFrameUsedBlit = MissileCameraInfraredBlit.IsAvailable;
                     MissileCameraInfraredAudit.LogAfterRender(this, _renderTexture);
                 }
@@ -455,9 +538,64 @@ namespace MissileCamera
             if (!IsRootAlive)
                 return;
 
-            _camera.fieldOfView = MissileCameraControlsConfig.ComputeEffectiveFov(
-                MissileCameraFeedConfig.Fov,
-                _zoomOffset);
+            float baseFov = MissileCameraFeedConfig.Fov;
+            if (MissileCameraFullscreenController.IsActive)
+            {
+                _camera.fieldOfView = MissileCameraControlsConfig.ComputeFullscreenFov(
+                    baseFov,
+                    _fullscreenMagnification);
+                return;
+            }
+
+            _camera.fieldOfView = MissileCameraControlsConfig.ComputeEffectiveFov(baseFov, _zoomOffset);
+        }
+
+        private void EnableNightVisionVolume()
+        {
+            if (!IsRootAlive)
+                return;
+
+            _nightVisionActive = true;
+            _colorAdjustments.saturation.overrideState = false;
+            _colorAdjustments.contrast.Override(5f);
+            _colorAdjustments.contrast.overrideState = true;
+            _bloom.intensity.Override(0.35f);
+            _bloom.intensity.overrideState = true;
+            _bloom.threshold.overrideState = true;
+            TickNightVisionGain();
+            MissileCameraRenderPrep.SetPipelineNightVision(true);
+        }
+
+        private void DisableNightVisionVolume()
+        {
+            _nightVisionActive = false;
+            _bloom.threshold.overrideState = false;
+            _bloom.intensity.overrideState = false;
+            MissileCameraRenderPrep.SetPipelineNightVision(false);
+        }
+
+        private void TickNightVisionGain()
+        {
+            if (Time.unscaledTime - _nvgGainLastUpdated < 1f)
+                return;
+
+            _nvgGainLastUpdated = Time.unscaledTime;
+            float ambient = 0.2f;
+            try
+            {
+                if (LevelInfoAccess.TryGetAmbientLight(out float a))
+                    ambient = a;
+            }
+            catch
+            {
+                // ignore
+            }
+
+            float t = Mathf.InverseLerp(0.01f, 0.4f, ambient);
+            // Dump NightVision.UpdateGain: postExposure + bloom.threshold from ambient.
+            _colorAdjustments.postExposure.Override(Mathf.Lerp(NvgGainMax, NvgGainMin, t));
+            _colorAdjustments.postExposure.overrideState = true;
+            _bloom.threshold.Override(Mathf.Lerp(NvgBloomThresholdMin, NvgBloomThresholdMax, t));
         }
 
         private void ApplyConfig()
@@ -472,13 +610,14 @@ namespace MissileCamera
             ReleaseTexture();
             int msaa = MissileCameraRenderPrep.ResolvePipelineMsaaSampleCount();
             bool fullscreen = MissileCameraFullscreenController.IsActive;
+            bool bilinear = !fullscreen || _fullscreenMagnification > 1.01f;
             _renderTexture = new RenderTexture(_textureWidth, _textureHeight, 16, RenderTextureFormat.ARGB32)
             {
                 name = "MissileCameraFeed",
                 antiAliasing = msaa,
                 useMipMap = false,
                 autoGenerateMips = false,
-                filterMode = fullscreen ? FilterMode.Point : FilterMode.Bilinear
+                filterMode = bilinear ? FilterMode.Bilinear : FilterMode.Point
             };
             _renderTexture.Create();
             _camera.targetTexture = _renderTexture;

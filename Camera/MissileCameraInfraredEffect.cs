@@ -4,14 +4,14 @@ using UnityEngine.UI;
 namespace MissileCamera
 {
     /// <summary>
-    /// Auto IR via TargetCam-style URP ColorAdjustments on the feed camera during <see cref="MissileCameraRig.RenderFrame"/>.
-    /// RawImage stays unmodified (HUD color layer separate). Local visual only — MP safe.
+    /// MFD: auto IR when dark. Fullscreen: manual vision modes (J cycle).
     /// </summary>
     internal static class MissileCameraInfraredEffect
     {
         private static bool _loggedPath;
         private static bool _lastInfrared;
         private static float _lastExposure = float.NaN;
+        private static MissileCameraVisionMode _lastFsMode = (MissileCameraVisionMode)255;
 
         internal static void Apply(RawImage? feedImage, MissileCameraRig? rig, bool infrared, float exposure)
         {
@@ -21,7 +21,7 @@ namespace MissileCamera
 
                 if (!infrared)
                 {
-                    rig?.SetInfraredVolume(false, 0f);
+                    rig?.SetVisionMode(MissileCameraVisionMode.Color, 0f);
                     _lastInfrared = false;
                     _lastExposure = 0f;
                     return;
@@ -41,15 +41,12 @@ namespace MissileCamera
                     return;
                 }
 
-                rig.SetInfraredVolume(true, exposure);
+                rig.SetVisionMode(MissileCameraVisionMode.WhiteHot, exposure);
 
                 if (!_loggedPath || !_lastInfrared)
                 {
                     _loggedPath = true;
-                    if (rig.IsPipelineDriven)
-                        MfdLog.Info($"IR on path=urp-volume finalExp={rig.InfraredBlitExposure:F2} (TargetCam parity)");
-                    else
-                        MfdLog.Info($"IR on path=hdr+blit finalExp={rig.InfraredBlitExposure:F2} (TargetCam EV)");
+                    MfdLog.Info($"IR on path=hdr+blit finalExp={rig.InfraredBlitExposure:F2}");
                 }
 
                 _lastInfrared = true;
@@ -60,17 +57,52 @@ namespace MissileCamera
             {
                 MfdLog.Error("IR apply failed: " + ex.Message);
                 ClearFeedMaterial(feedImage);
-                rig?.SetInfraredVolume(false, 0f);
+                rig?.SetVisionMode(MissileCameraVisionMode.Color, 0f);
                 _lastInfrared = false;
+            }
+        }
+
+        internal static void ApplyFullscreenVision(
+            RawImage? feedImage,
+            MissileCameraRig? rig,
+            MissileCameraVisionMode mode,
+            float infraredExposure)
+        {
+            try
+            {
+                ClearFeedMaterial(feedImage);
+                if (rig == null)
+                    return;
+
+                if (MissileCameraVisionModeController.UsesInfraredBlit(mode))
+                    MissileCameraInfraredAudit.LogStartupOnce();
+
+                rig.SetVisionMode(mode, infraredExposure);
+
+                if (_lastFsMode != mode)
+                {
+                    _lastFsMode = mode;
+                    MfdLog.Info("FS vision apply mode=" + mode);
+                }
+
+                _lastInfrared = MissileCameraVisionModeController.UsesInfraredBlit(mode);
+                _lastExposure = infraredExposure;
+            }
+            catch (System.Exception ex)
+            {
+                MfdLog.Error("FS vision apply failed: " + ex.Message);
+                ClearFeedMaterial(feedImage);
+                rig?.SetVisionMode(MissileCameraVisionMode.Color, 0f);
             }
         }
 
         internal static void Clear(RawImage? feedImage, MissileCameraRig? rig)
         {
             ClearFeedMaterial(feedImage);
-            rig?.SetInfraredVolume(false, 0f);
+            rig?.SetVisionMode(MissileCameraVisionMode.Color, 0f);
             _lastInfrared = false;
             _lastExposure = 0f;
+            _lastFsMode = (MissileCameraVisionMode)255;
             MissileCameraInfraredPolicy.Reset();
             MissileCameraInfraredAudit.Reset();
         }
@@ -80,10 +112,12 @@ namespace MissileCamera
             _loggedPath = false;
             _lastInfrared = false;
             _lastExposure = float.NaN;
+            _lastFsMode = (MissileCameraVisionMode)255;
             MissileCameraShaderBundle.Unload();
             MissileCameraInfraredBlit.Shutdown();
             MissileCameraInfraredPolicy.Reset();
             MissileCameraInfraredAudit.Reset();
+            MissileCameraVisionModeController.Reset();
         }
 
         private static void ClearFeedMaterial(RawImage? feedImage)

@@ -314,8 +314,19 @@ namespace MissileCamera
                     targetBearingDeg = Mathf.Repeat(Mathf.Atan2(to.x, to.z) * Mathf.Rad2Deg, 360f);
             }
 
-            bool infrared = MissileCameraInfraredPolicy.InfraredActive;
+            bool fullscreen = MissileCameraFullscreenController.IsActive;
+            MissileCameraVisionMode fsVision = MissileCameraVisionModeController.Mode;
+            bool infrared = fullscreen
+                ? MissileCameraVisionModeController.UsesInfraredBlit(fsVision)
+                    || MissileCameraVisionModeController.UsesNightVisionVolume(fsVision)
+                : MissileCameraInfraredPolicy.InfraredActive;
             float exposure = MissileCameraInfraredPolicy.Exposure;
+            string tgpMode = fullscreen
+                ? MissileCameraVisionModeController.ModeLabel(fsVision)
+                : MissileCameraTelemetry.FormatTgpMode(infrared);
+            string tgpPalette = fullscreen
+                ? MissileCameraVisionModeController.PaletteLabel(fsVision)
+                : MissileCameraTelemetry.FormatTgpPalette(infrared);
             bool showTti = hasTti && ttiSec > 0.05f && closMs >= 1f;
             float ttiFraction = 0f;
             if (showTti)
@@ -363,8 +374,8 @@ namespace MissileCamera
                 tgpTargetSpdText: hasTgtSpd
                     ? MissileCameraTelemetry.FormatTgpSpd(tgtSpdMs)
                     : "SPD ---",
-                tgpModeText: MissileCameraTelemetry.FormatTgpMode(infrared),
-                tgpPaletteText: MissileCameraTelemetry.FormatTgpPalette(infrared),
+                tgpModeText: tgpMode,
+                tgpPaletteText: tgpPalette,
                 tgpMagText: MissileCameraTelemetry.FormatTgpMag(mag),
                 tgpRidText: MissileCameraTelemetry.FormatTgpRid(MissileAccess.GetTargetRid(missile)),
                 tgpTtiText: showTti ? MissileCameraTelemetry.FormatTgpTti(ttiSec) : string.Empty,

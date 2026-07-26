@@ -43,6 +43,7 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 * **MFD split-screen UI:** Splits the wide tactical MFD (Target view) into zones and embeds the missile feed in the weapons panel area.
 * **Seeker cam (missile nose cam):** Renders a live `RawImage` feed from your latest **player-owned** in-flight missile. **No selected target required** — dumb-fire / no-lock launches still open the MFD feed. On destruction, a brief TV-static burst plays before the panel closes.
 * **Fullscreen feed:** `RightAlt+F` — dedicated seeker RenderTexture on a fullscreen `RawImage` (same as MFD). **Never hijacks** vanilla `CameraStateManager` / cockpit camera. FLIR chrome overlay; CombatHUD unit markers only.
+* **Fullscreen zoom / filters:** mouse wheel optical zoom up to **50×** (MMB reset); **J** cycles vision modes (Color / NVG / WhiteHot / BlackHot / Contour±). MFD keeps keyboard zoom + auto IR when dark.
 * **Fullscreen FLIR HUD:** green sensor chrome with live `— MSL —` / `— TGT —` telemetry, scrolling compass, dials; **vanilla CombatHUD target markers** — **fullscreen only**. MFD keeps the classic S/A/R corner HUD.
 * **Classic MFD HUD:** S/A/R corners + salvo (1.30.1 style).
 * **Post-FX:** optional scanlines / motion blur / chromatic / bloom (`MissileCameraEffects`) — inactive with a startup warning if shaders are missing from the embedded bundle.
@@ -92,13 +93,18 @@ Active only while the missile feed overlay is on and you have **player-owned** i
 | :--- | :--- | :--- |
 | **Right Alt** + `/` | `RightAlt` + `Slash` | Next missile (newer; wraps 6/6 → 1/6) |
 | **Right Alt** + `,` | `RightAlt` + `Comma` | Previous missile (older; wraps 1/6 → 6/6) |
-| **Right Alt** + `;` | `RightAlt` + `Semicolon` | Zoom in (narrower FOV) |
-| **Right Alt** + `.` | `RightAlt` + `Period` | Zoom out (wider FOV) |
-| **Right Shift** + `.` | `RightShift` + `Period` | Reset zoom offset to `0.0` |
+| **Right Alt** + `;` | `RightAlt` + `Semicolon` | MFD zoom in (narrower FOV) |
+| **Right Alt** + `.` | `RightAlt` + `Period` | MFD zoom out (wider FOV) |
+| **Right Shift** + `.` | `RightShift` + `Period` | MFD reset zoom offset to `0.0` |
+| **Mouse wheel** | `mouseScrollDelta` | **Fullscreen only:** optical zoom **1×…50×** |
+| **Middle mouse** | `Mouse2` | **Fullscreen only:** reset magnification to **1×** |
+| **J** | `J` (configurable) | **Fullscreen only:** cycle vision filter |
+
+**Vision cycle (fullscreen):** Color → NightVision → WhiteHot → BlackHot → WhiteContour → BlackContour. NightVision uses a local feed Volume only — never toggles stock cockpit NVG.
 
 **Sticky selection:** after Next/Prev the camera stays on your chosen missile when new ones launch. If it is destroyed, the feed falls back to the newest remaining missile.
 
-**Zoom HUD:** each zoom change shows the current **offset** for **0.5 s** above feed center. Zoom step/limits: **MissileCameraControls** in Configuration Manager.
+**Zoom HUD (MFD):** each zoom change shows the current **offset** for **0.5 s** above feed center. Fullscreen FLIR shows `MAG xN` from optical magnification.
 
 ---
 
@@ -194,6 +200,10 @@ BepInEx\config\com.at747.missilecamera.bepinex.cfg
 | `RequireRightAlt` | `true` | Require RightAlt with ToggleKey |
 | `FeedWidth` | `1920` | Fullscreen RenderTexture width |
 | `FeedHeight` | `1080` | Fullscreen RenderTexture height |
+| `ZoomMax` | `50` | Max optical magnification (mouse wheel) |
+| `ZoomWheelFactor` | `1.12` | Multiplier per wheel notch |
+| `VisionCycleKey` | `J` | Cycle Color / NVG / IR / Contour modes |
+| `ZoomResetOnExit` | `true` | Reset magnification to 1× when leaving fullscreen |
 | `BootstrapSeconds` | `0.6` | First-enter bootstrap duration |
 | `BootstrapSteps` | `4` | Bootstrap staged UI steps |
 

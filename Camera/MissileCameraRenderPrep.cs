@@ -1,5 +1,6 @@
-using System.Globalization;
+using System;
 using System.Reflection;
+using HarmonyLib;
 using NuclearOption.Effects;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -9,6 +10,7 @@ namespace MissileCamera
 {
     /// <summary>
     /// Nuclear Option terrain/detail shaders read per-camera globals from <see cref="ShaderGlobalManager"/>.
+    /// Trees/grass (DetailRenderer) cull against Camera.main — sync to feed before each seeker render.
     /// Mirrors URP settings from vanilla TargetCam / main — no manual AA/MSAA overrides.
     /// </summary>
     internal static class MissileCameraRenderPrep
@@ -17,11 +19,17 @@ namespace MissileCamera
         private static readonly int HeightMapId = Shader.PropertyToID("_HeightMap");
         private static readonly int BlockerMapId = Shader.PropertyToID("_BlockerMap");
 
+        private static readonly FieldInfo? DetailCameraField =
+            AccessTools.Field(typeof(DetailRenderer), "camera");
+        private static readonly MethodInfo? DetailLateUpdateMethod =
+            AccessTools.Method(typeof(DetailRenderer), "LateUpdate");
+
         private static Vector2Int _lastBakedWindow = new(int.MinValue, int.MinValue);
         private static bool _pipelineHooksRegistered;
         private static Camera? _pipelineFeedCamera;
         private static bool _pipelineForceLdr;
         private static bool _pipelineInfrared;
+        private static bool _pipelineNightVision;
         private static bool _pipelineFogPrev;
         private static bool _pipelineFogActive;
 
@@ -30,6 +38,7 @@ namespace MissileCamera
             ApplyShaderGlobalsForCamera(feedCamera);
             MirrorUrpFromReference(feedCamera, forceLdr);
             BakeTerrainWindowForCamera(feedCamera);
+            SyncDetailsToCamera(feedCamera);
         }
 
         internal static void AfterRender()
@@ -52,6 +61,7 @@ namespace MissileCamera
                 UnregisterPipelineHooks();
                 _pipelineFeedCamera = null;
                 _pipelineInfrared = false;
+                _pipelineNightVision = false;
                 return;
             }
 
@@ -63,6 +73,8 @@ namespace MissileCamera
         }
 
         internal static void SetPipelineInfrared(bool infrared) => _pipelineInfrared = infrared;
+
+        internal static void SetPipelineNightVision(bool nightVision) => _pipelineNightVision = nightVision;
 
         internal static int ResolvePipelineMsaaSampleCount()
         {
@@ -111,6 +123,7 @@ namespace MissileCamera
             ApplyShaderGlobalsForCamera(camera);
             MirrorUrpFromReference(camera, _pipelineForceLdr);
             BakeTerrainWindowForCamera(camera);
+            SyncDetailsToCamera(camera);
         }
 
         private static void OnEndCameraRendering(ScriptableRenderContext context, Camera camera)
@@ -125,6 +138,51 @@ namespace MissileCamera
             }
 
             AfterRender();
+        }
+
+        /// <summary>
+        /// Dump: DetailRenderer.LateUpdate culls trees/grass with its private camera (Camera.main).
+        /// Point it at the seeker briefly so ComputeFrustumCulling + RenderMeshIndirect match the feed.
+        /// </summary>
+        private static void SyncDetailsToCamera(Camera feedCamera)
+        {
+            if (feedCamera == null || DetailCameraField == null || DetailLateUpdateMethod == null)
+                return;
+
+            DetailRenderer? detail = null;
+            try
+            {
+                detail = SceneSingleton<DetailRenderer>.i;
+            }
+            catch
+            {
+                return;
+            }
+
+            if (detail == null || !detail.isActiveAndEnabled)
+                return;
+
+            object? previous = DetailCameraField.GetValue(detail);
+            try
+            {
+                DetailCameraField.SetValue(detail, feedCamera);
+                DetailLateUpdateMethod.Invoke(detail, null);
+            }
+            catch (Exception ex)
+            {
+                MfdLog.Info("detail sync error: " + ex.Message);
+            }
+            finally
+            {
+                try
+                {
+                    DetailCameraField.SetValue(detail, previous);
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
         }
 
         private static void ApplyShaderGlobalsForCamera(Camera camera)
@@ -179,8 +237,8 @@ namespace MissileCamera
             UniversalAdditionalCameraData refUrp = reference.GetUniversalAdditionalCameraData();
             feedUrp.SetRenderer(GetRendererIndex(refUrp));
             feedUrp.renderShadows = refUrp.renderShadows;
-            // Never inherit TargetCam postFX — IR uses our local Volume only when policy says ON.
-            feedUrp.renderPostProcessing = _pipelineInfrared;
+            // IR blit path: no PP. NightVision: local feed Volume only (never toggle stock NVG).
+            feedUrp.renderPostProcessing = _pipelineInfrared || _pipelineNightVision;
             feedUrp.volumeTrigger = feedCamera.transform;
             feedUrp.antialiasing = refUrp.antialiasing;
             feedUrp.antialiasingQuality = refUrp.antialiasingQuality;

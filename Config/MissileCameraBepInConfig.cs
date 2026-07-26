@@ -75,6 +75,10 @@ namespace MissileCamera.Config
         internal static ConfigEntry<int> FullscreenBootstrapSteps { get; private set; } = null!;
         internal static ConfigEntry<int> FullscreenFeedWidth { get; private set; } = null!;
         internal static ConfigEntry<int> FullscreenFeedHeight { get; private set; } = null!;
+        internal static ConfigEntry<float> FullscreenZoomMax { get; private set; } = null!;
+        internal static ConfigEntry<float> FullscreenZoomWheelFactor { get; private set; } = null!;
+        internal static ConfigEntry<string> FullscreenVisionCycleKey { get; private set; } = null!;
+        internal static ConfigEntry<bool> FullscreenZoomResetOnExit { get; private set; } = null!;
 
         internal static ConfigEntry<bool> TelemetryShowG { get; private set; } = null!;
         internal static ConfigEntry<bool> TelemetryShowFuel { get; private set; } = null!;
@@ -197,7 +201,7 @@ namespace MissileCamera.Config
                     new AcceptableValueList<string>("Tgp", "Classic")));
             SalvoWindowSeconds = config.Bind(hud, "SalvoWindowSeconds", 0.5f,
                 new ConfigDescription("Salvo grouping window (seconds).", new AcceptableValueRange<float>(0.05f, 5f)));
-            ShowCenterCluster = config.Bind(hud, "ShowCenterCluster", true, "Center reticle / intercept ring.");
+            ShowCenterCluster = config.Bind(hud, "ShowCenterCluster", true, "Center reticle and intercept aim-point ring (hollow circle).");
             ShowTargetMarker = config.Bind(hud, "ShowTargetMarker", true, "Target diamond marker.");
             HudCockpitPipEnabled = config.Bind(hud, "CockpitPipEnabled", true, "TGP bottom-left cockpit PiP (TOR: Cockpit View).");
             HudCockpitPipFps = config.Bind(hud, "CockpitPipFps", 15,
@@ -242,6 +246,14 @@ namespace MissileCamera.Config
                 new ConfigDescription(
                     "Fullscreen feed RenderTexture height (independent of MFD FeedHeight).",
                     new AcceptableValueRange<int>(360, 2160)));
+            FullscreenZoomMax = config.Bind(fullscreen, "ZoomMax", 50f,
+                new ConfigDescription("Fullscreen optical zoom max magnification (mouse wheel).", new AcceptableValueRange<float>(2f, 50f)));
+            FullscreenZoomWheelFactor = config.Bind(fullscreen, "ZoomWheelFactor", 1.12f,
+                new ConfigDescription("Fullscreen zoom multiply per mouse-wheel notch.", new AcceptableValueRange<float>(1.02f, 1.5f)));
+            FullscreenVisionCycleKey = config.Bind(fullscreen, "VisionCycleKey", "J",
+                "KeyCode to cycle fullscreen vision filters (Color/NVG/WhiteHot/BlackHot/Contour).");
+            FullscreenZoomResetOnExit = config.Bind(fullscreen, "ZoomResetOnExit", true,
+                "Reset fullscreen magnification to 1x when leaving fullscreen.");
 
             const string telemetry = "MissileCameraTelemetry";
             TelemetryShowG = config.Bind(telemetry, "ShowG", false, "Reserved extended G readout (off = classic MFD HUD like 1.30.1).");
