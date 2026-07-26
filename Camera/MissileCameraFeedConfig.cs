@@ -20,7 +20,7 @@ namespace MissileCamera
         internal static float TurnLookSlewDegPerSec = 120f;
         internal static float TurnLookSmoothTime = 0.18f;
         internal static float PostExplosionHoldSeconds;
-        internal static float PostLossInterferenceSeconds = 0.4f;
+        internal static float PostLossInterferenceSeconds = 0.5f;
         internal static int RenderFps = 30;
         internal static bool InfraredAutoEnabled = true;
         internal static float InfraredDaylightThreshold = 0.12f;

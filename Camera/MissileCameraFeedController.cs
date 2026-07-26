@@ -69,6 +69,7 @@ namespace MissileCamera
             Missile? current = _followedMissile ?? PickLatestMissile();
             Missile? next = MissileCameraFeedSelection.CycleCurrent(OwnedActive, current, 1);
             ApplyManualSelection(next);
+            NotifyCameraSwitchInterference(current, next);
         }
 
         internal static void SelectPreviousMissile()
@@ -79,6 +80,16 @@ namespace MissileCamera
             Missile? current = _followedMissile ?? PickLatestMissile();
             Missile? previous = MissileCameraFeedSelection.CycleCurrent(OwnedActive, current, -1);
             ApplyManualSelection(previous);
+            NotifyCameraSwitchInterference(current, previous);
+        }
+
+        private static void NotifyCameraSwitchInterference(Missile? from, Missile? to)
+        {
+            if (to == null || ReferenceEquals(from, to))
+                return;
+
+            float seconds = Mathf.Max(MissileCameraFeedConfig.PostLossInterferenceSeconds, 0.05f);
+            MissileCameraLossInterference.BeginSwitch(seconds);
         }
 
         internal static void AdjustZoom(float delta)
@@ -111,6 +122,10 @@ namespace MissileCamera
         {
             RefreshConfigsIfDue();
             MissileCameraFullscreenController.TickYieldToVanillaUi();
+
+            // Fullscreen/MFD TV static (switch / destroy / exit-no-missile).
+            MissileCameraLossInterference.Tick(_feedImage);
+            MissileCameraFullscreenController.TickDeferredExit();
 
             if (!MissileCameraFeedConfig.Enabled)
             {
@@ -169,22 +184,21 @@ namespace MissileCamera
             Vector3 missilePos = missile.transform.position;
             bool infrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
 
-            // Fullscreen: vanilla mainCamera pose overlay (ViewDriver.LateTick). MFD rig = IR/bore only.
+            // MFD and fullscreen both use dedicated feed camera → RawImage.
+            // NEVER drive CameraStateManager.mainCamera (see Fullscreen/CAMERA_SAFETY.md).
             rig.SetPipelineDriven(false);
 
             if (fullscreen)
-            {
-                MissileCameraFullscreenViewDriver.TickZoom(_zoomOffset);
                 MissileCameraVanillaHudBridge.TickHideStubs();
-                if (_feedImage != null)
-                {
-                    _feedImage.enabled = false;
-                    _feedImage.texture = null;
-                }
+            else
+                MissileCameraInfraredEffect.Apply(_feedImage, rig, infrared, exposure);
 
+            if (fullscreen && MissileCameraLossInterference.IsActive)
+            {
+                // Fullscreen noise layer owns the flash; keep feed clearing IR only.
                 MissileCameraInfraredEffect.Clear(_feedImage, rig);
             }
-            else
+            else if (fullscreen)
             {
                 MissileCameraInfraredEffect.Apply(_feedImage, rig, infrared, exposure);
             }
@@ -193,11 +207,8 @@ namespace MissileCamera
             if (_panelRt != null && HudOverlay.Root != null)
                 MissileCameraCockpitPipController.Tick(HudOverlay.Root, GetPanelMetrics(_panelRt));
 
-            if (fullscreen)
-            {
-                rig.SyncPose();
-            }
-            else if (Time.unscaledTime >= _nextRenderTimeUnscaled)
+            if (Time.unscaledTime >= _nextRenderTimeUnscaled
+                || (fullscreen && !MissileCameraLossInterference.IsActive))
             {
                 float interval = 1f / Mathf.Max(MissileCameraFeedConfig.RenderFps, 1);
                 _nextRenderTimeUnscaled = Time.unscaledTime + interval;
@@ -205,7 +216,7 @@ namespace MissileCamera
 
                 bool aircraftMulti = MissileCameraAircraftCamConfig.Enabled && MfdLayoutController.IsLayoutActive;
                 bool cockpitMulti = MissileCameraCockpitPipController.IsActive;
-                bool multi = aircraftMulti || cockpitMulti;
+                bool multi = !fullscreen && (aircraftMulti || cockpitMulti);
                 if (multi)
                     MissileCameraFrameRenderContext.BeginMultiRender();
 
@@ -215,8 +226,11 @@ namespace MissileCamera
                         MissileCameraFrameRenderContext.PrepareCamera(rig.FeedCamera, forceLdr: false);
 
                     rig.RenderFrame(managePrep: !multi);
-                    MissileCameraAircraftCamController.RenderIfDue(useSharedPrep: multi);
-                    MissileCameraCockpitPipController.RenderIfDue(useSharedPrep: multi);
+                    if (!fullscreen)
+                    {
+                        MissileCameraAircraftCamController.RenderIfDue(useSharedPrep: multi);
+                        MissileCameraCockpitPipController.RenderIfDue(useSharedPrep: multi);
+                    }
                 }
                 finally
                 {
@@ -405,11 +419,15 @@ namespace MissileCamera
 
             if (_feedImage != null)
             {
-                if (MissileCameraFullscreenController.IsActive)
+                if (MissileCameraLossInterference.IsActive
+                    && MissileCameraLossInterference.ActiveKind == MissileCameraLossInterference.BurstKind.ExitShutdown)
                 {
-                    // Scene is vanilla mainCamera; keep RawImage off.
+                    // ExitShutdown uses dedicated fullscreen noise canvas; hide feed flash.
                     _feedImage.enabled = false;
-                    _feedImage.texture = null;
+                }
+                else if (MissileCameraLossInterference.IsActive || _postLossSequenceActive)
+                {
+                    // Destroy/switch static may use feed or fullscreen noise layer.
                 }
                 else
                 {
@@ -420,8 +438,7 @@ namespace MissileCamera
                 }
             }
 
-            if (!MissileCameraFullscreenController.IsActive
-                && (missile == null || texture == null))
+            if (missile == null || texture == null)
                 MissileCameraInfraredEffect.Apply(_feedImage, _rig, infrared: false, exposure: 0f);
 
             if (_telemetryText != null)
@@ -563,9 +580,7 @@ namespace MissileCamera
 
         private static void HandleMissileLost()
         {
-            // Pose-overlay must not stay active without a missile (sticky mainCamera).
-            MissileCameraFullscreenController.ExitIfActive();
-
+            // Stop pose overlay removed — CSM never touched (CAMERA_SAFETY.md).
             if (!_overlayActive)
             {
                 FinishPostLossCleanup();
@@ -575,7 +590,9 @@ namespace MissileCamera
             if (!_postLossSequenceActive)
                 BeginPostLossSequence();
 
-            if (MissileCameraLossInterference.Tick(_feedImage))
+            // Interference is ticked globally in Tick(); wait while destroy burst plays.
+            if (MissileCameraLossInterference.IsActive
+                && MissileCameraLossInterference.ActiveKind == MissileCameraLossInterference.BurstKind.Destroy)
             {
                 UseIdleDriverWait = false;
                 UpdatePostLossHud();
@@ -605,12 +622,18 @@ namespace MissileCamera
             DetachRig();
             MissileCameraInfraredEffect.Clear(_feedImage, null);
 
+            if (_feedImage != null)
+            {
+                _feedImage.enabled = true;
+                _feedImage.color = Color.white;
+            }
+
             if (_colorLabel != null)
                 _colorLabel.text = "LOST";
 
-            float interferenceSeconds = MissileCameraFeedConfig.PostLossInterferenceSeconds;
+            float interferenceSeconds = Mathf.Max(MissileCameraFeedConfig.PostLossInterferenceSeconds, 0.05f);
             if (interferenceSeconds > 0f)
-                MissileCameraLossInterference.Begin(interferenceSeconds);
+                MissileCameraLossInterference.BeginDestroy(interferenceSeconds);
             else
                 MissileCameraLossInterference.Stop();
         }
@@ -632,6 +655,9 @@ namespace MissileCamera
                 _feedImage.texture = null;
                 _feedImage.enabled = false;
             }
+
+            // After impact static: leave fullscreen (cockpit camera was never hijacked).
+            MissileCameraFullscreenController.ExitIfActive();
 
             UpdateDisplay(null);
             TryReleaseLayout();
@@ -669,7 +695,8 @@ namespace MissileCamera
             HasTrackableOwnedMissile()
             || _postLossSequenceActive
             || MissileCameraLossInterference.IsActive
-            || MissileCameraFullscreenController.IsActive;
+            || MissileCameraFullscreenController.IsActive
+            || MissileCameraFullscreenController.IsDeferredExit;
 
         private static void DetachRig()
         {

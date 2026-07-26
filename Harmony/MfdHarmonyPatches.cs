@@ -110,8 +110,8 @@ namespace MissileCamera.Patches
     }
 
     /// <summary>
-    /// After vanilla UpdateState snaps cockpit, optionally overlay missile nose pose.
-    /// Never blocks UpdateState — that caused sticky missile camera on exit.
+    /// After vanilla LateUpdate: markers HUD suppress only.
+    /// Never write CameraStateManager camera pose (CAMERA_SAFETY.md).
     /// </summary>
     [HarmonyPatch]
     internal static class CameraStateManager_LateUpdate_Patch
@@ -123,7 +123,7 @@ namespace MissileCamera.Patches
         [HarmonyPostfix]
         internal static void Postfix()
         {
-            MissileCameraFullscreenViewDriver.LateTick();
+            // Markers-only HUD suppress. Never call camera pose writers here (CAMERA_SAFETY.md).
             MissileCameraVanillaHudBridge.LateTickMarkers();
         }
     }

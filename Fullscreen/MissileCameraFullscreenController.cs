@@ -6,12 +6,15 @@ namespace MissileCamera
     /// <summary>
     /// Fullscreen missile feed host. On pause / maximized map — Exit() (restore panel to MFD)
     /// so vanilla UI is never covered and the feed is never stolen into a hidden canvas.
+    /// Exit with no missiles: 0.5s fullscreen static, then auto-disable.
+    /// Never touches CameraStateManager (see CAMERA_SAFETY.md).
     /// </summary>
     internal static class MissileCameraFullscreenController
     {
         private const int OverlaySortingOrder = 50;
 
         private static bool _active;
+        private static bool _deferredExit;
         private static GameObject? _overlayGo;
         private static Canvas? _overlayCanvas;
         private static RectTransform? _fullscreenRoot;
@@ -25,13 +28,15 @@ namespace MissileCamera
         private static Quaternion _panelLocalRotation;
 
         internal static bool IsActive => _active;
+        internal static bool IsDeferredExit => _deferredExit;
 
         internal static void ResetForMissionUnload()
         {
+            _deferredExit = false;
+            MissileCameraLossInterference.Stop();
             if (_active)
                 Exit(force: true);
 
-            MissileCameraFullscreenViewDriver.Exit();
             MissileCameraVanillaHudBridge.ResetForMissionUnload();
             MissileCameraFullscreenBootstrap.ResetForMissionUnload();
             DestroyOverlayHost();
@@ -42,25 +47,70 @@ namespace MissileCamera
             if (!MissileCameraFullscreenConfig.Enabled)
                 return;
 
+            if (_deferredExit)
+            {
+                CompleteDeferredExit();
+                return;
+            }
+
             if (!MissileCameraFeedController.HasOverlayInputContext() && !_active)
                 return;
 
             if (_active)
-                Exit(force: false);
+                RequestExit();
             else
                 Enter();
         }
 
         internal static void ExitIfActive()
         {
+            _deferredExit = false;
             if (_active)
                 Exit(force: true);
         }
 
-        /// <summary>
-        /// While fullscreen: if pause or full map is open, exit fullscreen so UI is usable
-        /// and the MFD panel is restored (never leave the panel parented under a disabled canvas).
-        /// </summary>
+        /// <summary>Called each Tick after interference — finishes exit-no-missile burst.</summary>
+        internal static void TickDeferredExit()
+        {
+            if (!_deferredExit)
+                return;
+
+            if (MissileCameraLossInterference.ConsumeExitCompletion())
+                CompleteDeferredExit();
+        }
+
+        private static void RequestExit()
+        {
+            // No live missiles → static then auto-off. Otherwise leave immediately.
+            if (!MissileCameraFeedController.HasTrackableOwnedMissile())
+            {
+                BeginDeferredExit();
+                return;
+            }
+
+            Exit(force: false);
+        }
+
+        private static void BeginDeferredExit()
+        {
+            if (_deferredExit)
+                return;
+
+            _deferredExit = true;
+            float seconds = Mathf.Max(MissileCameraFeedConfig.PostLossInterferenceSeconds, 0.05f);
+            MissileCameraLossInterference.BeginExitShutdown(seconds);
+            MfdLog.Info("fullscreen deferred exit → interference");
+        }
+
+        private static void CompleteDeferredExit()
+        {
+            _deferredExit = false;
+            MissileCameraLossInterference.Stop();
+            if (_active)
+                Exit(force: false);
+            MfdLog.Info("fullscreen deferred exit complete");
+        }
+
         internal static void TickYieldToVanillaUi()
         {
             if (!_active)
@@ -69,11 +119,12 @@ namespace MissileCamera
             if (ShouldDeferToVanillaUi())
             {
                 MfdLog.Info("fullscreen auto-exit → vanilla UI (pause/map)");
+                _deferredExit = false;
+                MissileCameraLossInterference.Stop();
                 Exit(force: false);
             }
         }
 
-        /// <summary>Only real blocking UIs — not menuCanvas.enabled alone (false positives).</summary>
         private static bool ShouldDeferToVanillaUi()
         {
             if (GameplayUI.GameIsPaused)
@@ -93,7 +144,6 @@ namespace MissileCamera
                 return;
             }
 
-            // Full map open → close it so we can show the feed (same key-flow as player expects).
             if (DynamicMap.mapMaximized)
             {
                 try
@@ -114,6 +164,7 @@ namespace MissileCamera
                 return;
             }
 
+            _deferredExit = false;
             EnsureOverlayHost();
             if (_fullscreenRoot == null || _overlayGo == null || _overlayCanvas == null)
                 return;
@@ -137,17 +188,15 @@ namespace MissileCamera
             panelRt.localRotation = Quaternion.identity;
 
             _active = true;
-            Missile? missile = MissileCameraFeedController.TryGetFollowedMissile();
-            MissileCameraFullscreenViewDriver.Enter(missile);
             MissileCameraVanillaHudBridge.OnFullscreenEntered();
             MissileCameraFullscreenBootstrap.StartIfNeeded(panelRt);
             MissileCameraFeedController.NotifyFullscreenChanged();
-            MfdLog.Info("fullscreen enter (vanilla mainCamera)");
+            MfdLog.Info("fullscreen enter (RawImage feed, CSM untouched)");
         }
 
         private static void Exit(bool force)
         {
-            // Always clear active first so Tick/LateTick stop driving the missile pose.
+            _deferredExit = false;
             _active = false;
 
             try
@@ -157,15 +206,6 @@ namespace MissileCamera
             catch
             {
                 // ignore
-            }
-
-            try
-            {
-                MissileCameraFullscreenViewDriver.Exit();
-            }
-            catch (System.Exception ex)
-            {
-                MfdLog.Info("fullscreen view exit error: " + ex.Message);
             }
 
             RectTransform? panelRt = MissileCameraFeedController.TryGetPanelRt();
@@ -241,8 +281,8 @@ namespace MissileCamera
             RectTransform bgRt = bgGo.GetComponent<RectTransform>();
             Stretch(bgRt);
             Image bg = bgGo.GetComponent<Image>();
-            // Transparent: scene is rendered by vanilla mainCamera, not a RawImage feed.
-            bg.color = new Color(0f, 0f, 0f, 0f);
+            // Opaque black under RawImage — never rely on hijacking the cockpit camera.
+            bg.color = Color.black;
             bg.raycastTarget = false;
         }
 

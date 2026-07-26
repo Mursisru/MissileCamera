@@ -33,10 +33,6 @@ namespace MissileCamera
             AccessToolsField(typeof(CombatHUD), "weaponState");
         private static readonly FieldInfo? ObjectiveOverlayField =
             AccessToolsField(typeof(CombatHUD), "objectiveOverlay");
-        private static readonly FieldInfo? MarkersField =
-            AccessToolsField(typeof(CombatHUD), "markers");
-        private static readonly FieldInfo? HitMarkersField =
-            AccessToolsField(typeof(CombatHUD), "hitMarkers");
         private static readonly FieldInfo? FlightHudCanvasField =
             AccessToolsField(typeof(FlightHud), "canvas");
         private static readonly FieldInfo? FlightHudCenterField =
@@ -54,7 +50,6 @@ namespace MissileCamera
         private static bool _designatorWasEnabled;
         private static readonly List<(GameObject go, bool wasActive)> _hiddenChrome =
             new List<(GameObject, bool)>(64);
-        private static readonly HashSet<Transform> _unitMarkerKeep = new HashSet<Transform>();
 
         private static Canvas? _combatCanvas;
         private static bool _canvasElevated;
@@ -67,7 +62,6 @@ namespace MissileCamera
         internal static void OnFullscreenEntered()
         {
             _hiddenChrome.Clear();
-            _unitMarkerKeep.Clear();
             _objectiveMgrWasEnabled = false;
             _designatorWasEnabled = false;
 
@@ -88,13 +82,13 @@ namespace MissileCamera
             RestoreDesignatorVisual();
             RestoreCombatHudCanvas();
             RestoreHiddenChrome();
+            RestoreFlightHudVisuals();
             RestoreFlightHud();
             RestoreDynamicMap();
             ForceCombatHudMarkerPass();
 
             _flightHudWasActive = false;
             _mapWasActive = false;
-            _unitMarkerKeep.Clear();
         }
 
         internal static void ResetForMissionUnload()
@@ -103,9 +97,9 @@ namespace MissileCamera
             RestoreDesignatorVisual();
             RestoreCombatHudCanvas();
             RestoreHiddenChrome();
+            RestoreFlightHudVisuals();
             _flightHudWasActive = false;
             _mapWasActive = false;
-            _unitMarkerKeep.Clear();
         }
 
         internal static void TickHideStubs()
@@ -335,6 +329,7 @@ namespace MissileCamera
 
         /// <summary>
         /// Per-frame: FlightHud.Update turns velocityVector back on; ObjectiveOverlay re-enables mission icons.
+        /// Uses HideGo (tracked) — never ForceOff without restore (that killed half the ILS on exit).
         /// </summary>
         private static void SuppressIlsAndObjectives()
         {
@@ -343,18 +338,18 @@ namespace MissileCamera
                 FlightHud? flightHud = SceneSingleton<FlightHud>.i;
                 if (flightHud != null)
                 {
-                    ForceOff(flightHud.velocityVector != null ? flightHud.velocityVector.gameObject : null);
-                    ForceOff(flightHud.waterline != null ? flightHud.waterline.gameObject : null);
-                    ForceOff(flightHud.virtualJoystickPos != null ? flightHud.virtualJoystickPos.gameObject : null);
+                    HideGo(flightHud.velocityVector != null ? flightHud.velocityVector.gameObject : null);
+                    HideGo(flightHud.waterline != null ? flightHud.waterline.gameObject : null);
+                    HideGo(flightHud.virtualJoystickPos != null ? flightHud.virtualJoystickPos.gameObject : null);
                     if (FlightHudCenterField?.GetValue(flightHud) is Transform hudCenter)
-                        ForceOff(hudCenter.gameObject);
-                    ForceOff(AccessToolsField(typeof(FlightHud), "compass")?.GetValue(flightHud) as Component);
-                    ForceOff(AccessToolsField(typeof(FlightHud), "pitchCompass")?.GetValue(flightHud) as Component);
+                        HideGo(hudCenter.gameObject);
+                    HideComponent(AccessToolsField(typeof(FlightHud), "compass")?.GetValue(flightHud) as Component);
+                    HideComponent(AccessToolsField(typeof(FlightHud), "pitchCompass")?.GetValue(flightHud) as Component);
                     object? pitchCenter = AccessToolsField(typeof(FlightHud), "pitchCompassCenter")?.GetValue(flightHud);
                     if (pitchCenter is GameObject pitchGo)
-                        ForceOff(pitchGo);
+                        HideGo(pitchGo);
                     else if (pitchCenter is Component pitchComp)
-                        ForceOff(pitchComp.gameObject);
+                        HideGo(pitchComp.gameObject);
                 }
             }
             catch
@@ -380,7 +375,7 @@ namespace MissileCamera
             if (TargetArrowField?.GetValue(hud) is Image arrow && arrow != null)
             {
                 arrow.enabled = false;
-                ForceOff(arrow.gameObject);
+                HideGo(arrow.gameObject);
             }
 
             if (ObjectiveOverlayField?.GetValue(hud) is ObjectiveOverlayManager mgr && mgr != null)
@@ -390,78 +385,47 @@ namespace MissileCamera
                 HideObjectiveOverlays(mgr);
             }
 
-            TrimIconLayerToUnitMarkersOnly(hud);
-            HideHitMarkers(hud);
+            // Do not deactivate iconLayer children — that permanently broke mission/ILS icons on exit.
+            // Objectives are suppressed via ObjectiveOverlayManager + HideOverlay above.
         }
 
-        private static void TrimIconLayerToUnitMarkersOnly(CombatHUD hud)
+        private static void RestoreFlightHudVisuals()
         {
-            if (hud.iconLayer == null)
-                return;
-
-            _unitMarkerKeep.Clear();
-            if (MarkersField?.GetValue(hud) is IList markers)
+            try
             {
-                for (int i = 0; i < markers.Count; i++)
-                {
-                    if (markers[i] is HUDUnitMarker unitMarker && unitMarker != null && unitMarker.image != null)
-                        _unitMarkerKeep.Add(unitMarker.image.transform);
-                }
+                FlightHud? flightHud = SceneSingleton<FlightHud>.i;
+                if (flightHud == null)
+                    return;
+
+                ForceOn(flightHud.velocityVector != null ? flightHud.velocityVector.gameObject : null);
+                ForceOn(flightHud.waterline != null ? flightHud.waterline.gameObject : null);
+                ForceOn(flightHud.virtualJoystickPos != null ? flightHud.virtualJoystickPos.gameObject : null);
+                if (FlightHudCenterField?.GetValue(flightHud) is Transform hudCenter)
+                    ForceOn(hudCenter.gameObject);
+                ForceOn(AccessToolsField(typeof(FlightHud), "compass")?.GetValue(flightHud) as Component);
+                ForceOn(AccessToolsField(typeof(FlightHud), "pitchCompass")?.GetValue(flightHud) as Component);
+                object? pitchCenter = AccessToolsField(typeof(FlightHud), "pitchCompassCenter")?.GetValue(flightHud);
+                if (pitchCenter is GameObject pitchGo)
+                    ForceOn(pitchGo);
+                else if (pitchCenter is Component pitchComp)
+                    ForceOn(pitchComp.gameObject);
             }
-
-            Transform layer = hud.iconLayer;
-            for (int i = 0; i < layer.childCount; i++)
+            catch
             {
-                Transform child = layer.GetChild(i);
-                if (IsUnitMarkerBranch(child, _unitMarkerKeep))
-                    continue;
-
-                ForceOff(child.gameObject);
-            }
-        }
-
-        private static bool IsUnitMarkerBranch(Transform node, HashSet<Transform> markerRoots)
-        {
-            foreach (Transform root in markerRoots)
-            {
-                if (root == null)
-                    continue;
-                if (node == root || node.IsChildOf(root) || root.IsChildOf(node))
-                    return true;
-            }
-
-            return false;
-        }
-
-        private static void HideHitMarkers(CombatHUD hud)
-        {
-            if (HitMarkersField?.GetValue(hud) is not IList hitMarkers)
-                return;
-
-            for (int i = 0; i < hitMarkers.Count; i++)
-            {
-                object? entry = hitMarkers[i];
-                if (entry == null)
-                    continue;
-
-                FieldInfo? markerField = entry.GetType().GetField(
-                    "marker",
-                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                if (markerField?.GetValue(entry) is GameObject markerGo)
-                    ForceOff(markerGo);
+                // ignore
             }
         }
 
-        private static void ForceOff(Component? c)
+        private static void ForceOn(Component? c)
         {
             if (c != null)
-                ForceOff(c.gameObject);
+                ForceOn(c.gameObject);
         }
 
-        private static void ForceOff(GameObject? go)
+        private static void ForceOn(GameObject? go)
         {
-            if (go != null && go.activeSelf)
-                go.SetActive(false);
+            if (go != null && !go.activeSelf)
+                go.SetActive(true);
         }
 
         private static void AddKeep(HashSet<Transform> keep, Transform? t)
@@ -648,8 +612,13 @@ namespace MissileCamera
 
             for (int i = 0; i < _hiddenChrome.Count; i++)
             {
-                if (_hiddenChrome[i].go == go)
-                    return;
+                if (_hiddenChrome[i].go != go)
+                    continue;
+
+                // FlightHud.Update may re-enable velocityVector — keep suppressed while fullscreen.
+                if (go.activeSelf)
+                    go.SetActive(false);
+                return;
             }
 
             _hiddenChrome.Add((go, go.activeSelf));

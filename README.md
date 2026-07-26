@@ -2,7 +2,7 @@
 
 [![Nuclear Option](https://img.shields.io/badge/Game-Nuclear%20Option-blue)](https://store.steampowered.com/app/2168680/Nuclear_Option/)
 [![BepInEx 5](https://img.shields.io/badge/Loader-BepInEx%205-orange)](https://docs.bepinex.dev/)
-[![Version](https://img.shields.io/badge/Version-2.32.21-green)](https://github.com/Mursisru/MissileCamera/releases)
+[![Version](https://img.shields.io/badge/Version-2.32.24-green)](https://github.com/Mursisru/MissileCamera/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](https://github.com/Mursisru/MissileCamera/blob/BepInExVersion/LICENSE)
 
 ---
@@ -10,6 +10,9 @@
 ## Critical warnings
 > [!IMPORTANT]
 > **BepInEx 5 (x64) required** - install [BepInEx](https://docs.bepinex.dev/articles/user_guide/installation/index.html) before this mod.
+
+> [!NOTE]
+> **Fullscreen never touches the cockpit camera** - seeker video is a dedicated RenderTexture on a UI `RawImage`. See `Fullscreen/CAMERA_SAFETY.md` in the source tree.
 
 > [!WARNING]
 > - **Third-party aircraft and MFD mods may break layout** - custom `TargetScreenUI` / tactical overlays can conflict; set `DisplayMode=skip` in Configuration Manager or disable conflicting MFD mods.
@@ -39,8 +42,8 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 
 * **MFD split-screen UI:** Splits the wide tactical MFD (Target view) into zones and embeds the missile feed in the weapons panel area.
 * **Seeker cam (missile nose cam):** Renders a live `RawImage` feed from your latest **player-owned** in-flight missile. **No selected target required** — dumb-fire / no-lock launches still open the MFD feed. On destruction, a brief TV-static burst plays before the panel closes.
-* **Fullscreen FLIR HUD:** green sensor chrome with live `— MSL —` / `— TGT —` telemetry, scrolling compass, dials; **vanilla CombatHUD target markers** projected through the seeker camera — **fullscreen only**. MFD keeps the classic S/A/R corner HUD.
-* **Fullscreen feed:** `RightAlt+F` — **vanilla `CameraStateManager.mainCamera`** on the missile nose (cockpit-style), with FLIR chrome overlay. CombatHUD unit markers only (native projection).
+* **Fullscreen feed:** `RightAlt+F` — dedicated seeker RenderTexture on a fullscreen `RawImage` (same as MFD). **Never hijacks** vanilla `CameraStateManager` / cockpit camera. FLIR chrome overlay; CombatHUD unit markers only.
+* **Fullscreen FLIR HUD:** green sensor chrome with live `— MSL —` / `— TGT —` telemetry, scrolling compass, dials; **vanilla CombatHUD target markers** — **fullscreen only**. MFD keeps the classic S/A/R corner HUD.
 * **Classic MFD HUD:** S/A/R corners + salvo (1.30.1 style).
 * **Post-FX:** optional scanlines / motion blur / chromatic / bloom (`MissileCameraEffects`) — inactive with a startup warning if shaders are missing from the embedded bundle.
 * **Aircraft mini-cam:** optional second feed (`MissileCameraAircraftCam`, default off). **No-op when `DisplayMode=skip`.**

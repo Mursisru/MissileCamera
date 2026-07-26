@@ -4,10 +4,6 @@ namespace MissileCamera
 {
     internal static class MissileCameraFeedInput
     {
-        /// <summary>
-        /// Fullscreen toggle only — called from CameraStateManager.LateUpdate Postfix
-        /// before missile pose overlay, so Exit stops writing in the same LateUpdate.
-        /// </summary>
         internal static void ProcessFullscreenToggle()
         {
             if (!MissileCameraFullscreenConfig.Enabled)
@@ -28,7 +24,7 @@ namespace MissileCamera
             MissileCameraAircraftCamConfig.Refresh();
             MissileCameraControlsConfig.Refresh();
 
-            // Fullscreen toggle is handled in LateUpdate (ViewDriver.LateTick) — not here.
+            ProcessFullscreenToggle();
 
             if (!MissileCameraControlsConfig.Enabled)
                 return;

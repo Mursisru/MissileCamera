@@ -55,8 +55,8 @@ namespace MissileCamera
             KillStubs(panelRt);
             SetHudBlocksVisible(panelRt, corners: false);
 
-            // Feed RawImage stays off (vanilla mainCamera is the view).
-            SetAlpha(panelRt, "MissileCameraFeed", 0f);
+            // Feed starts visible (RT → RawImage). Never hide for CSM hijack.
+            SetFeedVisible(panelRt, true);
 
             yield return new WaitForSecondsRealtime(stepWait);
             if (_aborted) yield break;
@@ -70,6 +70,11 @@ namespace MissileCamera
             _doneThisMission = true;
             _running = null;
             MfdLog.Info("fullscreen bootstrap complete");
+        }
+
+        private static void SetFeedVisible(RectTransform panelRt, bool visible)
+        {
+            SetAlpha(panelRt, "MissileCameraFeed", visible ? 1f : 0f);
         }
 
         private static void SetAlpha(RectTransform panelRt, string childName, float alpha)
@@ -107,7 +112,7 @@ namespace MissileCamera
                 return;
 
             KillStubs(panelRt);
-            SetAlpha(panelRt, "MissileCameraFeed", 0f);
+            SetFeedVisible(panelRt, true);
             SetHudBlocksVisible(panelRt, corners: true);
         }
 

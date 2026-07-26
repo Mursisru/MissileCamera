@@ -1,5 +1,31 @@
 # Changelog
 
+## [2.32.24] — 2026-07-26
+
+### Fixed
+
+- **Cockpit camera fly-out on fullscreen exit (root cause):** fullscreen no longer touches `CameraStateManager` / `cameraPivot` / `mainCamera` at all. Video is dedicated feed RT → `RawImage` only (`Fullscreen/CAMERA_SAFETY.md`).
+- **Bootstrap hid the feed:** first-enter staging no longer forces `MissileCameraFeed` alpha to 0 (legacy path when vanilla mainCamera was the view).
+- **Opaque fullscreen backdrop** under the RawImage so the cockpit is fully covered without hijacking the camera.
+
+### Changed
+
+- `MissileCameraFullscreenViewDriver` remains a permanent no-op guard; enter/exit no longer call Snap/pose helpers.
+
+## [2.32.23] — 2026-07-26
+
+### Changed
+
+- **Fullscreen TV static (0.5s):** dedicated Overlay noise layer (sorting 200). Plays on missile camera switch, on destroy, and on fullscreen exit when no missiles remain (then auto-closes fullscreen).
+
+## [2.32.22] — 2026-07-26
+
+### Fixed
+
+- **Impact / exit HUD wipe:** stop `ForceOff` without restore on ILS elements; restore FlightHud visuals on exit.
+- **Post-hit interference:** do not tear down fullscreen on missile loss — keep overlay, enable RawImage for TV static, then exit after sequence.
+- **Camera after impact/exit:** always `SnapToCockpit` when pose overlay stops.
+
 ## [2.32.21] — 2026-07-26
 
 ### Fixed

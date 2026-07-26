@@ -156,9 +156,9 @@ namespace MissileCamera.Config
                 new ConfigDescription("Turn-look smoothing time (seconds).", new AcceptableValueRange<float>(0.02f, 1.5f)));
             PostExplosionHoldSeconds = config.Bind(feed, "PostExplosionHoldSeconds", 0f,
                 new ConfigDescription("Hold last frame after missile loss (0 = off).", new AcceptableValueRange<float>(0f, 10f)));
-            PostLossInterferenceSeconds = config.Bind(feed, "PostLossInterferenceSeconds", 0.4f,
+            PostLossInterferenceSeconds = config.Bind(feed, "PostLossInterferenceSeconds", 0.5f,
                 new ConfigDescription(
-                    "TV-static burst after the last followed missile is destroyed (0 = off).",
+                    "TV-static duration (seconds) for missile switch, destroy, and fullscreen exit with no missiles (0 = off).",
                     new AcceptableValueRange<float>(0f, 2f)));
             RenderFps = config.Bind(feed, "RenderFps", 30,
                 new ConfigDescription("Feed refresh rate.", new AcceptableValueRange<int>(5, 60)));
