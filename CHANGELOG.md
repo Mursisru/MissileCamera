@@ -6,6 +6,7 @@
 
 - **Fullscreen optical zoom:** mouse wheel magnification **1×…50×** (`fov = baseFov / mag`), middle-click reset to 1×. RT supersample buckets (up to 4K) + Bilinear when zoomed. Config: `Fullscreen.ZoomMax`, `ZoomWheelFactor`, `ZoomResetOnExit`.
 - **Fullscreen vision cycle (J):** Color → NightVision → WhiteHot → BlackHot → WhiteContour → BlackContour. Stock-style NVG via local feed Volume only (never calls `NightVision.Toggle`). Contour modes use Sobel edge blit. MFD keeps auto WhiteHot-when-dark and keyboard zoom (`RightAlt+;` / `.`).
+- **Fullscreen boot (~3.5s, first enter per mission):** feed tile reassembly → FLIR flicker + per-character calibration → hex line drum → telemetry value drum; center diagnostic stack ending with SUCCESSFUL badge.
 
 ### Changed
 

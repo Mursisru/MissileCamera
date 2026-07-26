@@ -30,6 +30,12 @@ namespace MissileCamera
         internal static bool IsActive => _active;
         internal static bool IsDeferredExit => _deferredExit;
 
+        internal static bool TryGetFullscreenRoot(out RectTransform? root)
+        {
+            root = _fullscreenRoot;
+            return root != null;
+        }
+
         internal static void ResetForMissionUnload()
         {
             _deferredExit = false;

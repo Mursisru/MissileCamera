@@ -42,7 +42,7 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 
 * **MFD split-screen UI:** Splits the wide tactical MFD (Target view) into zones and embeds the missile feed in the weapons panel area.
 * **Seeker cam (missile nose cam):** Renders a live `RawImage` feed from your latest **player-owned** in-flight missile. **No selected target required** — dumb-fire / no-lock launches still open the MFD feed. On destruction, a brief TV-static burst plays before the panel closes.
-* **Fullscreen feed:** `RightAlt+F` — dedicated seeker RenderTexture on a fullscreen `RawImage` (same as MFD). **Never hijacks** vanilla `CameraStateManager` / cockpit camera. FLIR chrome overlay; CombatHUD unit markers only.
+* **Fullscreen feed:** `RightAlt+F` — dedicated seeker RenderTexture on a fullscreen `RawImage` (same as MFD). **Never hijacks** vanilla `CameraStateManager` / cockpit camera. First enter per mission plays a ~3.5s boot (tile assemble → symbol cal → hex/value drums + diagnostics). FLIR chrome overlay; CombatHUD unit markers only.
 * **Fullscreen zoom / filters:** mouse wheel optical zoom up to **50×** (MMB reset); **J** cycles vision modes (Color / NVG / WhiteHot / BlackHot / Contour±). MFD keeps keyboard zoom + auto IR when dark.
 * **Fullscreen FLIR HUD:** green sensor chrome with live `— MSL —` / `— TGT —` telemetry, scrolling compass, dials; **vanilla CombatHUD target markers** — **fullscreen only**. MFD keeps the classic S/A/R corner HUD.
 * **Classic MFD HUD:** S/A/R corners + salvo (1.30.1 style).

@@ -299,6 +299,60 @@ namespace MissileCamera
 
         internal static RectTransform? TryGetPanelRt() => _panelRt;
 
+        internal static Texture? TryGetFeedTexture() =>
+            _rig != null && _rig.IsRootAlive ? _rig.Texture : _feedImage != null ? _feedImage.texture : null;
+
+        /// <summary>Attach + render one seeker frame so boot puzzle has a live RT.</summary>
+        internal static Texture? EnsureFeedReadyForBoot()
+        {
+            Missile? missile = ResolveFollowedMissile();
+            if (missile == null)
+                return TryGetFeedTexture();
+
+            MissileCameraRig rig = EnsureRig();
+            if (MissileCameraFullscreenController.IsActive)
+                rig.SetFullscreenMagnification(_fullscreenMagnification);
+            else
+                rig.SetZoomOffset(_zoomOffset);
+
+            rig.Attach(missile);
+            rig.SyncPose();
+            rig.SetPipelineDriven(false);
+            try
+            {
+                rig.RenderFrame(managePrep: true);
+            }
+            catch (System.Exception ex)
+            {
+                MfdLog.Info("boot feed render: " + ex.Message);
+            }
+
+            RenderTexture? tex = rig.Texture;
+            if (_feedImage != null && tex != null)
+            {
+                _feedImage.texture = tex;
+                _feedImage.enabled = true;
+            }
+
+            return tex;
+        }
+
+        /// <summary>One-shot FLIR fill for boot text capture (skips when boot not using overlay).</summary>
+        internal static void RefreshFlirHudOnce()
+        {
+            if (_layoutRoot == null || _panelRt == null)
+                return;
+
+            Missile? missile = _followedMissile;
+            if (missile == null || missile.disabled)
+                missile = PickLatestMissile();
+
+            SyncFeedLayout();
+            MissileCameraHudSnapshot snapshot = ResolveHudSnapshot(missile);
+            MissileCameraPanelMetrics panel = GetPanelMetrics(_panelRt);
+            HudOverlay.ForceFlirUpdate(snapshot, panel);
+        }
+
         internal static Missile? TryGetFollowedMissile() =>
             MissileCameraFeedSelection.IsStillTrackable(_followedMissile) ? _followedMissile : null;
 

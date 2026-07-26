@@ -20,6 +20,10 @@ namespace MissileCamera
 
         internal RectTransform? Root => _root;
 
+        internal static RectTransform? TryGetFlirRoot() => _flirRootStatic;
+
+        private static RectTransform? _flirRootStatic;
+
         internal void EnsureBuilt(RectTransform layoutRt, TargetScreenUI? screenUi)
         {
             MissileCameraHudConfig.Refresh();
@@ -46,6 +50,7 @@ namespace MissileCamera
 
             _corners = MissileCameraCornerHud.Create(_root, screenUi);
             _flir = MissileCameraFlirHud.Create(_root);
+            _flirRootStatic = _flir.Root;
             _attitude = MissileCameraAttitudeWidget.Create(_root);
             _zoomIndicator = MissileCameraZoomIndicator.Create(_root, screenUi);
 
@@ -85,8 +90,21 @@ namespace MissileCamera
                 return;
             }
 
+            bool bootPlaying = MissileCameraFullscreenBootstrap.IsRunning;
             bool flir = MissileCameraHudConfig.UseFullscreenFlirHud;
-            _corners?.SetVisible(!flir);
+            _corners?.SetVisible(!flir && !bootPlaying);
+
+            // During boot, BootSequence owns FlirHud — hide leftover MFD center chrome.
+            if (bootPlaying)
+            {
+                _attitude?.SetVisible(false);
+                if (_interceptRoot != null)
+                    _interceptRoot.gameObject.SetActive(false);
+                _zoomIndicator?.UpdateVisibility();
+                MissileCameraCockpitPipController.Tick(null, panel);
+                return;
+            }
+
             _flir?.SetVisible(flir);
 
             if (flir)
@@ -132,6 +150,16 @@ namespace MissileCamera
 
         internal void UpdateZoomIndicatorVisibility() => _zoomIndicator?.UpdateVisibility();
 
+        internal void ForceFlirUpdate(MissileCameraHudSnapshot snapshot, MissileCameraPanelMetrics panel)
+        {
+            if (_flir == null)
+                return;
+
+            _flir.SetVisible(true);
+            _flir.Update(snapshot, panel);
+            _flirRootStatic = _flir.Root;
+        }
+
         internal void Destroy()
         {
             MissileCameraCockpitPipController.Shutdown();
@@ -142,6 +170,7 @@ namespace MissileCamera
             _root = null;
             _corners = null;
             _flir = null;
+            _flirRootStatic = null;
             _attitude = null;
             _zoomIndicator = null;
             _interceptRing = null;

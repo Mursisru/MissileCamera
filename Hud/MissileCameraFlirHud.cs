@@ -186,6 +186,8 @@ namespace MissileCamera
             _layoutH = -1f;
         }
 
+        internal RectTransform Root => _root;
+
         internal void SetVisible(bool visible)
         {
             if (!visible)
@@ -241,6 +243,13 @@ namespace MissileCamera
             float fov = snapshot.FeedFovDeg > 0.1f ? snapshot.FeedFovDeg : 60f;
             float mag = snapshot.BaseFovDeg > 0.1f ? snapshot.BaseFovDeg / fov : 1f;
 
+            _headingBig.text = string.Format(CultureInfo.InvariantCulture, "{0:F0}°T", ownHdg);
+            UpdateCompassTape(panel, ownHdg);
+            UpdateAzimuthSlider(panel, ownHdg, snapshot);
+            UpdateGimbalDials(panel, pitch, ownHdg);
+            _northArrow.text = "-N->";
+            _northArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, -ownHdg);
+
             int channel = Mathf.Max(1, snapshot.SalvoIndex + 183);
             _sys.text = "FLIR SYSTEMS " + channel.ToString(CultureInfo.InvariantCulture)
                 + "  CH" + (snapshot.SalvoIndex + 1).ToString(CultureInfo.InvariantCulture)
@@ -266,9 +275,6 @@ namespace MissileCamera
                 + "/" + Mathf.Max(1, snapshot.SalvoTotal).ToString(CultureInfo.InvariantCulture);
             _date.text = utc.ToString("MM/dd/yy", CultureInfo.InvariantCulture);
             _time.text = utc.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + " Z";
-
-            _headingBig.text = string.Format(CultureInfo.InvariantCulture, "{0:F0}°T", ownHdg);
-            UpdateCompassTape(panel, ownHdg);
 
             if (snapshot.HasTarget)
             {
@@ -300,9 +306,6 @@ namespace MissileCamera
                 _lrf.text = string.Empty;
                 _lrf.gameObject.SetActive(false);
             }
-
-            _northArrow.text = "-N->";
-            _northArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, -ownHdg);
 
             MissileCameraVisionMode vision = MissileCameraVisionModeController.Mode;
             string polarity = MissileCameraVisionModeController.FlirPolarityLabel(vision);
@@ -365,9 +368,6 @@ namespace MissileCamera
 
             _dialPitchLabel.text = "PIT\n" + string.Format(CultureInfo.InvariantCulture, "{0:F0}°", pitch);
             _dialHdgLabel.text = "HDG\n" + string.Format(CultureInfo.InvariantCulture, "{0:F0}°", ownHdg);
-
-            UpdateAzimuthSlider(panel, ownHdg, snapshot);
-            UpdateGimbalDials(panel, pitch, ownHdg);
         }
 
         private static string FormatClosSafe(float closingMs)

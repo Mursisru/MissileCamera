@@ -4,7 +4,7 @@ using UnityEngine.UI;
 
 namespace MissileCamera
 {
-    /// <summary>First-enter-per-mission staged FLIR reveal. Never shows legacy stubs.</summary>
+    /// <summary>First-enter-per-mission boot (~3.5s), then normal FLIR.</summary>
     internal static class MissileCameraFullscreenBootstrap
     {
         private static Coroutine? _running;
@@ -23,48 +23,58 @@ namespace MissileCamera
 
         internal static void Abort()
         {
-            if (_running == null)
-                return;
-
-            MissileCameraFeedDriverHost.StopCoroutineSafe(_running);
-            _running = null;
+            StopRunning();
             _aborted = true;
             ApplyFullVisibility();
         }
 
         internal static void StartIfNeeded(RectTransform panelRt)
         {
-            if (_doneThisMission || panelRt == null)
+            if (panelRt == null)
+                return;
+
+            if (_doneThisMission)
             {
                 ApplyFullVisibility();
                 return;
             }
 
-            Abort();
+            StopRunning();
             _aborted = false;
             _running = MissileCameraFeedDriverHost.StartCoroutineSafe(Run(panelRt));
         }
 
+        private static void StopRunning()
+        {
+            if (_running != null)
+            {
+                MissileCameraFeedDriverHost.StopCoroutineSafe(_running);
+                _running = null;
+            }
+
+            MissileCameraBootSequence.Abort();
+        }
+
         private static IEnumerator Run(RectTransform panelRt)
         {
-            int steps = Mathf.Max(MissileCameraFullscreenConfig.BootstrapSteps, 1);
-            float total = Mathf.Max(MissileCameraFullscreenConfig.BootstrapSeconds, 0.05f);
-            float stepWait = total / steps;
-
-            // Legacy stubs must never appear in fullscreen.
             KillStubs(panelRt);
-            SetHudBlocksVisible(panelRt, corners: false);
-
-            // Feed starts visible (RT → RawImage). Never hide for CSM hijack.
             SetFeedVisible(panelRt, true);
+            SetHudBlocksVisible(panelRt, flirVisible: false);
 
-            yield return new WaitForSecondsRealtime(stepWait);
-            if (_aborted) yield break;
+            if (!MissileCameraFullscreenController.TryGetFullscreenRoot(out RectTransform? root) || root == null)
+            {
+                ApplyFullVisibility();
+                _doneThisMission = true;
+                _running = null;
+                yield break;
+            }
 
-            SetHudBlocksVisible(panelRt, corners: true);
-            KillStubs(panelRt);
-            yield return new WaitForSecondsRealtime(stepWait);
-            if (_aborted) yield break;
+            yield return MissileCameraBootSequence.Play(root, panelRt);
+            if (_aborted)
+            {
+                _running = null;
+                yield break;
+            }
 
             ApplyFullVisibility();
             _doneThisMission = true;
@@ -90,7 +100,7 @@ namespace MissileCamera
             group.alpha = alpha;
         }
 
-        private static void SetHudBlocksVisible(RectTransform panelRt, bool corners)
+        private static void SetHudBlocksVisible(RectTransform panelRt, bool flirVisible)
         {
             Transform? hud = FindDeep(panelRt, "MissileCameraHudOverlay");
             if (hud == null)
@@ -98,7 +108,7 @@ namespace MissileCamera
 
             Transform? flirNode = hud.Find("MissileCameraFlirHud");
             if (flirNode != null)
-                flirNode.gameObject.SetActive(corners);
+                flirNode.gameObject.SetActive(flirVisible);
 
             Transform? cornersNode = hud.Find("MissileCameraHudCorners");
             if (cornersNode != null)
@@ -113,7 +123,7 @@ namespace MissileCamera
 
             KillStubs(panelRt);
             SetFeedVisible(panelRt, true);
-            SetHudBlocksVisible(panelRt, corners: true);
+            SetHudBlocksVisible(panelRt, flirVisible: true);
         }
 
         private static void KillStubs(RectTransform panelRt)
