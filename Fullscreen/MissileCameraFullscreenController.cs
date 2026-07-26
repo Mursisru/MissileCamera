@@ -31,6 +31,8 @@ namespace MissileCamera
             if (_active)
                 Exit(force: true);
 
+            MissileCameraFullscreenViewDriver.Exit();
+            MissileCameraVanillaHudBridge.ResetForMissionUnload();
             MissileCameraFullscreenBootstrap.ResetForMissionUnload();
             DestroyOverlayHost();
         }
@@ -135,14 +137,18 @@ namespace MissileCamera
             panelRt.localRotation = Quaternion.identity;
 
             _active = true;
+            Missile? missile = MissileCameraFeedController.TryGetFollowedMissile();
+            MissileCameraFullscreenViewDriver.Enter(missile);
+            MissileCameraVanillaHudBridge.OnFullscreenEntered();
             MissileCameraFullscreenBootstrap.StartIfNeeded(panelRt);
             MissileCameraFeedController.NotifyFullscreenChanged();
-            MfdLog.Info("fullscreen enter (game viewport overlay)");
+            MfdLog.Info("fullscreen enter (vanilla mainCamera)");
         }
 
         private static void Exit(bool force)
         {
             MissileCameraFullscreenBootstrap.Abort();
+            MissileCameraFullscreenViewDriver.Exit();
 
             RectTransform? panelRt = MissileCameraFeedController.TryGetPanelRt();
             if (panelRt != null && _panelOriginalParent != null)
@@ -165,6 +171,7 @@ namespace MissileCamera
                 _overlayCanvas.enabled = true;
 
             _active = false;
+            MissileCameraVanillaHudBridge.OnFullscreenExited();
             MissileCameraFeedController.NotifyFullscreenChanged();
             if (!force)
                 MfdLog.Info("fullscreen exit");
@@ -204,7 +211,8 @@ namespace MissileCamera
             RectTransform bgRt = bgGo.GetComponent<RectTransform>();
             Stretch(bgRt);
             Image bg = bgGo.GetComponent<Image>();
-            bg.color = new Color(0f, 0f, 0f, 1f);
+            // Transparent: scene is rendered by vanilla mainCamera, not a RawImage feed.
+            bg.color = new Color(0f, 0f, 0f, 0f);
             bg.raycastTarget = false;
         }
 

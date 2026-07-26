@@ -2,7 +2,7 @@
 
 [![Nuclear Option](https://img.shields.io/badge/Game-Nuclear%20Option-blue)](https://store.steampowered.com/app/2168680/Nuclear_Option/)
 [![BepInEx 5](https://img.shields.io/badge/Loader-BepInEx%205-orange)](https://docs.bepinex.dev/)
-[![Version](https://img.shields.io/badge/Version-2.32.10-green)](https://github.com/Mursisru/MissileCamera/releases)
+[![Version](https://img.shields.io/badge/Version-2.32.16-green)](https://github.com/Mursisru/MissileCamera/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](https://github.com/Mursisru/MissileCamera/blob/BepInExVersion/LICENSE)
 
 ---
@@ -39,8 +39,8 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 
 * **MFD split-screen UI:** Splits the wide tactical MFD (Target view) into zones and embeds the missile feed in the weapons panel area.
 * **Seeker cam (missile nose cam):** Renders a live `RawImage` feed from your latest **player-owned** in-flight missile. **No selected target required** — dumb-fire / no-lock launches still open the MFD feed. On destruction, a brief TV-static burst plays before the panel closes.
-* **Fullscreen FLIR HUD:** green sensor chrome with live `— MSL —` / `— TGT —` telemetry, scrolling compass, dials; translucent unlabeled markers for all scene units — **fullscreen only**. MFD keeps the classic S/A/R corner HUD.
-* **Fullscreen feed:** `RightAlt+F` covers the game screen. Feed camera is **URP pipeline-driven** (same path as TargetCam — mirrors game AA/MSAA/postFX). Uncapped FPS. RT size via `MissileCameraFullscreen.FeedWidth` / `FeedHeight` (default **1920×1080**).
+* **Fullscreen FLIR HUD:** green sensor chrome with live `— MSL —` / `— TGT —` telemetry, scrolling compass, dials; **vanilla CombatHUD target markers** projected through the seeker camera — **fullscreen only**. MFD keeps the classic S/A/R corner HUD.
+* **Fullscreen feed:** `RightAlt+F` — **vanilla `CameraStateManager.mainCamera`** on the missile nose (cockpit-style), with FLIR chrome overlay. CombatHUD unit markers only (native projection).
 * **Classic MFD HUD:** S/A/R corners + salvo (1.30.1 style).
 * **Post-FX:** optional scanlines / motion blur / chromatic / bloom (`MissileCameraEffects`) — inactive with a startup warning if shaders are missing from the embedded bundle.
 * **Aircraft mini-cam:** optional second feed (`MissileCameraAircraftCam`, default off). **No-op when `DisplayMode=skip`.**
@@ -158,8 +158,7 @@ BepInEx\config\com.at747.missilecamera.bepinex.cfg
 | `Enabled` | `true` | HUD overlay on feed |
 | `Style` | `Tgp` | `Tgp` (sensor HUD) or `Classic` (S/A/R corners) |
 | `SalvoWindowSeconds` | `0.5` | Salvo grouping window (seconds) |
-| `ShowCenterCluster` | `true` | Center reticle / intercept ring |
-| `ShowTargetMarker` | `true` | Target diamond marker |
+| `ShowCenterCluster` | `true` | Center reticle / intercept ring (MFD classic) |
 | `CockpitPipEnabled` | `true` | TGP bottom-left cockpit PiP |
 | `CockpitPipFps` | `15` | Cockpit PiP render FPS |
 | `InterceptColor` | `0,1,0,1` | Intercept ring RGBA (0–1) |

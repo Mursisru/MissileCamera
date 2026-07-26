@@ -94,22 +94,6 @@ namespace MissileCamera.Config
         internal static ConfigEntry<bool> FxBloomEnabled { get; private set; } = null!;
         internal static ConfigEntry<float> FxBloomIntensity { get; private set; } = null!;
 
-        internal static ConfigEntry<int> MarkersMax { get; private set; } = null!;
-        internal static ConfigEntry<bool> MarkersShowTarget { get; private set; } = null!;
-        internal static ConfigEntry<bool> MarkersShowAim { get; private set; } = null!;
-        internal static ConfigEntry<bool> MarkersShowSceneUnits { get; private set; } = null!;
-        internal static ConfigEntry<float> MarkersSceneUnitAlpha { get; private set; } = null!;
-        internal static ConfigEntry<bool> MarkersShowThreat { get; private set; } = null!;
-        internal static ConfigEntry<bool> MarkersShowAlly { get; private set; } = null!;
-        internal static ConfigEntry<bool> MarkersShowWaypoint { get; private set; } = null!;
-        internal static ConfigEntry<bool> MarkersShowJam { get; private set; } = null!;
-        internal static ConfigEntry<string> MarkersTargetColor { get; private set; } = null!;
-        internal static ConfigEntry<string> MarkersAimColor { get; private set; } = null!;
-        internal static ConfigEntry<string> MarkersThreatColor { get; private set; } = null!;
-        internal static ConfigEntry<string> MarkersAllyColor { get; private set; } = null!;
-        internal static ConfigEntry<string> MarkersWaypointColor { get; private set; } = null!;
-        internal static ConfigEntry<string> MarkersJamColor { get; private set; } = null!;
-
         internal static ConfigEntry<bool> AircraftCamEnabled { get; private set; } = null!;
         internal static ConfigEntry<string> AircraftCamMode { get; private set; } = null!;
         internal static ConfigEntry<int> AircraftCamFps { get; private set; } = null!;
@@ -283,26 +267,6 @@ namespace MissileCamera.Config
             FxBloomEnabled = config.Bind(fx, "BloomEnabled", false, "Bloom post-FX (requires shader bundle).");
             FxBloomIntensity = config.Bind(fx, "BloomIntensity", 0.3f,
                 new ConfigDescription("Bloom intensity 0–1.", new AcceptableValueRange<float>(0f, 1f)));
-
-            const string markers = "MissileCameraMarkers";
-            MarkersMax = config.Bind(markers, "MaxMarkers", 48,
-                new ConfigDescription("Max pooled markers projected per frame.", new AcceptableValueRange<int>(1, 64)));
-            MarkersShowTarget = config.Bind(markers, "ShowTarget", true, "Show locked target marker from HudSnapshot.");
-            MarkersShowAim = config.Bind(markers, "ShowAim", true, "Show aim/intercept marker from HudSnapshot.");
-            MarkersShowSceneUnits = config.Bind(markers, "ShowSceneUnits", true,
-                "Show translucent unlabeled markers for all other scene units.");
-            MarkersSceneUnitAlpha = config.Bind(markers, "SceneUnitAlpha", 0.4f,
-                new ConfigDescription("Alpha for ambient unit markers (no labels).", new AcceptableValueRange<float>(0.1f, 1f)));
-            MarkersShowThreat = config.Bind(markers, "ShowThreat", false, "Reserved threat markers.");
-            MarkersShowAlly = config.Bind(markers, "ShowAlly", false, "Reserved ally markers.");
-            MarkersShowWaypoint = config.Bind(markers, "ShowWaypoint", false, "Reserved waypoint markers.");
-            MarkersShowJam = config.Bind(markers, "ShowJam", false, "Reserved jam markers.");
-            MarkersTargetColor = config.Bind(markers, "TargetColor", "0.35,0.95,1,1", "Target marker RGBA (cyan).");
-            MarkersAimColor = config.Bind(markers, "AimColor", "1,0.75,0.12,1", "Aim/IP marker RGBA (amber).");
-            MarkersThreatColor = config.Bind(markers, "ThreatColor", "1,0.22,0.18,1", "Threat marker RGBA (red).");
-            MarkersAllyColor = config.Bind(markers, "AllyColor", "0.35,1,0.45,1", "Ally marker RGBA (green).");
-            MarkersWaypointColor = config.Bind(markers, "WaypointColor", "0.95,0.55,1,1", "Waypoint marker RGBA (violet).");
-            MarkersJamColor = config.Bind(markers, "JamColor", "1,0.45,0.05,1", "Jam marker RGBA (orange).");
 
             const string aircraftCam = "MissileCameraAircraftCam";
             AircraftCamEnabled = config.Bind(aircraftCam, "Enabled", false, "Aircraft mini-cam (off by default). No-op when DisplayMode=skip.");

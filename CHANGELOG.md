@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.32.16] — 2026-07-26
+
+### Fixed
+
+- **Stub labels:** deep-find kill for `MissileCameraTitle` / `COLOR` / telemetry; fullscreen always forces stubs off.
+- **Markers (dump audit):** `CombatHUD.UpdateMarkers` forced after camera LateTick; `iconLayer` reparent uses screen-overlay reset (`localScale=1`); soft-hide FlightHud when CombatHUD shares its canvas so LateUpdate keeps running.
+
+## [2.32.15] — 2026-07-26
+
+### Fixed
+
+- **Fullscreen stub labels:** bootstrap no longer fades in `MissileCameraTitle` / `COLOR` / `A:---/R:---/S:---` — stubs stay disabled every tick.
+- **Markers under FLIR overlay:** `CombatHUD.iconLayer` reparented to Overlay sorting **120** (above FLIR chrome). Projection remains vanilla `mainCamera` (missile nose).
+
+## [2.32.14] — 2026-07-26
+
+### Changed
+
+- **Fullscreen = vanilla main camera:** drives `CameraStateManager` pivot to the missile nose (same idea as cockpit cam). No RT/RawImage as the game view. CombatHUD markers use native `WorldToScreenPoint` again (fixes center-stuck markers).
+- **HUD:** FlightHud / minimap / CombatHUD chrome hidden; only unit markers remain. FLIR labels stay as a transparent overlay.
+
+## [2.32.13] — 2026-07-26
+
+### Fixed
+
+- **Fullscreen HUD clutter:** only **CombatHUD unit markers** (`iconLayer` + target arrow) are shown. FlightHud (ILS/compass), DynamicMap minimap, and the rest of CombatHUD stay off / under the feed. Markers are reparented onto a dedicated Overlay host.
+
+## [2.32.12] — 2026-07-26
+
+### Fixed
+
+- **Fullscreen vanilla markers invisible:** feed Overlay covered ScreenSpace-Camera CombatHUD; `WorldToScreenPoint` on the RT feed camera returned RT pixels, not Screen. Markers now project via `WorldToViewportPoint` → Screen, and the CombatHUD canvas is forced to **ScreenSpaceOverlay** above the feed. FlightHud instruments are hidden without killing the HUD canvas.
+
+## [2.32.11] — 2026-07-26
+
+### Changed
+
+- **Fullscreen target markers:** removed the custom marker pool. Fullscreen now uses **vanilla CombatHUD / HUDUnitMarker** contacts, projected through the missile feed camera (map/datalink set unchanged).
+- **FlightHud instruments** (compass/pitch) are hidden in fullscreen — wrong POV; CombatHUD unit icons stay on top of the feed.
+
+### Removed
+
+- `Markers/*`, `UnitRegistryAccess`, `MissileCameraTargetMarker`, and the `MissileCameraMarkers` config section.
+
 ## [2.32.10] — 2026-07-14
 
 ### Fixed

@@ -101,7 +101,6 @@ namespace MissileCamera
             MissileCameraFullscreenConfig.Refresh(force: true);
             MissileCameraTelemetryConfig.Refresh(force: true);
             MissileCameraEffectsConfig.Refresh(force: true);
-            MissileCameraMarkersConfig.Refresh(force: true);
             MissileCameraAircraftCamConfig.Refresh(force: true);
 
             MissileAccess.WarmFieldCache();

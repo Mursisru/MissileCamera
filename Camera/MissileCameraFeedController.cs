@@ -166,10 +166,28 @@ namespace MissileCamera
 
             Vector3 missilePos = missile.transform.position;
             bool infrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
-            MissileCameraInfraredEffect.Apply(_feedImage, rig, infrared, exposure);
 
             bool fullscreen = MissileCameraFullscreenController.IsActive;
-            rig.SetPipelineDriven(fullscreen);
+            // Fullscreen uses vanilla mainCamera — keep MFD rig for IR policy/bore only, not as the view.
+            rig.SetPipelineDriven(false);
+
+            if (fullscreen)
+            {
+                MissileCameraFullscreenViewDriver.Tick(missile, _zoomOffset);
+                MissileCameraVanillaHudBridge.TickHideStubs();
+                // Hide RT feed: scene comes from mainCamera.
+                if (_feedImage != null)
+                {
+                    _feedImage.enabled = false;
+                    _feedImage.texture = null;
+                }
+
+                MissileCameraInfraredEffect.Clear(_feedImage, rig);
+            }
+            else
+            {
+                MissileCameraInfraredEffect.Apply(_feedImage, rig, infrared, exposure);
+            }
 
             MissileCameraAircraftCamController.Tick();
             if (_panelRt != null && HudOverlay.Root != null)
@@ -178,8 +196,6 @@ namespace MissileCamera
             if (fullscreen)
             {
                 rig.SyncPose();
-                if (_feedImage != null && rig.Texture != null)
-                    _feedImage.texture = rig.Texture;
             }
             else if (Time.unscaledTime >= _nextRenderTimeUnscaled)
             {
@@ -213,6 +229,22 @@ namespace MissileCamera
         }
 
         internal static RectTransform? TryGetPanelRt() => _panelRt;
+
+        internal static Missile? TryGetFollowedMissile() =>
+            MissileCameraFeedSelection.IsStillTrackable(_followedMissile) ? _followedMissile : null;
+
+        internal static float TryGetBoreRollDeg() =>
+            _rig != null && _rig.IsRootAlive ? _rig.BoreRollDeg : 0f;
+
+        /// <summary>Active seeker feed camera while the rig exists (MFD or fullscreen).</summary>
+        internal static Camera? TryGetFeedCamera()
+        {
+            if (_rig == null || !_rig.IsRootAlive)
+                return null;
+
+            Camera feed = _rig.FeedCamera;
+            return feed != null ? feed : null;
+        }
 
         internal static void NotifyFullscreenChanged()
         {
@@ -373,16 +405,44 @@ namespace MissileCamera
 
             if (_feedImage != null)
             {
-                _feedImage.texture = texture;
-                _feedImage.enabled = texture != null;
-                if (missile != null && texture != null && MissileCameraInfraredPolicy.InfraredActive)
-                    MissileCameraInfraredEffect.Apply(_feedImage, _rig, infrared: true, exposure: MissileCameraInfraredPolicy.Exposure);
+                if (MissileCameraFullscreenController.IsActive)
+                {
+                    // Scene is vanilla mainCamera; keep RawImage off.
+                    _feedImage.enabled = false;
+                    _feedImage.texture = null;
+                }
+                else
+                {
+                    _feedImage.texture = texture;
+                    _feedImage.enabled = texture != null;
+                    if (missile != null && texture != null && MissileCameraInfraredPolicy.InfraredActive)
+                        MissileCameraInfraredEffect.Apply(_feedImage, _rig, infrared: true, exposure: MissileCameraInfraredPolicy.Exposure);
+                }
             }
 
-            if (missile == null || texture == null)
+            if (!MissileCameraFullscreenController.IsActive
+                && (missile == null || texture == null))
                 MissileCameraInfraredEffect.Apply(_feedImage, _rig, infrared: false, exposure: 0f);
 
-            MissileCameraTelemetry.Update(_telemetryText, missile);
+            if (_telemetryText != null)
+            {
+                if (MissileCameraFullscreenController.IsActive || MissileCameraHudConfig.Enabled)
+                {
+                    _telemetryText.text = string.Empty;
+                    _telemetryText.enabled = false;
+                }
+                else
+                    MissileCameraTelemetry.Update(_telemetryText, missile);
+            }
+
+            if (_colorLabel != null)
+            {
+                if (MissileCameraFullscreenController.IsActive || MissileCameraHudConfig.Enabled)
+                {
+                    _colorLabel.text = string.Empty;
+                    _colorLabel.enabled = false;
+                }
+            }
 
             if (_layoutRoot != null && _panelRt != null)
             {
@@ -421,8 +481,7 @@ namespace MissileCamera
                         panel,
                         _panelRt,
                         updateCorners,
-                        updateDynamic,
-                        missile);
+                        updateDynamic);
                 }
             }
         }
@@ -440,7 +499,6 @@ namespace MissileCamera
             MissileCameraFullscreenConfig.Refresh();
             MissileCameraTelemetryConfig.Refresh();
             MissileCameraEffectsConfig.Refresh();
-            MissileCameraMarkersConfig.Refresh();
             MissileCameraAircraftCamConfig.Refresh();
         }
 
