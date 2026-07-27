@@ -1,4 +1,5 @@
 using BepInEx.Configuration;
+using UnityEngine;
 
 namespace MissileCamera.Config
 {
@@ -48,6 +49,13 @@ namespace MissileCamera.Config
         internal static ConfigEntry<float> LabelBackgroundAlpha { get; private set; }
 
         internal static ConfigEntry<bool> ControlsEnabled { get; private set; }
+        internal static ConfigEntry<string> ModifierKey { get; private set; }
+        internal static ConfigEntry<string> NextMissileKey { get; private set; }
+        internal static ConfigEntry<string> PreviousMissileKey { get; private set; }
+        internal static ConfigEntry<string> ZoomInKey { get; private set; }
+        internal static ConfigEntry<string> ZoomOutKey { get; private set; }
+        internal static ConfigEntry<string> ResetZoomModifierKey { get; private set; }
+        internal static ConfigEntry<string> ResetZoomKey { get; private set; }
         internal static ConfigEntry<float> ZoomStep { get; private set; }
         internal static ConfigEntry<float> ZoomMin { get; private set; }
         internal static ConfigEntry<float> ZoomMax { get; private set; }
@@ -123,7 +131,22 @@ namespace MissileCamera.Config
                 new ConfigDescription("Label backdrop alpha override.", new AcceptableValueRange<float>(0f, 1f)));
 
             const string controls = "MissileCameraControls";
+            const string keyHint = "Unity KeyCode name (e.g. RightAlt, Slash, None).";
             ControlsEnabled = config.Bind(controls, "Enabled", true, "Keyboard missile cycling and zoom.");
+            ModifierKey = config.Bind(controls, "ModifierKey", "RightAlt",
+                "Hold this key with cycle/zoom actions. Use None for no modifier.");
+            NextMissileKey = config.Bind(controls, "NextMissileKey", "Slash",
+                "Select next owned in-flight missile (with ModifierKey). " + keyHint);
+            PreviousMissileKey = config.Bind(controls, "PreviousMissileKey", "Comma",
+                "Select previous owned in-flight missile (with ModifierKey). " + keyHint);
+            ZoomInKey = config.Bind(controls, "ZoomInKey", "Semicolon",
+                "Zoom in (with ModifierKey). " + keyHint);
+            ZoomOutKey = config.Bind(controls, "ZoomOutKey", "Period",
+                "Zoom out (with ModifierKey). " + keyHint);
+            ResetZoomModifierKey = config.Bind(controls, "ResetZoomModifierKey", "RightShift",
+                "Hold this with ResetZoomKey. Use None for no modifier.");
+            ResetZoomKey = config.Bind(controls, "ResetZoomKey", "Period",
+                "Reset zoom offset to 0. " + keyHint);
             ZoomStep = config.Bind(controls, "ZoomStep", 0.5f,
                 new ConfigDescription("Zoom offset change per key press.", new AcceptableValueRange<float>(0.05f, 4f)));
             ZoomMin = config.Bind(controls, "ZoomMin", -4f,

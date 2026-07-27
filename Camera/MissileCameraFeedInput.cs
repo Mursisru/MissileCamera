@@ -12,23 +12,35 @@ namespace MissileCamera
             if (!MissileCameraFeedController.HasOverlayInputContext())
                 return;
 
-            if (Input.GetKey(KeyCode.RightShift) && Input.GetKeyDown(KeyCode.Period))
+            // Same path as pre-config hardcodes: UnityEngine.Input (not BepInEx KeyboardShortcut).
+            if (IsComboDown(
+                    MissileCameraControlsConfig.ResetZoomModifierKey,
+                    MissileCameraControlsConfig.ResetZoomKey))
             {
                 MissileCameraFeedController.ResetZoom();
                 return;
             }
 
-            if (!Input.GetKey(KeyCode.RightAlt))
+            if (!IsModifierHeld(MissileCameraControlsConfig.ModifierKey))
                 return;
 
-            if (Input.GetKeyDown(KeyCode.Slash))
+            if (IsActionDown(MissileCameraControlsConfig.NextMissileKey))
                 MissileCameraFeedController.SelectNextMissile();
-            else if (Input.GetKeyDown(KeyCode.Comma))
+            else if (IsActionDown(MissileCameraControlsConfig.PreviousMissileKey))
                 MissileCameraFeedController.SelectPreviousMissile();
-            else if (Input.GetKeyDown(KeyCode.Semicolon))
+            else if (IsActionDown(MissileCameraControlsConfig.ZoomInKey))
                 MissileCameraFeedController.AdjustZoom(MissileCameraControlsConfig.ZoomStep);
-            else if (Input.GetKeyDown(KeyCode.Period))
+            else if (IsActionDown(MissileCameraControlsConfig.ZoomOutKey))
                 MissileCameraFeedController.AdjustZoom(-MissileCameraControlsConfig.ZoomStep);
         }
+
+        private static bool IsModifierHeld(KeyCode modifier) =>
+            modifier == KeyCode.None || Input.GetKey(modifier);
+
+        private static bool IsActionDown(KeyCode action) =>
+            action != KeyCode.None && Input.GetKeyDown(action);
+
+        private static bool IsComboDown(KeyCode modifier, KeyCode action) =>
+            IsActionDown(action) && IsModifierHeld(modifier);
     }
 }

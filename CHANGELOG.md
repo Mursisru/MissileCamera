@@ -1,4 +1,15 @@
-# Changelog
+﻿# Changelog
+
+## [0.27.4] — 2026-07-27
+
+### Added
+
+- VT-7 Vagrant (`VTOLTrainer1`) MFD support: replace NOZZLE+ENGINE section while preserving weapons silhouette.
+- `MissileCameraControls` keybinds are now configurable via BepInEx config (`ModifierKey`, `NextMissileKey`, `PreviousMissileKey`, `ZoomInKey`, `ZoomOutKey`, `ResetZoomModifierKey`, `ResetZoomKey`).
+
+### Fixed
+
+- Keep missile-camera overlay active through early Tac initialization and disabled TargetCam states while owned missiles are still in flight.
 
 ## [0.27.3] — 2026-07-07
 
