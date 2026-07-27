@@ -181,8 +181,8 @@ namespace MissileCamera
             return rect.AnchorMin.x >= 0.55f
                 && rect.AnchorMax.x <= 1.01f
                 && rect.AnchorMin.y >= 0.18f
-                && rect.AnchorMax.y <= 0.80f
-                && h <= 0.58f
+                && rect.AnchorMax.y <= 0.83f
+                && h <= 0.60f
                 && w <= 0.48f;
         }
 

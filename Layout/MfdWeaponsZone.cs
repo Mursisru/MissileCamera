@@ -1503,16 +1503,14 @@ namespace MissileCamera
                 finalTargets = new List<RectTransform> { commonParent };
 
             PanelRectState discovered = PanelRectNormalizer.UnionOnCanvas(overlayCanvas, finalTargets);
-            PanelRectState zone = FitVagrantOverlayZone(discovered, overlayCanvas, mfdRoot);
+            PanelRectState zone = FitVagrantOverlayZone(discovered);
 
             // Prefer chrome parent size when it wraps NOZZLE+ENGINE without weapons silhouette.
             RectTransform? chrome = TryFindVagrantChromeParent(finalTargets, overlayCanvas);
             if (chrome != null)
             {
                 PanelRectState chromeZone = FitVagrantOverlayZone(
-                    PanelRectNormalizer.CaptureOnCanvas(chrome, overlayCanvas),
-                    overlayCanvas,
-                    mfdRoot);
+                    PanelRectNormalizer.CaptureOnCanvas(chrome, overlayCanvas));
                 float chromeArea = (chromeZone.AnchorMax.x - chromeZone.AnchorMin.x)
                     * (chromeZone.AnchorMax.y - chromeZone.AnchorMin.y);
                 float zoneArea = (zone.AnchorMax.x - zone.AnchorMin.x)
@@ -1706,19 +1704,10 @@ namespace MissileCamera
         /// Soft-clamp discovery union into the right column. Size comes from NOZZLE+ENGINE gauges;
         /// only block bleed into FUEL/HEAT (minX) and weapons silhouette (maxY).
         /// </summary>
-        private static PanelRectState FitVagrantOverlayZone(
-            PanelRectState discovered,
-            Canvas? canvas,
-            GameObject? mfdRoot)
+        private static PanelRectState FitVagrantOverlayZone(PanelRectState discovered)
         {
-            float silhouetteFloor = 0f;
-            if (canvas != null && mfdRoot != null)
-                silhouetteFloor = TryFindVagrantWeaponsFloorY(mfdRoot, canvas);
-
             float minXFloor = 0.62f;
-            float maxYCeil = silhouetteFloor > 0.55f
-                ? Mathf.Clamp(silhouetteFloor - 0.012f, 0.62f, 0.76f)
-                : 0.74f;
+            float maxYCeil = 0.79f;
 
             float minX = Mathf.Max(discovered.AnchorMin.x, minXFloor);
             float maxX = Mathf.Min(discovered.AnchorMax.x, 0.995f);
@@ -1727,7 +1716,6 @@ namespace MissileCamera
 
             if (maxX - minX < 0.18f || maxY - minY < 0.18f)
             {
-                // Discovery failed to size — use last known good band from gauge union.
                 minX = minXFloor;
                 maxX = 0.99f;
                 minY = 0.28f;
@@ -1739,28 +1727,6 @@ namespace MissileCamera
                 new Vector2(maxX, maxY),
                 Vector2.zero,
                 Vector2.zero);
-        }
-
-        private static float TryFindVagrantWeaponsFloorY(GameObject mfdRoot, Canvas canvas)
-        {
-            float floor = 0f;
-            foreach (RectTransform rt in mfdRoot.GetComponentsInChildren<RectTransform>(true))
-            {
-                if (rt == null || !IsVagrantWeaponsSilhouetteNode(rt))
-                    continue;
-
-                PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(rt, canvas);
-                if (zone.AnchorMax.x < 0.55f || zone.AnchorMin.x > 0.95f)
-                    continue;
-                if (zone.AnchorMin.y < 0.45f)
-                    continue;
-
-                // Bottom edge of the weapons silhouette becomes the ceiling for MissileCamera.
-                if (zone.AnchorMin.y > floor)
-                    floor = zone.AnchorMin.y;
-            }
-
-            return floor;
         }
 
         private static RectTransform? TryFindVagrantChromeParent(
@@ -1804,7 +1770,7 @@ namespace MissileCamera
         }
 
         private static PanelRectState ClampVagrantOverlayZone(PanelRectState zone) =>
-            FitVagrantOverlayZone(zone, null, null);
+            FitVagrantOverlayZone(zone);
 
         private static bool IsVagrantWeaponsSilhouetteNode(RectTransform node)
         {
