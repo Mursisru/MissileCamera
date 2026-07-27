@@ -249,7 +249,6 @@ namespace MissileCamera
             if (missile == null || missile.disabled || missile.rb == null)
                 return Empty;
 
-            MissileCameraTelemetryConfig.Refresh();
             MissileCameraSalvoTracker.GetSalvoInfo(missile, ownedActive, out int salvoIndex, out int salvoTotal);
 
             bool hasTarget = MissileAccess.TryGetTargetPosition(missile, out GlobalPosition targetPosition);

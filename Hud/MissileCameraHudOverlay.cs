@@ -16,7 +16,7 @@ namespace MissileCamera
         private RectTransform? _interceptRoot;
         private TargetScreenUI? _screenUi;
         private float _nextDynamicTime;
-        private const float DynamicInterval = 1f / 15f;
+        private const float DynamicInterval = 1f / 10f;
 
         internal RectTransform? Root => _root;
 

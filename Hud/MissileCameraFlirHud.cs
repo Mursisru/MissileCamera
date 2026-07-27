@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -63,6 +64,18 @@ namespace MissileCamera
         private float _smoothHeading;
         private float _headingVel;
         private bool _headingReady;
+        private readonly StringBuilder _sb = new StringBuilder(192);
+        private float _lastNorthHdg = float.NaN;
+        private float _lastDialPitch = float.NaN;
+        private float _lastDialHdg = float.NaN;
+        private Vector2 _lastDialLeftCenter;
+        private Vector2 _lastDialRightCenter;
+        private float _lastDialRadius = -1f;
+        private bool _northLabelReady;
+        private int _activeCompassTicks;
+        private int _activeCompassMarks;
+        private int _lastHdgInt = int.MinValue;
+        private string _cachedHdgBig = string.Empty;
 
         private MissileCameraFlirHud(
             RectTransform root,
@@ -242,90 +255,130 @@ namespace MissileCamera
             float pitch = snapshot.PitchDeg;
             float fov = snapshot.FeedFovDeg > 0.1f ? snapshot.FeedFovDeg : 60f;
             float mag = snapshot.BaseFovDeg > 0.1f ? snapshot.BaseFovDeg / fov : 1f;
+            int hdgInt = Mathf.RoundToInt(ownHdg);
+            int pitchInt = Mathf.RoundToInt(pitch);
+            int fovInt = Mathf.RoundToInt(fov);
 
-            _headingBig.text = string.Format(CultureInfo.InvariantCulture, "{0:F0}°T", ownHdg);
+            if (hdgInt != _lastHdgInt)
+            {
+                _lastHdgInt = hdgInt;
+                _cachedHdgBig = hdgInt.ToString(CultureInfo.InvariantCulture) + "°T";
+            }
+
+            SetTextIfChanged(_headingBig, _cachedHdgBig);
             UpdateCompassTape(panel, ownHdg);
             UpdateAzimuthSlider(panel, ownHdg, snapshot);
             UpdateGimbalDials(panel, pitch, ownHdg);
-            _northArrow.text = "-N->";
-            _northArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, -ownHdg);
+
+            if (!_northLabelReady)
+            {
+                _northArrow.text = "-N->";
+                _northLabelReady = true;
+            }
+
+            if (float.IsNaN(_lastNorthHdg) || Mathf.Abs(Mathf.DeltaAngle(_lastNorthHdg, ownHdg)) > 0.05f)
+            {
+                _lastNorthHdg = ownHdg;
+                _northArrow.rectTransform.localEulerAngles = new Vector3(0f, 0f, -ownHdg);
+            }
 
             int channel = Mathf.Max(1, snapshot.SalvoIndex + 183);
-            _sys.text = "FLIR SYSTEMS " + channel.ToString(CultureInfo.InvariantCulture)
-                + "  CH" + (snapshot.SalvoIndex + 1).ToString(CultureInfo.InvariantCulture)
-                + "/" + Mathf.Max(1, snapshot.SalvoTotal).ToString(CultureInfo.InvariantCulture);
+            int salvoTotal = Mathf.Max(1, snapshot.SalvoTotal);
+            _sb.Length = 0;
+            _sb.Append("FLIR SYSTEMS ").Append(channel.ToString(CultureInfo.InvariantCulture))
+                .Append("  CH").Append((snapshot.SalvoIndex + 1).ToString(CultureInfo.InvariantCulture))
+                .Append('/').Append(salvoTotal.ToString(CultureInfo.InvariantCulture));
+            SetTextIfChanged(_sys, _sb);
 
             string grid = string.IsNullOrEmpty(snapshot.GridText) ? "GRID ---" : snapshot.GridText;
             string mslName = string.IsNullOrEmpty(snapshot.MissileName) ? "MSL ---" : snapshot.MissileName;
+            string spd = StripPrefix(snapshot.TgpSpdText, "SPD ");
+            if (string.IsNullOrEmpty(spd))
+                spd = "---";
+
+            SetTextIfChanged(_coord, "— MSL —");
+            _sb.Length = 0;
+            _sb.Append(mslName).Append('\n').Append(grid)
+                .Append("\nSPD ").Append(spd)
+                .Append("  HDG ").Append(hdgInt.ToString(CultureInfo.InvariantCulture)).Append("°T")
+                .Append("\nALT ").Append(FormatAltitudeFlir(snapshot))
+                .Append("  G ").Append(snapshot.InstantG.ToString("0.0", CultureInfo.InvariantCulture));
+            SetTextIfChanged(_ownTelemetry, _sb);
+
             string plat = string.IsNullOrEmpty(snapshot.OwnshipName) || snapshot.OwnshipName == "---"
                 ? "PLAT ---"
                 : "PLAT " + snapshot.OwnshipName;
+            _sb.Length = 0;
+            _sb.Append("MACH ").Append(snapshot.Mach.ToString("0.00", CultureInfo.InvariantCulture))
+                .Append("  FUEL ").Append(Mathf.RoundToInt(snapshot.FuelFraction * 100f).ToString(CultureInfo.InvariantCulture)).Append('%')
+                .Append('\n').Append(plat)
+                .Append("\nSALVO ").Append((snapshot.SalvoIndex + 1).ToString(CultureInfo.InvariantCulture))
+                .Append('/').Append(salvoTotal.ToString(CultureInfo.InvariantCulture));
+            SetTextIfChanged(_alt, _sb);
 
-            _coord.text = "— MSL —";
-            _ownTelemetry.text = mslName
-                + "\n" + grid
-                + "\nSPD " + (string.IsNullOrEmpty(snapshot.TgpSpdText) ? "---" : snapshot.TgpSpdText.Replace("SPD ", string.Empty))
-                + "  HDG " + string.Format(CultureInfo.InvariantCulture, "{0:F0}°T", ownHdg)
-                + "\nALT " + FormatAltitudeFlir(snapshot)
-                + "  G " + string.Format(CultureInfo.InvariantCulture, "{0:F1}", snapshot.InstantG);
-            _alt.text = "MACH " + string.Format(CultureInfo.InvariantCulture, "{0:F2}", snapshot.Mach)
-                + "  FUEL " + string.Format(CultureInfo.InvariantCulture, "{0:0}%", snapshot.FuelFraction * 100f)
-                + "\n" + plat
-                + "\nSALVO " + (snapshot.SalvoIndex + 1).ToString(CultureInfo.InvariantCulture)
-                + "/" + Mathf.Max(1, snapshot.SalvoTotal).ToString(CultureInfo.InvariantCulture);
-            _date.text = utc.ToString("MM/dd/yy", CultureInfo.InvariantCulture);
-            _time.text = utc.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + " Z";
+            SetTextIfChanged(_date, utc.ToString("MM/dd/yy", CultureInfo.InvariantCulture));
+            _sb.Length = 0;
+            _sb.Append(utc.ToString("HH:mm:ss", CultureInfo.InvariantCulture)).Append(" Z");
+            SetTextIfChanged(_time, _sb);
 
             if (snapshot.HasTarget)
             {
                 string tgtAlt = UnitConverter.AltitudeReading(snapshot.TargetPosition.y);
-                string tti = snapshot.HasTimeToImpact
-                    ? string.Format(CultureInfo.InvariantCulture, "TTI {0:F1}s", snapshot.TimeToImpactSec)
-                    : "TTI ---";
-                string clos = FormatClosSafe(snapshot.ClosingSpeedMs);
-                _tgtCoord.text = "— TGT —\n" + snapshot.TargetName;
-                _tgtTelemetry.text = snapshot.TargetGridText
-                    + "\nSPD " + snapshot.TgpTargetSpdText.Replace("SPD ", string.Empty)
-                    + "  " + snapshot.TgpHdgText.Replace("°", "°T")
-                    + "\nALT " + tgtAlt
-                    + "  " + snapshot.TgpRelText;
-                _tgtElv.text = "SLT " + snapshot.TgpRngText.Replace("RNG ", string.Empty)
-                    + "  " + clos
-                    + "\n" + tti
-                    + "  LRF " + FormatRangeMeters(snapshot.TargetRangeMeters)
-                    + "\n" + snapshot.TgpRidText
-                    + "  ANG " + string.Format(CultureInfo.InvariantCulture, "{0:F1}°", snapshot.TargetAngleDeg);
-                _lrf.text = string.Empty;
-                _lrf.gameObject.SetActive(false);
+                _sb.Length = 0;
+                _sb.Append("— TGT —\n").Append(snapshot.TargetName);
+                SetTextIfChanged(_tgtCoord, _sb);
+
+                _sb.Length = 0;
+                _sb.Append(snapshot.TargetGridText)
+                    .Append("\nSPD ").Append(StripPrefix(snapshot.TgpTargetSpdText, "SPD "))
+                    .Append("  ").Append(snapshot.TgpHdgText.Replace("°", "°T"))
+                    .Append("\nALT ").Append(tgtAlt)
+                    .Append("  ").Append(snapshot.TgpRelText);
+                SetTextIfChanged(_tgtTelemetry, _sb);
+
+                _sb.Length = 0;
+                _sb.Append("SLT ").Append(StripPrefix(snapshot.TgpRngText, "RNG "))
+                    .Append("  ").Append(FormatClosSafe(snapshot.ClosingSpeedMs)).Append('\n');
+                if (snapshot.HasTimeToImpact)
+                    _sb.Append("TTI ").Append(snapshot.TimeToImpactSec.ToString("0.0", CultureInfo.InvariantCulture)).Append('s');
+                else
+                    _sb.Append("TTI ---");
+                _sb.Append("  LRF ").Append(FormatRangeMeters(snapshot.TargetRangeMeters))
+                    .Append('\n').Append(snapshot.TgpRidText)
+                    .Append("  ANG ").Append(snapshot.TargetAngleDeg.ToString("0.0", CultureInfo.InvariantCulture)).Append('°');
+                SetTextIfChanged(_tgtElv, _sb);
             }
             else
             {
-                _tgtCoord.text = "— TGT —\nNO TRACK";
-                _tgtTelemetry.text = "GRID ---\nSPD ---  HDG ---°T\nALT ---  REL ---";
-                _tgtElv.text = "SLT ---  CLOS ---\nTTI ---  LRF ---\nRID ---  ANG ---";
-                _lrf.text = string.Empty;
-                _lrf.gameObject.SetActive(false);
+                SetTextIfChanged(_tgtCoord, "— TGT —\nNO TRACK");
+                SetTextIfChanged(_tgtTelemetry, "GRID ---\nSPD ---  HDG ---°T\nALT ---  REL ---");
+                SetTextIfChanged(_tgtElv, "SLT ---  CLOS ---\nTTI ---  LRF ---\nRID ---  ANG ---");
             }
+
+            if (_lrf.gameObject.activeSelf)
+                _lrf.gameObject.SetActive(false);
 
             MissileCameraVisionMode vision = MissileCameraVisionModeController.Mode;
             string polarity = MissileCameraVisionModeController.FlirPolarityLabel(vision);
-            string foc = mag <= 1f + ZoomAutoEpsilon
-                ? "FOC AUTO"
-                : "FOC MAN x" + string.Format(CultureInfo.InvariantCulture, "{0:F1}", mag);
-            string exp;
-            if (MissileCameraVisionModeController.UsesInfraredBlit(vision))
-                exp = "EXP " + string.Format(CultureInfo.InvariantCulture, "{0:F2}", snapshot.InfraredExposure);
-            else if (MissileCameraVisionModeController.UsesNightVisionVolume(vision))
-                exp = "EXP NVG";
+            _sb.Length = 0;
+            _sb.Append("HDIR ").Append(hdgInt.ToString(CultureInfo.InvariantCulture)).Append("°T\n")
+                .Append(polarity).Append('\n');
+            if (mag <= 1f + ZoomAutoEpsilon)
+                _sb.Append("FOC AUTO\n");
             else
-                exp = "EXP DAY";
-            _modes.text = "HDIR " + string.Format(CultureInfo.InvariantCulture, "{0:F0}°T", ownHdg)
-                + "\n" + polarity
-                + "\n" + foc
-                + "\n" + exp;
+                _sb.Append("FOC MAN x").Append(mag.ToString("0.0", CultureInfo.InvariantCulture)).Append('\n');
+            if (MissileCameraVisionModeController.UsesInfraredBlit(vision))
+                _sb.Append("EXP ").Append(snapshot.InfraredExposure.ToString("0.00", CultureInfo.InvariantCulture));
+            else if (MissileCameraVisionModeController.UsesNightVisionVolume(vision))
+                _sb.Append("EXP NVG");
+            else
+                _sb.Append("EXP DAY");
+            SetTextIfChanged(_modes, _sb);
 
-            _magRid.text = "MAG x" + string.Format(CultureInfo.InvariantCulture, "{0:F1}", mag)
-                + "\nFOV " + string.Format(CultureInfo.InvariantCulture, "{0:F0}°", fov);
+            _sb.Length = 0;
+            _sb.Append("MAG x").Append(mag.ToString("0.0", CultureInfo.InvariantCulture))
+                .Append("\nFOV ").Append(fovInt.ToString(CultureInfo.InvariantCulture)).Append('°');
+            SetTextIfChanged(_magRid, _sb);
 
             string guide = snapshot.Guidance switch
             {
@@ -333,41 +386,63 @@ namespace MissileCamera
                 MissileGuidanceStatus.LostLock => "LOST LOCK",
                 _ => "BALLISTIC"
             };
-            string ipRa;
+
+            _sb.Length = 0;
             if (snapshot.HasAimPoint)
             {
-                ipRa = "IP-RA "
-                    + string.Format(CultureInfo.InvariantCulture, "{0:F1}°", snapshot.TargetAngleDeg)
-                    + " / "
-                    + string.Format(CultureInfo.InvariantCulture, "{0:F0}m", snapshot.RelativeAltitudeMeters);
+                _sb.Append("IP-RA ")
+                    .Append(snapshot.TargetAngleDeg.ToString("0.0", CultureInfo.InvariantCulture)).Append("° / ")
+                    .Append(snapshot.RelativeAltitudeMeters.ToString("0", CultureInfo.InvariantCulture)).Append('m');
             }
             else
-                ipRa = "IP-RA OFF";
+                _sb.Append("IP-RA OFF");
 
-            string trk;
+            _sb.Append("\nINS NAV ").Append(snapshot.TargetAngleDeg.ToString("0.00", CultureInfo.InvariantCulture)).Append('°');
             if (snapshot.Guidance == MissileGuidanceStatus.LostLock)
-                trk = "TRK COR LOST";
+                _sb.Append("\nTRK COR LOST");
             else if (snapshot.Guidance == MissileGuidanceStatus.Guided && snapshot.ClosingSpeedMs > 1f && snapshot.ClosingSpeedMs < 5000f)
-                trk = "TRK COR ON " + FormatClosSafe(snapshot.ClosingSpeedMs);
+                _sb.Append("\nTRK COR ON ").Append(FormatClosSafe(snapshot.ClosingSpeedMs));
             else
-                trk = "TRK COR OFF";
+                _sb.Append("\nTRK COR OFF");
 
-            string slave;
             if (snapshot.Guidance == MissileGuidanceStatus.LostLock)
-                slave = "SLAVE LOST";
+                _sb.Append("\nSLAVE LOST");
             else if (snapshot.HasTarget && snapshot.Guidance == MissileGuidanceStatus.Guided)
-                slave = "SLAVE READY";
+                _sb.Append("\nSLAVE READY");
             else
-                slave = "SLAVE IDLE";
+                _sb.Append("\nSLAVE IDLE");
 
-            _status.text = ipRa
-                + "\nINS NAV " + string.Format(CultureInfo.InvariantCulture, "{0:F2}°", snapshot.TargetAngleDeg)
-                + "\n" + trk
-                + "\n" + slave
-                + "\n" + guide;
+            _sb.Append('\n').Append(guide);
+            SetTextIfChanged(_status, _sb);
 
-            _dialPitchLabel.text = "PIT\n" + string.Format(CultureInfo.InvariantCulture, "{0:F0}°", pitch);
-            _dialHdgLabel.text = "HDG\n" + string.Format(CultureInfo.InvariantCulture, "{0:F0}°", ownHdg);
+            _sb.Length = 0;
+            _sb.Append("PIT\n").Append(pitchInt.ToString(CultureInfo.InvariantCulture)).Append('°');
+            SetTextIfChanged(_dialPitchLabel, _sb);
+            _sb.Length = 0;
+            _sb.Append("HDG\n").Append(hdgInt.ToString(CultureInfo.InvariantCulture)).Append('°');
+            SetTextIfChanged(_dialHdgLabel, _sb);
+        }
+
+        private static string StripPrefix(string? value, string prefix)
+        {
+            if (value == null || value.Length == 0)
+                return "---";
+            if (value.StartsWith(prefix, StringComparison.Ordinal) && value.Length > prefix.Length)
+                return value.Substring(prefix.Length);
+            return value;
+        }
+
+        private static void SetTextIfChanged(Text text, string value)
+        {
+            if (text.text != value)
+                text.text = value;
+        }
+
+        private void SetTextIfChanged(Text text, StringBuilder sb)
+        {
+            string value = sb.ToString();
+            if (text.text != value)
+                text.text = value;
         }
 
         private static string FormatClosSafe(float closingMs)
@@ -443,11 +518,6 @@ namespace MissileCamera
             float yTick = panel.Height * 0.5f - panel.VerticalInset - 42f;
             float yMark = yTick - 16f;
 
-            for (int i = 0; i < _compassTicks.Length; i++)
-                _compassTicks[i].gameObject.SetActive(false);
-            for (int i = 0; i < _compassMarks.Length; i++)
-                _compassMarks[i].gameObject.SetActive(false);
-
             float first = Mathf.Floor((headingDeg - halfSpan) / CompassMinorStepDeg) * CompassMinorStepDeg;
             int tickIdx = 0;
             int markIdx = 0;
@@ -472,25 +542,45 @@ namespace MissileCamera
                         new Vector2(x, yTick - tickH),
                         major ? 1.7f : 1.1f,
                         FlirGreen);
-                    _compassTicks[tickIdx].gameObject.SetActive(true);
+                    if (!_compassTicks[tickIdx].gameObject.activeSelf)
+                        _compassTicks[tickIdx].gameObject.SetActive(true);
                     tickIdx++;
                 }
 
                 if (major && markIdx < _compassMarks.Length)
                 {
                     Text label = _compassMarks[markIdx];
-                    label.text = FormatCompassMark(markWrapped);
+                    SetTextIfChanged(label, FormatCompassMark(markWrapped));
                     RectTransform rt = label.rectTransform;
-                    rt.anchorMin = new Vector2(0.5f, 0.5f);
-                    rt.anchorMax = new Vector2(0.5f, 0.5f);
-                    rt.pivot = new Vector2(0.5f, 1f);
                     rt.anchoredPosition = new Vector2(x, yMark);
-                    rt.sizeDelta = new Vector2(48f, 18f);
-                    label.alignment = TextAnchor.UpperCenter;
-                    label.gameObject.SetActive(true);
+                    if (!label.gameObject.activeSelf)
+                    {
+                        rt.anchorMin = new Vector2(0.5f, 0.5f);
+                        rt.anchorMax = new Vector2(0.5f, 0.5f);
+                        rt.pivot = new Vector2(0.5f, 1f);
+                        rt.sizeDelta = new Vector2(48f, 18f);
+                        label.alignment = TextAnchor.UpperCenter;
+                        label.gameObject.SetActive(true);
+                    }
+
                     markIdx++;
                 }
             }
+
+            for (int i = tickIdx; i < _activeCompassTicks; i++)
+            {
+                if (_compassTicks[i].gameObject.activeSelf)
+                    _compassTicks[i].gameObject.SetActive(false);
+            }
+
+            for (int i = markIdx; i < _activeCompassMarks; i++)
+            {
+                if (_compassMarks[i].gameObject.activeSelf)
+                    _compassMarks[i].gameObject.SetActive(false);
+            }
+
+            _activeCompassTicks = tickIdx;
+            _activeCompassMarks = markIdx;
         }
 
         private void UpdateAzimuthSlider(MissileCameraPanelMetrics panel, float missileHdg, MissileCameraHudSnapshot snapshot)
@@ -530,12 +620,41 @@ namespace MissileCamera
             float cy = -panel.Height * 0.5f + bottomSafe;
             float gap = 78f;
             float r = 30f;
+            var leftCenter = new Vector2(-gap, cy);
+            var rightCenter = new Vector2(gap, cy);
 
-            DrawDial(_dialLeftRing, _dialLeftTicks, _dialLeftNeedle, new Vector2(-gap, cy), r, pitchDeg * 2f);
-            DrawDial(_dialRightRing, _dialRightTicks, _dialRightNeedle, new Vector2(gap, cy), r, headingDeg);
+            bool layoutDirty = _lastDialRadius < 0f
+                || !Mathf.Approximately(_lastDialRadius, r)
+                || (leftCenter - _lastDialLeftCenter).sqrMagnitude > 0.01f
+                || (rightCenter - _lastDialRightCenter).sqrMagnitude > 0.01f;
 
-            PlaceDialCaption(_dialPitchLabel, -gap, cy - r - 2f);
-            PlaceDialCaption(_dialHdgLabel, gap, cy - r - 2f);
+            bool pitchDirty = layoutDirty
+                || float.IsNaN(_lastDialPitch)
+                || Mathf.Abs(_lastDialPitch - pitchDeg) > 0.05f;
+            bool hdgDirty = layoutDirty
+                || float.IsNaN(_lastDialHdg)
+                || Mathf.Abs(Mathf.DeltaAngle(_lastDialHdg, headingDeg)) > 0.05f;
+
+            if (pitchDirty)
+            {
+                DrawDial(_dialLeftRing, _dialLeftTicks, _dialLeftNeedle, leftCenter, r, pitchDeg * 2f, layoutDirty);
+                _lastDialPitch = pitchDeg;
+            }
+
+            if (hdgDirty)
+            {
+                DrawDial(_dialRightRing, _dialRightTicks, _dialRightNeedle, rightCenter, r, headingDeg, layoutDirty);
+                _lastDialHdg = headingDeg;
+            }
+
+            if (layoutDirty)
+            {
+                _lastDialLeftCenter = leftCenter;
+                _lastDialRightCenter = rightCenter;
+                _lastDialRadius = r;
+                PlaceDialCaption(_dialPitchLabel, -gap, cy - r - 2f);
+                PlaceDialCaption(_dialHdgLabel, gap, cy - r - 2f);
+            }
         }
 
         private static void PlaceDialCaption(Text text, float x, float y)
@@ -555,17 +674,21 @@ namespace MissileCamera
             HudLineGraphic needle,
             Vector2 center,
             float radius,
-            float needleDeg)
+            float needleDeg,
+            bool redrawTicks)
         {
             if (ring.transform is RectTransform ringRt)
                 ringRt.anchoredPosition = center;
             ring.SetRing(radius, 1.6f, FlirGreen, filled: false);
 
-            for (int i = 0; i < ticks.Length; i++)
+            if (redrawTicks)
             {
-                float ang = i * (360f / ticks.Length) * Mathf.Deg2Rad;
-                Vector2 dir = new Vector2(Mathf.Sin(ang), Mathf.Cos(ang));
-                ticks[i].SetLine(center + dir * (radius - 6f), center + dir * radius, 1.2f, FlirGreen);
+                for (int i = 0; i < ticks.Length; i++)
+                {
+                    float ang = i * (360f / ticks.Length) * Mathf.Deg2Rad;
+                    Vector2 dir = new Vector2(Mathf.Sin(ang), Mathf.Cos(ang));
+                    ticks[i].SetLine(center + dir * (radius - 6f), center + dir * radius, 1.2f, FlirGreen);
+                }
             }
 
             float n = needleDeg * Mathf.Deg2Rad;

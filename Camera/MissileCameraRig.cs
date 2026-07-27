@@ -136,7 +136,12 @@ namespace MissileCamera
             if (_visionMode == mode)
             {
                 if (blitIr)
-                    SetInfraredVolume(true, infraredExposure);
+                {
+                    if (!Mathf.Approximately(_lastPolicyExposure, infraredExposure)
+                        || !_infraredVolumeActive)
+                        SetInfraredVolume(true, infraredExposure);
+                }
+
                 return;
             }
 
@@ -207,6 +212,14 @@ namespace MissileCamera
         internal void SetInfraredVolume(bool infrared, float exposure)
         {
             if (!IsRootAlive)
+                return;
+
+            if (!infrared && !_infraredVolumeActive)
+                return;
+
+            if (infrared
+                && _infraredVolumeActive
+                && Mathf.Approximately(_lastPolicyExposure, exposure))
                 return;
 
             _infraredVolumeActive = infrared;
@@ -505,7 +518,6 @@ namespace MissileCamera
             _root.transform.localRotation = Quaternion.identity;
 
             Transform missileTransform = _missile.transform;
-            MissileTurnLoad.TrySampleHorizontalTurn(_missile, out float lateralG, out _);
 
             Quaternion desiredWorld = HorizonFrame.BuildCameraWorldRotation(
                 missileTransform,
@@ -515,7 +527,7 @@ namespace MissileCamera
             Quaternion bodyWorld = missileTransform.rotation;
             _camera.transform.localRotation = Quaternion.Inverse(bodyWorld) * desiredWorld;
 
-            LastHorizonFrame = HorizonFrame.FromCamera(_camera, lateralG, _boreRollDeg);
+            LastHorizonFrame = HorizonFrame.FromCamera(_camera, _filteredLateralG, _boreRollDeg);
         }
 
         private void ApplyConfigIfNeeded()

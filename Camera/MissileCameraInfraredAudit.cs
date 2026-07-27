@@ -8,6 +8,9 @@ namespace MissileCamera
     /// </summary>
     internal static class MissileCameraInfraredAudit
     {
+        /// <summary>Shipping default off — ReadPixels stalls the GPU when sampling luminance.</summary>
+        private static readonly bool Enabled = false;
+
         private const float LogIntervalSeconds = 2f;
         private const int SampleSize = 8;
 
@@ -17,7 +20,7 @@ namespace MissileCamera
 
         internal static void LogStartupOnce()
         {
-            if (_loggedStartup)
+            if (!Enabled || _loggedStartup)
                 return;
 
             _loggedStartup = true;
@@ -31,7 +34,7 @@ namespace MissileCamera
             bool infrared,
             float policyExposure)
         {
-            if (!infrared || rig == null)
+            if (!Enabled || !infrared || rig == null)
                 return;
 
             float now = Time.unscaledTime;
@@ -44,6 +47,9 @@ namespace MissileCamera
 
         internal static void LogAfterRender(MissileCameraRig rig, RenderTexture? displayRt)
         {
+            if (!Enabled)
+                return;
+
             float now = Time.unscaledTime;
             if (now < _nextLogUnscaled)
                 return;

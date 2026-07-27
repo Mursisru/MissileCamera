@@ -11,6 +11,8 @@
 ### Changed
 
 - **Versioning:** clean numeric semver only (`MAJOR.MINOR.PATCH`). Removed letter suffixes (`QV`, channels, `Build` tails). `AppVersion.DisplayVersion` matches `[BepInPlugin]` (`2.2.0`).
+- **Hot-path performance (no quality cut):** FLIR text dirty-check + StringBuilder; TargetCam/RenderPrep FieldInfo caches; IR/vision Apply early-out; marker feed-camera per-frame cache; IR audit ReadPixels off by default; URP mirror dirty-skip.
+- **Soft tick rates:** HUD snapshot / corner / dynamic / FS labels **10 Hz**; Cockpit PiP + AircraftCam + Telemetry `SmoothHz` defaults **10**; IR policy + config refresh **1 s**. Feed `RenderFps` stays **30**; fullscreen video still every frame.
 - **Loss / switch / exit flash:** black screen with bordered **NO SIGNAL** (replaces TV static).
 - **Documentation:** README aligned to Mursisru standards (`Developer: Mursisru`, badges, GitHub Alerts, Keywords).
 

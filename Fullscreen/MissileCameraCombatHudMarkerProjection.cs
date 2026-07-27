@@ -15,6 +15,9 @@ namespace MissileCamera
         private static readonly FieldInfo? HiddenField =
             AccessTools.Field(typeof(HUDUnitMarker), "hidden");
 
+        private static int _feedCameraFrame = -1;
+        private static Camera? _feedCameraCached;
+
         internal static void ReprojectIfFullscreen(HUDUnitMarker marker)
         {
             if (!MissileCameraFullscreenController.IsActive)
@@ -26,7 +29,7 @@ namespace MissileCamera
             if (HiddenField != null && HiddenField.GetValue(marker) is true)
                 return;
 
-            Camera? feed = MissileCameraFeedController.TryGetFeedCamera();
+            Camera? feed = ResolveFeedCamera();
             if (feed == null)
                 return;
 
@@ -51,6 +54,17 @@ namespace MissileCamera
                 marker.image.enabled = true;
 
             marker.image.transform.position = new Vector3(screen.x, screen.y, 0f);
+        }
+
+        private static Camera? ResolveFeedCamera()
+        {
+            int frame = Time.frameCount;
+            if (_feedCameraFrame == frame)
+                return _feedCameraCached;
+
+            _feedCameraFrame = frame;
+            _feedCameraCached = MissileCameraFeedController.TryGetFeedCamera();
+            return _feedCameraCached;
         }
 
         private static bool TryResolveWorld(HUDUnitMarker marker, out Vector3 world)

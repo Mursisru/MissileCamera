@@ -169,7 +169,7 @@ BepInEx\config\com.at747.missilecamera.bepinex.cfg
 | `SalvoWindowSeconds` | `0.5` | Salvo grouping window (seconds) |
 | `ShowCenterCluster` | `true` | Center reticle / intercept ring (MFD classic) |
 | `CockpitPipEnabled` | `true` | TGP bottom-left cockpit PiP |
-| `CockpitPipFps` | `15` | Cockpit PiP render FPS |
+| `CockpitPipFps` | `10` | Cockpit PiP render FPS |
 | `InterceptColor` | `0,1,0,1` | Intercept ring RGBA (0–1) |
 | `ReticleColor` | `1,1,1,1` | Reticle RGBA |
 | `HorizonColor` | `0.05,0.35,0.08,1` | Horizon fill |

@@ -28,7 +28,6 @@ namespace MissileCamera
             if (source == null)
                 return null;
 
-            MissileCameraEffectsConfig.Refresh();
             MissileCameraInfraredStage.Configure(infraredActive, infraredExposure);
 
             bool any = false;

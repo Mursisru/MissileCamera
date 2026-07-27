@@ -14,7 +14,7 @@ namespace MissileCamera
     {
         internal static bool Enabled;
         internal static MissileCameraAircraftCamMode Mode = MissileCameraAircraftCamMode.Rear;
-        internal static int RenderFps = 15;
+        internal static int RenderFps = 10;
         internal static int Width = 256;
         internal static int Height = 256;
         internal static float AnchorMinX = 0.72f;

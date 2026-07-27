@@ -10,7 +10,7 @@ namespace MissileCamera
     {
         private const float AmbientExposureMin = 0.02f;
         private const float AmbientExposureMax = 0.4f;
-        private const float PolicyIntervalSeconds = 0.5f;
+        private const float PolicyIntervalSeconds = 1f;
 
         private static float _nextEvaluateUnscaled;
         private static bool _infraredActive;

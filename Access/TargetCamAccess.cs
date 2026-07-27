@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -9,36 +11,47 @@ namespace MissileCamera
     {
         private const BindingFlags InstanceAny = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
+        private static readonly Dictionary<FieldKey, FieldInfo?> FieldCache = new Dictionary<FieldKey, FieldInfo?>(16);
+        private static FieldInfo? _irModeField;
+        private static FieldInfo? _currentModeField;
+        private static bool _irModeResolved;
+        private static bool _currentModeResolved;
+
         internal static TargetCam? GetTargetCam(Component aircraft) =>
-            GetField<TargetCam>(aircraft, "targetCam");
+            GetFieldCached<TargetCam>(aircraft, "targetCam");
 
         internal static Camera? GetCam(TargetCam instance) =>
-            GetField<Camera>(instance, "cam");
+            GetFieldCached<Camera>(instance, "cam");
 
         internal static Camera? GetUiCam(TargetCam instance) =>
-            GetField<Camera>(instance, "UICam");
+            GetFieldCached<Camera>(instance, "UICam");
 
         internal static TargetScreenUI? GetTargetScreenUi(TargetCam instance) =>
-            GetField<TargetScreenUI>(instance, "targetScreenUI");
+            GetFieldCached<TargetScreenUI>(instance, "targetScreenUI");
 
         internal static Component? GetAircraft(TargetCam instance) =>
-            GetField<Component>(instance, "aircraft");
+            GetFieldCached<Component>(instance, "aircraft");
 
         internal static Renderer? GetTargetScreenRenderer(TargetCam instance) =>
-            GetField<Renderer>(instance, "targetScreenRenderer");
+            GetFieldCached<Renderer>(instance, "targetScreenRenderer");
 
         internal static Volume? GetScreenVolume(TargetCam instance) =>
-            GetField<Volume>(instance, "screenVolume");
+            GetFieldCached<Volume>(instance, "screenVolume");
 
         internal static bool IsIrMode(TargetCam instance)
         {
-            FieldInfo? field = instance.GetType().GetField("IRMode", InstanceAny);
-            return field?.GetValue(instance) is bool ir && ir;
+            if (!_irModeResolved)
+            {
+                _irModeField = typeof(TargetCam).GetField("IRMode", InstanceAny);
+                _irModeResolved = true;
+            }
+
+            return _irModeField?.GetValue(instance) is bool ir && ir;
         }
 
         internal static bool TryGetColorAdjustments(TargetCam instance, out ColorAdjustments? adjustments)
         {
-            adjustments = GetField<ColorAdjustments>(instance, "colorAdjustments");
+            adjustments = GetFieldCached<ColorAdjustments>(instance, "colorAdjustments");
             return adjustments != null;
         }
 
@@ -69,27 +82,73 @@ namespace MissileCamera
 
         internal static TargetCam.CamMode GetCurrentMode(TargetCam instance)
         {
-            FieldInfo? field = instance.GetType().GetField("currentMode", InstanceAny);
-            if (field == null)
+            if (!_currentModeResolved)
+            {
+                _currentModeField = typeof(TargetCam).GetField("currentMode", InstanceAny);
+                _currentModeResolved = true;
+            }
+
+            if (_currentModeField == null)
                 return TargetCam.CamMode.targetForward;
 
-            object? value = field.GetValue(instance);
+            object? value = _currentModeField.GetValue(instance);
             return value is TargetCam.CamMode mode ? mode : TargetCam.CamMode.targetForward;
         }
 
         internal static bool IsLandingMode(TargetCam instance) =>
             GetCurrentMode(instance) == TargetCam.CamMode.landingMode;
 
-        private static T? GetField<T>(Component instance, string name) where T : class
+        private static T? GetFieldCached<T>(Component instance, string name) where T : class
         {
-            FieldInfo? field = instance.GetType().GetField(name, InstanceAny);
+            if (instance == null)
+                return null;
+
+            Type type = instance.GetType();
+            var key = new FieldKey(type, name);
+            if (!FieldCache.TryGetValue(key, out FieldInfo? field))
+            {
+                field = type.GetField(name, InstanceAny);
+                FieldCache[key] = field;
+            }
+
             return field?.GetValue(instance) as T;
         }
 
-        private static T? GetField<T>(TargetCam instance, string name) where T : class
+        private static T? GetFieldCached<T>(TargetCam instance, string name) where T : class
         {
-            FieldInfo? field = instance.GetType().GetField(name, InstanceAny);
+            if (instance == null)
+                return null;
+
+            Type type = typeof(TargetCam);
+            var key = new FieldKey(type, name);
+            if (!FieldCache.TryGetValue(key, out FieldInfo? field))
+            {
+                field = type.GetField(name, InstanceAny);
+                FieldCache[key] = field;
+            }
+
             return field?.GetValue(instance) as T;
+        }
+
+        private readonly struct FieldKey : IEquatable<FieldKey>
+        {
+            private readonly Type _type;
+            private readonly string _name;
+
+            internal FieldKey(Type type, string name)
+            {
+                _type = type;
+                _name = name;
+            }
+
+            public bool Equals(FieldKey other) =>
+                ReferenceEquals(_type, other._type) && _name == other._name;
+
+            public override bool Equals(object? obj) =>
+                obj is FieldKey other && Equals(other);
+
+            public override int GetHashCode() =>
+                (_type.GetHashCode() * 397) ^ (_name != null ? _name.GetHashCode() : 0);
         }
     }
 }

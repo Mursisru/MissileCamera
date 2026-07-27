@@ -10,7 +10,7 @@ namespace MissileCamera
         internal static bool ShowMach;
         internal static bool ShowTargetRange = true;
         internal static bool ShowTargetAngle;
-        internal static float SmoothHz = 12f;
+        internal static float SmoothHz = 10f;
         internal static int Revision;
 
         internal static void Refresh(bool force = false)

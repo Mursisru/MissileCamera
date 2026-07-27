@@ -18,7 +18,7 @@ namespace MissileCamera
         internal static bool ShowCenterCluster = true;
         internal static bool ShowTargetMarker = true;
         internal static bool CockpitPipEnabled = true;
-        internal static int CockpitPipFps = 15;
+        internal static int CockpitPipFps = 10;
         internal static Color InterceptColor = new Color(0f, 1f, 0f, 1f);
         internal static Color ReticleColor = new Color(1f, 1f, 1f, 1f);
         internal static Color HorizonColor = new Color(0.05f, 0.35f, 0.08f, 1f);

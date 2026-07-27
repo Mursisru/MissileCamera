@@ -204,7 +204,7 @@ namespace MissileCamera.Config
             ShowCenterCluster = config.Bind(hud, "ShowCenterCluster", true, "Center reticle and intercept aim-point ring (hollow circle).");
             ShowTargetMarker = config.Bind(hud, "ShowTargetMarker", true, "Target diamond marker.");
             HudCockpitPipEnabled = config.Bind(hud, "CockpitPipEnabled", true, "TGP bottom-left cockpit PiP (TOR: Cockpit View).");
-            HudCockpitPipFps = config.Bind(hud, "CockpitPipFps", 15,
+            HudCockpitPipFps = config.Bind(hud, "CockpitPipFps", 10,
                 new ConfigDescription("Cockpit PiP render FPS.", new AcceptableValueRange<int>(5, 30)));
             InterceptColor = config.Bind(hud, "InterceptColor", "0,1,0,1", "Intercept ring RGBA (0–1), comma-separated.");
             ReticleColor = config.Bind(hud, "ReticleColor", "1,1,1,1", "Reticle RGBA (0–1), comma-separated.");
@@ -262,7 +262,7 @@ namespace MissileCamera.Config
             TelemetryShowMach = config.Bind(telemetry, "ShowMach", false, "Reserved Mach readout (off = classic MFD HUD).");
             TelemetryShowTargetRange = config.Bind(telemetry, "ShowTargetRange", true, "Use aim/target range for R: label (classic).");
             TelemetryShowTargetAngle = config.Bind(telemetry, "ShowTargetAngle", false, "Reserved off-bore angle on HUD (off = classic MFD HUD).");
-            TelemetrySmoothHz = config.Bind(telemetry, "SmoothHz", 12f,
+            TelemetrySmoothHz = config.Bind(telemetry, "SmoothHz", 10f,
                 new ConfigDescription("Telemetry smoothing Hz (capped by RenderFps).", new AcceptableValueRange<float>(1f, 60f)));
 
             const string fx = "MissileCameraEffects";
@@ -284,7 +284,7 @@ namespace MissileCamera.Config
             AircraftCamEnabled = config.Bind(aircraftCam, "Enabled", false, "Aircraft mini-cam (off by default). No-op when DisplayMode=skip.");
             AircraftCamMode = config.Bind(aircraftCam, "Mode", "Rear",
                 new ConfigDescription("Rear / TopDown / Chase.", new AcceptableValueList<string>("Rear", "TopDown", "Chase")));
-            AircraftCamFps = config.Bind(aircraftCam, "RenderFps", 15,
+            AircraftCamFps = config.Bind(aircraftCam, "RenderFps", 10,
                 new ConfigDescription("Mini-cam FPS.", new AcceptableValueRange<int>(5, 30)));
             AircraftCamWidth = config.Bind(aircraftCam, "Width", 256,
                 new ConfigDescription("Mini-cam RT width.", new AcceptableValueRange<int>(64, 1024)));

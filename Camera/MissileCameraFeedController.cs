@@ -37,9 +37,10 @@ namespace MissileCamera
         private static float _nextHudVisualTime;
         private static float _nextCornerHudTime;
         private static float _nextConfigRefreshTime;
-        private const float HudSnapshotInterval = 1f / 15f;
-        private const float CornerHudInterval = 1f / 15f;
-        private const float ConfigRefreshInterval = 0.5f;
+        private const float HudSnapshotInterval = 1f / 10f;
+        private const float FullscreenHudSnapshotInterval = 1f / 10f;
+        private const float CornerHudInterval = 1f / 10f;
+        private const float ConfigRefreshInterval = 1f;
 
         internal static bool UseIdleDriverWait { get; private set; }
 
@@ -540,10 +541,12 @@ namespace MissileCamera
                 }
                 else
                 {
-                    _feedImage.texture = texture;
-                    _feedImage.enabled = texture != null;
-                    if (missile != null && texture != null && MissileCameraInfraredPolicy.InfraredActive)
-                        MissileCameraInfraredEffect.Apply(_feedImage, _rig, infrared: true, exposure: MissileCameraInfraredPolicy.Exposure);
+                    if (_feedImage.texture != texture)
+                        _feedImage.texture = texture;
+                    bool show = texture != null;
+                    if (_feedImage.enabled != show)
+                        _feedImage.enabled = show;
+                    // IR/vision already applied in Tick(); skip redundant Apply here on the hot path.
                 }
             }
 
@@ -591,10 +594,7 @@ namespace MissileCamera
                     SyncFeedLayout();
                     RectTransform viewRt = MissileCameraFeedLayout.ResolveProjectionRect(_layoutRoot);
 
-                    // Fullscreen: rebuild snapshot every frame so FLIR labels stay live in Update().
-                    if (fullscreen)
-                        _nextHudSnapshotTime = 0f;
-
+                    // Fullscreen FLIR still ticks every frame; snapshot strings throttle via ResolveHudSnapshot.
                     MissileCameraHudSnapshot snapshot = ResolveHudSnapshot(missile);
                     Camera? feedCamera = _rig?.FeedCamera;
 
@@ -667,7 +667,10 @@ namespace MissileCamera
             float now = Time.unscaledTime;
             if (now >= _nextHudSnapshotTime)
             {
-                _nextHudSnapshotTime = now + HudSnapshotInterval;
+                float interval = MissileCameraFullscreenController.IsActive
+                    ? FullscreenHudSnapshotInterval
+                    : HudSnapshotInterval;
+                _nextHudSnapshotTime = now + interval;
                 _cachedSnapshot = MissileCameraHudSnapshot.Build(missile, _rig, OwnedActive);
             }
 
