@@ -217,6 +217,8 @@ namespace MissileCamera
                         ? "ibis"
                     : resolved.IsTarantulaSection
                         ? "tarantula"
+                    : resolved.IsVagrantNozzleEngineSection
+                        ? "vagrant-nozzle-engine"
                     : resolved.IsCompassEngineSection
                         ? "engine"
                     : resolved.IsIfritStrip
@@ -344,6 +346,15 @@ namespace MissileCamera
                     return true;
 
                 MaybeLogChicaneDiscoveryFailure(mfdRoot, tacScreen, canvas);
+                return false;
+            }
+
+            if (TacScreenAccess.IsVagrantAircraft(aircraftJsonKey))
+            {
+                if (TryResolveVagrantNozzleEngineSection(mfdRoot, tacScreen, canvas, aircraftJsonKey, out resolved))
+                    return true;
+
+                MaybeLogVagrantDiscoveryFailure(mfdRoot, tacScreen, canvas, aircraftJsonKey);
                 return false;
             }
 
@@ -645,6 +656,9 @@ namespace MissileCamera
                 return 0.05f;
 
             if (resolved.IsCricketEngineSection)
+                return 0.04f;
+
+            if (resolved.IsVagrantNozzleEngineSection)
                 return 0.04f;
 
             return 0.02f;
@@ -1451,6 +1465,525 @@ namespace MissileCamera
                 hideTargets,
                 isCompassEngineSection: true);
             return true;
+        }
+
+        /// <summary>
+        /// VT-7 Vagrant: replace stacked NOZZLE + ENGINE gauges on the right MFD column.
+        /// Weapons silhouette above stays visible.
+        /// </summary>
+        private static bool TryResolveVagrantNozzleEngineSection(
+            GameObject mfdRoot,
+            TacScreen tacScreen,
+            Canvas canvas,
+            string? aircraftJsonKey,
+            out ResolvedPanel resolved)
+        {
+            resolved = default;
+
+            Component? aircraft = TacScreenAccess.GetAircraft(tacScreen);
+            Transform? aircraftRoot = aircraft != null ? aircraft.transform : null;
+
+            List<RectTransform> hideTargets = CollectVagrantNozzleEngineTargets(
+                mfdRoot,
+                aircraftRoot,
+                canvas,
+                out Canvas overlayCanvas);
+
+            if (hideTargets.Count == 0)
+                hideTargets = CollectVagrantRawGaugeRects(mfdRoot, aircraftRoot, overlayCanvas);
+
+            if (hideTargets.Count == 0)
+                return false;
+
+            // Only collapse to a common parent when it still fits the NOZZLE+ENGINE band
+            // (otherwise climbing pulls in the weapons silhouette → reject at y≈0.95).
+            RectTransform? commonParent = TryFindVagrantCommonParent(hideTargets, overlayCanvas);
+            List<RectTransform> finalTargets = hideTargets;
+            if (commonParent != null)
+                finalTargets = new List<RectTransform> { commonParent };
+
+            PanelRectState discovered = PanelRectNormalizer.UnionOnCanvas(overlayCanvas, finalTargets);
+            PanelRectState zone = FitVagrantOverlayZone(discovered, overlayCanvas, mfdRoot);
+
+            // Prefer chrome parent size when it wraps NOZZLE+ENGINE without weapons silhouette.
+            RectTransform? chrome = TryFindVagrantChromeParent(finalTargets, overlayCanvas);
+            if (chrome != null)
+            {
+                PanelRectState chromeZone = FitVagrantOverlayZone(
+                    PanelRectNormalizer.CaptureOnCanvas(chrome, overlayCanvas),
+                    overlayCanvas,
+                    mfdRoot);
+                float chromeArea = (chromeZone.AnchorMax.x - chromeZone.AnchorMin.x)
+                    * (chromeZone.AnchorMax.y - chromeZone.AnchorMin.y);
+                float zoneArea = (zone.AnchorMax.x - zone.AnchorMin.x)
+                    * (zone.AnchorMax.y - zone.AnchorMin.y);
+                if (PanelRectNormalizer.IsVagrantNozzleEngineZone(chromeZone) && chromeArea >= zoneArea * 0.95f)
+                {
+                    zone = chromeZone;
+                    if (!finalTargets.Contains(chrome))
+                        finalTargets = new List<RectTransform>(finalTargets) { chrome };
+                }
+            }
+
+            if (!PanelRectNormalizer.IsVagrantNozzleEngineZone(zone))
+            {
+                MfdLog.Info(
+                    $"vagrant nozzle/engine fit rejected jsonKey={aircraftJsonKey} " +
+                    $"discovered={FormatAnchors(discovered)} fit={FormatAnchors(zone)} " +
+                    $"hideChildren={finalTargets.Count}");
+                return false;
+            }
+
+            MfdLog.Info(
+                $"vagrant nozzle/engine hideRoot={finalTargets[0].name} hideChildren={finalTargets.Count} " +
+                $"discovered={FormatAnchors(discovered)} zone={FormatAnchors(zone)} jsonKey={aircraftJsonKey}");
+
+            resolved = new ResolvedPanel(
+                finalTargets[0],
+                overlayCanvas,
+                zone,
+                finalTargets,
+                isVagrantNozzleEngineSection: true);
+            return true;
+        }
+
+        private static List<RectTransform> CollectVagrantNozzleEngineTargets(
+            GameObject mfdRoot,
+            Transform? aircraftRoot,
+            Canvas canvas,
+            out Canvas overlayCanvas)
+        {
+            overlayCanvas = canvas;
+            var targets = new List<RectTransform>();
+            var seen = new HashSet<RectTransform>();
+            Canvas resolvedOverlay = canvas;
+
+            void TryAdd(RectTransform? frame)
+            {
+                if (frame == null || !seen.Add(frame))
+                    return;
+
+                if (!IsVagrantEngineBandFrame(frame, canvas))
+                    return;
+
+                if (IsVagrantWeaponsSilhouetteNode(frame))
+                    return;
+
+                resolvedOverlay = TacScreenAccess.GetOverlayCanvas(frame) ?? canvas;
+                targets.Add(frame);
+            }
+
+            void ScanRoot(Transform root)
+            {
+                foreach (NozzleGauge nozzle in root.GetComponentsInChildren<NozzleGauge>(true))
+                {
+                    if (nozzle == null || !nozzle.TryGetComponent(out RectTransform nozzleRt))
+                        continue;
+
+                    TryAdd(ResolveVagrantGaugeFrame(nozzleRt, canvas));
+                }
+
+                foreach (EngineTelemetry telemetry in root.GetComponentsInChildren<EngineTelemetry>(true))
+                {
+                    if (telemetry == null || !telemetry.TryGetComponent(out RectTransform telemetryRt))
+                        continue;
+
+                    TryAdd(ResolveVagrantGaugeFrame(telemetryRt, canvas));
+                }
+
+                // RPM lives under ENGINE on Vagrant — only take if already under an accepted engine frame.
+                foreach (RPMGauge rpm in root.GetComponentsInChildren<RPMGauge>(true))
+                {
+                    if (rpm == null || !rpm.TryGetComponent(out RectTransform rpmRt))
+                        continue;
+
+                    if (rpmRt.GetComponentInParent<EngineTelemetry>() == null
+                        && !IsVagrantEngineRpmNode(rpmRt))
+                        continue;
+
+                    TryAdd(ResolveVagrantGaugeFrame(rpmRt, canvas));
+                }
+            }
+
+            ScanRoot(mfdRoot.transform);
+            if (aircraftRoot != null && aircraftRoot != mfdRoot.transform)
+                ScanRoot(aircraftRoot);
+
+            RectTransform? knownNozzle = FindPanelByName(mfdRoot, "NozzlePanel")
+                ?? FindPanelByName(mfdRoot, "nozzlePanel");
+            RectTransform? knownEngine = FindPanelByName(mfdRoot, "EnginePanel")
+                ?? FindPanelByName(mfdRoot, "enginePanel")
+                ?? FindPanelByName(mfdRoot, "engPanel")
+                ?? FindPanelByName(mfdRoot, "EngPanel");
+            if (knownNozzle != null)
+                TryAdd(knownNozzle);
+            if (knownEngine != null)
+                TryAdd(knownEngine);
+
+            overlayCanvas = resolvedOverlay;
+            return targets;
+        }
+
+        private static bool IsVagrantEngineBandFrame(RectTransform frame, Canvas canvas)
+        {
+            PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(frame, canvas);
+            float w = zone.AnchorMax.x - zone.AnchorMin.x;
+            float h = zone.AnchorMax.y - zone.AnchorMin.y;
+            float midY = (zone.AnchorMin.y + zone.AnchorMax.y) * 0.5f;
+
+            // Right column, below weapons silhouette.
+            if (zone.AnchorMax.x < 0.50f)
+                return false;
+            if (zone.AnchorMin.x > 0.92f)
+                return false;
+            if (midY > 0.82f || zone.AnchorMax.y > 0.90f)
+                return false;
+            if (w > 0.55f || h > 0.60f)
+                return false;
+            if (h < 0.04f || w < 0.06f)
+                return false;
+
+            return true;
+        }
+
+        private static List<RectTransform> FilterVagrantTargetsToEngineBand(
+            IReadOnlyList<RectTransform> hideTargets,
+            Canvas canvas)
+        {
+            var filtered = new List<RectTransform>(hideTargets.Count);
+            for (int i = 0; i < hideTargets.Count; i++)
+            {
+                RectTransform target = hideTargets[i];
+                if (target == null)
+                    continue;
+                if (!IsVagrantEngineBandFrame(target, canvas))
+                    continue;
+                if (IsVagrantWeaponsSilhouetteNode(target))
+                    continue;
+                filtered.Add(target);
+            }
+
+            return filtered;
+        }
+
+        private static List<RectTransform> CollectVagrantRawGaugeRects(
+            GameObject mfdRoot,
+            Transform? aircraftRoot,
+            Canvas canvas)
+        {
+            var targets = new List<RectTransform>();
+            var seen = new HashSet<RectTransform>();
+
+            void Scan(Transform root)
+            {
+                foreach (NozzleGauge nozzle in root.GetComponentsInChildren<NozzleGauge>(true))
+                {
+                    if (nozzle == null || !nozzle.TryGetComponent(out RectTransform rt) || !seen.Add(rt))
+                        continue;
+                    if (PanelRectNormalizer.CaptureOnCanvas(rt, canvas).AnchorMax.x < 0.40f)
+                        continue;
+                    targets.Add(rt);
+                }
+
+                foreach (EngineTelemetry telemetry in root.GetComponentsInChildren<EngineTelemetry>(true))
+                {
+                    if (telemetry == null || !telemetry.TryGetComponent(out RectTransform rt) || !seen.Add(rt))
+                        continue;
+                    if (PanelRectNormalizer.CaptureOnCanvas(rt, canvas).AnchorMax.x < 0.40f)
+                        continue;
+                    targets.Add(rt);
+                }
+            }
+
+            Scan(mfdRoot.transform);
+            if (aircraftRoot != null && aircraftRoot != mfdRoot.transform)
+                Scan(aircraftRoot);
+
+            return targets;
+        }
+
+        /// <summary>
+        /// Soft-clamp discovery union into the right column. Size comes from NOZZLE+ENGINE gauges;
+        /// only block bleed into FUEL/HEAT (minX) and weapons silhouette (maxY).
+        /// </summary>
+        private static PanelRectState FitVagrantOverlayZone(
+            PanelRectState discovered,
+            Canvas? canvas,
+            GameObject? mfdRoot)
+        {
+            float silhouetteFloor = 0f;
+            if (canvas != null && mfdRoot != null)
+                silhouetteFloor = TryFindVagrantWeaponsFloorY(mfdRoot, canvas);
+
+            float minXFloor = 0.62f;
+            float maxYCeil = silhouetteFloor > 0.55f
+                ? Mathf.Clamp(silhouetteFloor - 0.012f, 0.62f, 0.76f)
+                : 0.74f;
+
+            float minX = Mathf.Max(discovered.AnchorMin.x, minXFloor);
+            float maxX = Mathf.Min(discovered.AnchorMax.x, 0.995f);
+            float minY = Mathf.Max(discovered.AnchorMin.y, 0.24f);
+            float maxY = Mathf.Min(discovered.AnchorMax.y, maxYCeil);
+
+            if (maxX - minX < 0.18f || maxY - minY < 0.18f)
+            {
+                // Discovery failed to size — use last known good band from gauge union.
+                minX = minXFloor;
+                maxX = 0.99f;
+                minY = 0.28f;
+                maxY = maxYCeil;
+            }
+
+            return new PanelRectState(
+                new Vector2(minX, minY),
+                new Vector2(maxX, maxY),
+                Vector2.zero,
+                Vector2.zero);
+        }
+
+        private static float TryFindVagrantWeaponsFloorY(GameObject mfdRoot, Canvas canvas)
+        {
+            float floor = 0f;
+            foreach (RectTransform rt in mfdRoot.GetComponentsInChildren<RectTransform>(true))
+            {
+                if (rt == null || !IsVagrantWeaponsSilhouetteNode(rt))
+                    continue;
+
+                PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(rt, canvas);
+                if (zone.AnchorMax.x < 0.55f || zone.AnchorMin.x > 0.95f)
+                    continue;
+                if (zone.AnchorMin.y < 0.45f)
+                    continue;
+
+                // Bottom edge of the weapons silhouette becomes the ceiling for MissileCamera.
+                if (zone.AnchorMin.y > floor)
+                    floor = zone.AnchorMin.y;
+            }
+
+            return floor;
+        }
+
+        private static RectTransform? TryFindVagrantChromeParent(
+            IReadOnlyList<RectTransform> hideTargets,
+            Canvas canvas)
+        {
+            if (hideTargets.Count == 0)
+                return null;
+
+            RectTransform? current = hideTargets[0].parent as RectTransform;
+            for (int depth = 0; depth < 5 && current != null; depth++)
+            {
+                if (IsVagrantWeaponsSilhouetteNode(current))
+                    return null;
+
+                bool coversAll = true;
+                for (int i = 0; i < hideTargets.Count; i++)
+                {
+                    if (!IsDescendantOrSelf(current, hideTargets[i]))
+                    {
+                        coversAll = false;
+                        break;
+                    }
+                }
+
+                if (coversAll)
+                {
+                    PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(current, canvas);
+                    float h = zone.AnchorMax.y - zone.AnchorMin.y;
+                    if (zone.AnchorMin.x >= 0.55f
+                        && zone.AnchorMax.y <= 0.82f
+                        && h <= 0.58f
+                        && h >= 0.20f)
+                        return current;
+                }
+
+                current = current.parent as RectTransform;
+            }
+
+            return null;
+        }
+
+        private static PanelRectState ClampVagrantOverlayZone(PanelRectState zone) =>
+            FitVagrantOverlayZone(zone, null, null);
+
+        private static bool IsVagrantWeaponsSilhouetteNode(RectTransform node)
+        {
+            string name = node.name;
+            if (name.IndexOf("Weapon", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Profile", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("TopView", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Hardpoint", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Armed", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            Transform? current = node;
+            for (int depth = 0; depth < 6 && current != null; depth++)
+            {
+                string n = current.name;
+                if (string.Equals(n, "WeaponPanel", System.StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n, "weaponPanel", System.StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n, "weaponStations", System.StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n, "frontProfile", System.StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(n, "TopView", System.StringComparison.OrdinalIgnoreCase))
+                    return true;
+
+                current = current.parent;
+            }
+
+            return false;
+        }
+
+        private static bool IsVagrantEngineRpmNode(RectTransform rpmRt)
+        {
+            Transform? current = rpmRt;
+            for (int depth = 0; depth < 6 && current != null; depth++)
+            {
+                string n = current.name;
+                if (n.IndexOf("Engine", System.StringComparison.OrdinalIgnoreCase) >= 0
+                    || n.IndexOf("THRUST", System.StringComparison.OrdinalIgnoreCase) >= 0
+                    || n.IndexOf("RPM", System.StringComparison.OrdinalIgnoreCase) >= 0
+                    || n.IndexOf("Nozzle", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+
+                current = current.parent;
+            }
+
+            return rpmRt.GetComponentInParent<EngineTelemetry>() != null;
+        }
+
+        private static RectTransform ResolveVagrantGaugeFrame(RectTransform gaugeRt, Canvas canvas)
+        {
+            // Prefer the gauge itself or a tight local frame — never climb into the full right column
+            // (that pulls weapons silhouette and rejects at maxY≈0.95).
+            RectTransform? best = null;
+            float bestScore = float.MaxValue;
+            RectTransform? current = gaugeRt;
+
+            for (int depth = 0; depth < 4 && current != null; depth++)
+            {
+                if (IsVagrantWeaponsSilhouetteNode(current))
+                    break;
+
+                PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(current, canvas);
+                float w = zone.AnchorMax.x - zone.AnchorMin.x;
+                float h = zone.AnchorMax.y - zone.AnchorMin.y;
+                if (zone.AnchorMax.x < 0.42f
+                    || zone.AnchorMax.y > 0.86f
+                    || w > 0.58f
+                    || h > 0.48f
+                    || zone.AnchorMin.y > 0.72f)
+                {
+                    break;
+                }
+
+                if (!IsVagrantEngineBandFrame(current, canvas))
+                {
+                    current = current.parent != null ? current.parent.GetComponent<RectTransform>() : null;
+                    continue;
+                }
+
+                // Prefer mid-sized frames that still cover the gauge chrome.
+                float score = Mathf.Abs(h - 0.22f) + Mathf.Abs(w - 0.35f);
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = current;
+                }
+
+                current = current.parent != null ? current.parent.GetComponent<RectTransform>() : null;
+            }
+
+            if (best != null)
+                return best;
+
+            return IsVagrantEngineBandFrame(gaugeRt, canvas) ? gaugeRt : gaugeRt;
+        }
+
+        private static RectTransform? TryFindVagrantCommonParent(
+            IReadOnlyList<RectTransform> hideTargets,
+            Canvas canvas)
+        {
+            if (hideTargets.Count < 2)
+                return null;
+
+            RectTransform? current = hideTargets[0];
+            for (int depth = 0; depth < 5 && current != null; depth++)
+            {
+                if (IsVagrantWeaponsSilhouetteNode(current))
+                    return null;
+
+                bool coversAll = true;
+                for (int i = 0; i < hideTargets.Count; i++)
+                {
+                    if (!IsDescendantOrSelf(current, hideTargets[i]))
+                    {
+                        coversAll = false;
+                        break;
+                    }
+                }
+
+                if (coversAll)
+                {
+                    PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(current, canvas);
+                    if (PanelRectNormalizer.IsVagrantNozzleEngineZone(zone)
+                        && IsVagrantEngineBandFrame(current, canvas)
+                        && !IsVagrantWeaponsSilhouetteNode(current))
+                        return current;
+                }
+
+                current = current.parent != null ? current.parent.GetComponent<RectTransform>() : null;
+            }
+
+            return null;
+        }
+
+        private static bool IsDescendantOrSelf(RectTransform ancestor, RectTransform node)
+        {
+            Transform? current = node;
+            while (current != null)
+            {
+                if (current == ancestor)
+                    return true;
+                current = current.parent;
+            }
+
+            return false;
+        }
+
+        private static void MaybeLogVagrantDiscoveryFailure(
+            GameObject mfdRoot,
+            TacScreen tacScreen,
+            Canvas canvas,
+            string? aircraftJsonKey)
+        {
+            int nozzles = mfdRoot.GetComponentsInChildren<NozzleGauge>(true).Length;
+            int telemetry = mfdRoot.GetComponentsInChildren<EngineTelemetry>(true).Length;
+            int rpm = mfdRoot.GetComponentsInChildren<RPMGauge>(true).Length;
+            Component? aircraft = TacScreenAccess.GetAircraft(tacScreen);
+            int nozzlesOnAircraft = 0;
+            int telemetryOnAircraft = 0;
+            if (aircraft != null)
+            {
+                nozzlesOnAircraft = aircraft.GetComponentsInChildren<NozzleGauge>(true).Length;
+                telemetryOnAircraft = aircraft.GetComponentsInChildren<EngineTelemetry>(true).Length;
+            }
+
+            foreach (NozzleGauge nozzle in mfdRoot.GetComponentsInChildren<NozzleGauge>(true))
+            {
+                if (nozzle != null && nozzle.TryGetComponent(out RectTransform rt))
+                    MfdLog.Info($"vagrant nozzleRt={rt.name} {FormatAnchors(PanelRectNormalizer.CaptureOnCanvas(rt, canvas))}");
+            }
+
+            foreach (EngineTelemetry telemetryNode in mfdRoot.GetComponentsInChildren<EngineTelemetry>(true))
+            {
+                if (telemetryNode != null && telemetryNode.TryGetComponent(out RectTransform rt))
+                    MfdLog.Info($"vagrant engineRt={rt.name} {FormatAnchors(PanelRectNormalizer.CaptureOnCanvas(rt, canvas))}");
+            }
+
+            MfdLog.Info(
+                $"vagrant nozzle/engine discovery failed jsonKey={aircraftJsonKey} root={mfdRoot.name} " +
+                $"canvas={canvas.name} nozzle={nozzles}/{nozzlesOnAircraft} " +
+                $"telemetry={telemetry}/{telemetryOnAircraft} rpm={rpm}");
         }
 
         /// <summary>Compass / Brawler tac canvas: fixed engPanel1 (ENGINE L) + engPanel2 (ENGINE R) nodes.</summary>
@@ -4375,6 +4908,8 @@ namespace MissileCamera
                         ? $"ibis×{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsTarantulaSection
                         ? $"tarantula×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                    : resolved.IsVagrantNozzleEngineSection
+                        ? $"vagrant-nozzle-engine×{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsCompassEngineSection
                         ? $"engine×{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsIfritStrip
@@ -4411,6 +4946,8 @@ namespace MissileCamera
                 || resolved.IsCricketEngineSection
                 || resolved.IsChicaneEngineSection
                 || resolved.IsIbisSection
+                || resolved.IsVagrantNozzleEngineSection
+                || resolved.IsCompassEngineSection
                 ? MissileCameraTelemetryLayout.RightColumn
                 : MissileCameraTelemetryLayout.BottomRow;
 
@@ -4432,6 +4969,7 @@ namespace MissileCamera
                 bool isCricketEngineSection = false,
                 bool isChicaneEngineSection = false,
                 bool isIbisSection = false,
+                bool isVagrantNozzleEngineSection = false,
                 bool overlayOnly = false,
                 RectTransform? overlayParent = null,
                 float overlayRotationZ = 0f,
@@ -4455,18 +4993,20 @@ namespace MissileCamera
                 IsCricketEngineSection = isCricketEngineSection;
                 IsChicaneEngineSection = isChicaneEngineSection;
                 IsIbisSection = isIbisSection;
+                IsVagrantNozzleEngineSection = isVagrantNozzleEngineSection;
                 OverlayOnly = overlayOnly;
                 IsIfritStrip = !isAlkyonFullPanel && !isDarkreachSection && !isMedusaSection
                     && !isCompassEngineSection && !isTarantulaSection && !isCricketEngineSection
-                    && !isChicaneEngineSection && !isIbisSection
+                    && !isChicaneEngineSection && !isIbisSection && !isVagrantNozzleEngineSection
                     && hideTargets != null && hideTargets.Count > 1;
                 IsAlkyonFullPanel = isAlkyonFullPanel;
                 UseMultiHide = isAlkyonFullPanel || isDarkreachSection || isMedusaSection || isCompassEngineSection
                     || isTarantulaSection || isCricketEngineSection || isChicaneEngineSection || isIbisSection
+                    || isVagrantNozzleEngineSection
                     || (hideTargets != null && hideTargets.Count > 1);
                 SuppressBottomDivider = UseMultiHide;
                 ShowPanelBorder = isAlkyonFullPanel || isDarkreachSection || isCompassEngineSection
-                    || isChicaneEngineSection;
+                    || isChicaneEngineSection || isVagrantNozzleEngineSection;
                 SuppressBottomBorder = isMedusaSection || isTarantulaSection;
                 OverlayRotationZ = overlayRotationZ;
                 StubContentRotationZ = stubContentRotationZ;
@@ -4492,6 +5032,7 @@ namespace MissileCamera
             internal bool IsCricketEngineSection { get; }
             internal bool IsChicaneEngineSection { get; }
             internal bool IsIbisSection { get; }
+            internal bool IsVagrantNozzleEngineSection { get; }
             internal bool OverlayOnly { get; }
             internal bool UseMultiHide { get; }
             internal bool SuppressBottomDivider { get; }

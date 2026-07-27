@@ -52,6 +52,7 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 * **Manual feed controls:** Cycle in-flight owned missiles and adjust camera zoom while the MFD overlay is active (see **Controls** below).
 * **Per-aircraft layout (`DisplayMode=auto`):**
   * **Dedicated split** (e.g. KR-67): wide target cam on the left, missile panel on the right.
+  * **VT-7 Vagrant:** MissileCamera replaces the right-column **NOZZLE + ENGINE** block (weapons silhouette kept).
   * **Small tac overlay** (e.g. Cricket): mod **skipped** — vanilla tactical MFD unchanged.
 * **Mission-only bootstrap:** Harmony patches and the feed driver attach on the **first mission scene**, not in the main menu.
 

@@ -167,6 +167,25 @@ namespace MissileCamera
                 && h <= 0.55f;
         }
 
+        /// <summary>
+        /// VT-7 Vagrant: stacked NOZZLE + ENGINE on right MFD column under weapons silhouette.
+        /// Accept discovery-sized unions; FitVagrantOverlayZone only soft-clamps bleed.
+        /// </summary>
+        internal static bool IsVagrantNozzleEngineZone(PanelRectState rect)
+        {
+            float w = rect.AnchorMax.x - rect.AnchorMin.x;
+            float h = rect.AnchorMax.y - rect.AnchorMin.y;
+            if (w < 0.12f || h < 0.15f)
+                return false;
+
+            return rect.AnchorMin.x >= 0.55f
+                && rect.AnchorMax.x <= 1.01f
+                && rect.AnchorMin.y >= 0.18f
+                && rect.AnchorMax.y <= 0.80f
+                && h <= 0.58f
+                && w <= 0.48f;
+        }
+
         /// <summary>CI-22 Cricket: EngPanel on shared canvas (maps to bottom-left Engines MFD).</summary>
         internal static bool IsCricketEngineZone(PanelRectState rect)
         {
@@ -275,6 +294,9 @@ namespace MissileCamera
                 return true;
 
             if (IsCompassEngineZone(rect))
+                return true;
+
+            if (IsVagrantNozzleEngineZone(rect))
                 return true;
 
             if (IsBomberRightColumnZone(rect))

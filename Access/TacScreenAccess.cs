@@ -103,7 +103,7 @@ namespace MissileCamera
                 }
             }
 
-            if (IsEngineSectionMfdAircraft(aircraftJsonKey))
+            if (IsEngineSectionMfdAircraft(aircraftJsonKey) || IsVagrantAircraft(aircraftJsonKey))
             {
                 Component? aircraft = GetAircraft(tacScreen);
                 if (aircraft != null)
@@ -120,10 +120,15 @@ namespace MissileCamera
             return tacRoot;
         }
 
-        /// <summary>T/A-30 Compass (trainer), A-19 Brawler (CAS1), VL-49 Tarantula (QuadVTOL1).</summary>
+        /// <summary>T/A-30 Compass (trainer), A-19 Brawler (CAS1).</summary>
         internal static bool IsEngineSectionMfdAircraft(string? jsonKey) =>
             string.Equals(jsonKey, "trainer", System.StringComparison.OrdinalIgnoreCase)
             || string.Equals(jsonKey, "CAS1", System.StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>VT-7 Vagrant VTOL trainer (Addressables: VTOLTrainer1).</summary>
+        internal static bool IsVagrantAircraft(string? jsonKey) =>
+            string.Equals(jsonKey, "VTOLTrainer1", System.StringComparison.OrdinalIgnoreCase)
+            || string.Equals(jsonKey, "Vagrant", System.StringComparison.OrdinalIgnoreCase);
 
         internal static bool IsTarantulaAircraft(string? jsonKey) =>
             string.Equals(jsonKey, "QuadVTOL1", System.StringComparison.OrdinalIgnoreCase);
@@ -142,6 +147,7 @@ namespace MissileCamera
 
         internal static bool UsesEarlyTacLayoutTrigger(string? jsonKey) =>
             IsEngineSectionMfdAircraft(jsonKey)
+            || IsVagrantAircraft(jsonKey)
             || IsTarantulaAircraft(jsonKey)
             || IsCricketAircraft(jsonKey)
             || IsIbisAircraft(jsonKey);
@@ -197,11 +203,24 @@ namespace MissileCamera
         }
 
         /// <summary>
-        /// Compass / Brawler: weapon wireframe + ENGINE gauges often live on a cockpit HUD canvas,
+        /// Compass / Brawler / Vagrant: ENGINE / NOZZLE gauges often live on a cockpit HUD canvas,
         /// not under tacScreen_* (which only hosts TargetCam UI).
         /// </summary>
         private static GameObject? FindEngineSectionHudRoot(Transform aircraftRoot, GameObject tacRoot, Canvas? tacCanvas)
         {
+            foreach (NozzleGauge nozzle in aircraftRoot.GetComponentsInChildren<NozzleGauge>(true))
+            {
+                if (nozzle == null || !nozzle.TryGetComponent(out RectTransform nozzleRt))
+                    continue;
+
+                if (IsLeftColumnUiNode(nozzleRt, tacCanvas))
+                    continue;
+
+                GameObject? root = GetHudCanvasRoot(nozzleRt);
+                if (root != null)
+                    return root;
+            }
+
             foreach (EngineTelemetry telemetry in aircraftRoot.GetComponentsInChildren<EngineTelemetry>(true))
             {
                 if (telemetry == null || !telemetry.TryGetComponent(out RectTransform telemetryRt))
