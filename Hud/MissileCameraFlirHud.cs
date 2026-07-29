@@ -243,6 +243,12 @@ namespace MissileCamera
             _ownshipPip.Update();
         }
 
+        internal void UpdateGaugeBarsOnly(MissileCameraHudSnapshot snapshot, MissileCameraPanelMetrics panel)
+        {
+            // Used during fullscreen boot: keep only FUEL/THR bars live without updating the whole FLIR chrome.
+            _gaugeBars.Update(snapshot, panel);
+        }
+
         private float SmoothHeading(float targetDeg)
         {
             targetDeg = Mathf.Repeat(targetDeg, 360f);

@@ -97,6 +97,9 @@ namespace MissileCamera
             // During boot, BootSequence owns FlirHud — hide leftover MFD center chrome.
             if (bootPlaying)
             {
+                if (flir)
+                    _flir?.UpdateGaugeBarsOnly(snapshot, panel);
+
                 _attitude?.SetVisible(false);
                 if (_interceptRoot != null)
                     _interceptRoot.gameObject.SetActive(false);
