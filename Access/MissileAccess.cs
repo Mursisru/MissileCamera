@@ -242,6 +242,9 @@ namespace MissileCamera
             return true;
         }
 
+        private const float MaxSaneClosingMs = 2500f;
+        private const float MinTtiApproachMs = 5f;
+
         /// <summary>
         /// Closing speed (m/s) along LOS missile→aim/target. Positive = closing.
         /// </summary>
@@ -270,21 +273,51 @@ namespace MissileCamera
                 targetAlong = Vector3.Dot(target.rb.velocity, los);
 
             closingMs = missileAlong - targetAlong;
+            if (float.IsNaN(closingMs) || float.IsInfinity(closingMs))
+                return false;
+            // Reject absurd LOS projections (common when aim/velocity are momentarily invalid).
+            if (closingMs > MaxSaneClosingMs || closingMs < -MaxSaneClosingMs)
+                return false;
+
             return true;
         }
 
-        /// <summary>Heuristic time-to-impact seconds from range / closing speed.</summary>
+        /// <summary>
+        /// Heuristic time-to-impact seconds. Prefers LOS closing; falls back to missile airspeed.
+        /// </summary>
         internal static bool TryGetTimeToImpactSec(Missile missile, out float ttiSec)
         {
             ttiSec = 0f;
             if (!TryGetTargetRangeMeters(missile, out float rangeM) || rangeM <= 0.5f)
                 return false;
 
-            if (!TryGetClosingSpeedMs(missile, out float closingMs) || closingMs < 1f)
+            float approachMs = 0f;
+            if (TryGetClosingSpeedMs(missile, out float closingMs) && closingMs >= MinTtiApproachMs)
+            {
+                approachMs = closingMs;
+            }
+            else if (TryGetSpeedMs(missile, out float speedMs) && speedMs >= MinTtiApproachMs)
+            {
+                // LOS closing can be near-zero / opening briefly; still estimate TTI from airspeed.
+                if (TryGetTargetAngleDeg(missile, out float angleDeg))
+                {
+                    float cos = Mathf.Cos(angleDeg * Mathf.Deg2Rad);
+                    approachMs = speedMs * Mathf.Max(0.2f, Mathf.Abs(cos));
+                }
+                else
+                {
+                    approachMs = speedMs;
+                }
+            }
+
+            if (approachMs < MinTtiApproachMs)
                 return false;
 
-            ttiSec = rangeM / closingMs;
-            return ttiSec > 0f && ttiSec < 600f && !float.IsNaN(ttiSec) && !float.IsInfinity(ttiSec);
+            ttiSec = rangeM / approachMs;
+            return ttiSec > 0.05f
+                && ttiSec < 600f
+                && !float.IsNaN(ttiSec)
+                && !float.IsInfinity(ttiSec);
         }
 
         /// <summary>Target unit speed (m/s) when locked.</summary>

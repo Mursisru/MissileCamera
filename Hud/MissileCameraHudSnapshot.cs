@@ -50,6 +50,7 @@ namespace MissileCamera
         internal readonly float TargetRangeMeters;
         internal readonly float TargetAngleDeg;
         internal readonly float InstantG;
+        internal readonly float GLimit;
         internal readonly float FuelFraction;
         internal readonly float ThrottleFraction;
         internal readonly float Mach;
@@ -118,6 +119,7 @@ namespace MissileCamera
             float targetRangeMeters,
             float targetAngleDeg,
             float instantG,
+            float gLimit,
             float fuelFraction,
             float throttleFraction,
             float mach,
@@ -173,6 +175,7 @@ namespace MissileCamera
             TargetRangeMeters = targetRangeMeters;
             TargetAngleDeg = targetAngleDeg;
             InstantG = instantG;
+            GLimit = gLimit;
             FuelFraction = fuelFraction;
             ThrottleFraction = throttleFraction;
             Mach = mach;
@@ -230,6 +233,7 @@ namespace MissileCamera
             targetRangeMeters: 0f,
             targetAngleDeg: 0f,
             instantG: 0f,
+            gLimit: 0f,
             fuelFraction: 0f,
             throttleFraction: 0f,
             mach: 0f,
@@ -265,6 +269,8 @@ namespace MissileCamera
             MissileAccess.TryGetTargetAngleDeg(missile, out angleDeg);
             float gLoad = 0f;
             MissileAccess.TryGetInstantG(missile, out gLoad);
+            float gLimit = MissileCameraFeedConfig.DefaultMissileGLimit;
+            MissileAccess.TryGetGLimit(missile, out gLimit);
             float fuel = 1f;
             MissileAccess.TryGetFuelFraction(missile, out fuel);
             float throttle = 1f;
@@ -334,7 +340,8 @@ namespace MissileCamera
             string tgpPalette = fullscreen
                 ? MissileCameraVisionModeController.PaletteLabel(fsVision)
                 : MissileCameraTelemetry.FormatTgpPalette(infrared);
-            bool showTti = hasTti && ttiSec > 0.05f && closMs >= 1f;
+            // Do not gate TTI on raw closing — approach can come from airspeed fallback.
+            bool showTti = hasTti && ttiSec > 0.05f && ttiSec < 600f;
             float ttiFraction = 0f;
             if (showTti)
             {
@@ -399,6 +406,7 @@ namespace MissileCamera
                 targetRangeMeters: rangeM,
                 targetAngleDeg: angleDeg,
                 instantG: gLoad,
+                gLimit: gLimit,
                 fuelFraction: fuel,
                 throttleFraction: throttle,
                 mach: mach,
@@ -459,10 +467,16 @@ namespace MissileCamera
             _smoothAngle = Mathf.Lerp(_smoothAngle, angle, t);
             if (hasClos)
                 _smoothClos = Mathf.Lerp(_smoothClos, clos, t);
+            else
+                _smoothClos = 0f;
+
             if (hasRel)
                 _smoothRel = Mathf.Lerp(_smoothRel, rel, t);
+
             if (hasTti)
                 _smoothTti = Mathf.Lerp(_smoothTti, tti, t);
+            else
+                _smoothTti = 0f;
 
             g = _smoothG;
             fuel = _smoothFuel;
@@ -470,9 +484,9 @@ namespace MissileCamera
             mach = _smoothMach;
             range = _smoothRange;
             angle = _smoothAngle;
-            clos = _smoothClos;
+            clos = hasClos ? _smoothClos : 0f;
             rel = _smoothRel;
-            tti = _smoothTti;
+            tti = hasTti ? _smoothTti : 0f;
         }
 
         private static string FormatG(float g) =>

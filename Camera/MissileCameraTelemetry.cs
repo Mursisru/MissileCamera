@@ -79,7 +79,8 @@ namespace MissileCamera
 
         internal static string FormatTgpClos(float closingMs)
         {
-            if (closingMs < 0.5f)
+            // Guard absurd LOS closing projections (m/s).
+            if (closingMs < 0.5f || closingMs > 2500f || float.IsNaN(closingMs) || float.IsInfinity(closingMs))
                 return "CLOS ---";
 
             return "CLOS " + UnitConverter.SpeedReading(closingMs);

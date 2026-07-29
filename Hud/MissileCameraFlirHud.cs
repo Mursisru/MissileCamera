@@ -370,12 +370,13 @@ namespace MissileCamera
 
                 _tgtEngagePanel.SetTitle("TGT ENGAGE");
                 _sb.Length = 0;
-                // Most important first: time-to-impact, closure, distance cues, then angles.
-                if (snapshot.HasTimeToImpact)
-                    _sb.Append("TTI  ").Append(snapshot.TimeToImpactSec.ToString("0.0", CultureInfo.InvariantCulture)).Append('s');
+                if (!string.IsNullOrEmpty(snapshot.TgpTtiText))
+                    _sb.Append("TTI  ").Append(snapshot.TgpTtiText);
                 else
                     _sb.Append("TTI  ---");
-                _sb.Append('\n').Append(FormatClosSafe(snapshot.ClosingSpeedMs))
+
+                // G-LIM instead of CLOS — stable limit for useful "max G" cue.
+                _sb.Append("\nG-LIM ").Append(snapshot.GLimit.ToString("0.0", CultureInfo.InvariantCulture))
                     .Append("\nLRF  ").Append(FormatRangeMeters(snapshot.TargetRangeMeters))
                     .Append("\nΔBRG ").Append(
                         string.Format(
@@ -392,7 +393,7 @@ namespace MissileCamera
                 _tgtTrackPanel.SetTitle("TGT TRACK");
                 _tgtTrackPanel.SetBody("NO TRACK\nBRG  ---\nREL  ---\nALT  ---\nSPD  ---\nHDG  ---\nGRID ---");
                 _tgtEngagePanel.SetTitle("TGT ENGAGE");
-                _tgtEngagePanel.SetBody("TTI  ---\nCLOS ---\nLRF  ---\nΔBRG ---\nANG  ---\nRID  ---\nSLT  ---");
+                _tgtEngagePanel.SetBody("TTI  ---\nG-LIM ---\nLRF  ---\nΔBRG ---\nANG  ---\nRID  ---\nSLT  ---");
             }
 
             if (_lrf.gameObject.activeSelf)
@@ -425,8 +426,8 @@ namespace MissileCamera
 
             if (snapshot.Guidance == MissileGuidanceStatus.LostLock)
                 _sb.Append("\nTRK  LOST");
-            else if (snapshot.Guidance == MissileGuidanceStatus.Guided && snapshot.ClosingSpeedMs > 1f && snapshot.ClosingSpeedMs < 5000f)
-                _sb.Append("\nTRK  ON\n").Append(FormatClosSafe(snapshot.ClosingSpeedMs));
+            else if (snapshot.Guidance == MissileGuidanceStatus.Guided)
+                _sb.Append("\nTRK  ON");
             else
                 _sb.Append("\nTRK  OFF");
 
@@ -485,13 +486,6 @@ namespace MissileCamera
             string value = sb.ToString();
             if (text.text != value)
                 text.text = value;
-        }
-
-        private static string FormatClosSafe(float closingMs)
-        {
-            if (closingMs < 0.5f || closingMs >= 5000f)
-                return "CLOS ---";
-            return "CLOS " + UnitConverter.SpeedReading(closingMs);
         }
 
         private static string FormatRangeMeters(float rangeM)
@@ -831,7 +825,7 @@ namespace MissileCamera
             float yRight = vPad;
             _tgtTrackPanel.Place(1f, 1f, -pad, -yRight, colW, tgtTrackH, TextAnchor.MiddleRight, TextAnchor.UpperRight);
             yRight += tgtTrackH + stackGap;
-            _tgtEngagePanel.Place(1f, 1f, -pad, -yRight, colW, tgtEngageH, TextAnchor.MiddleRight, TextAnchor.UpperLeft);
+            _tgtEngagePanel.Place(1f, 1f, -pad, -yRight, colW, tgtEngageH, TextAnchor.MiddleRight, TextAnchor.UpperRight);
 
             Place(_lrf, 0f, 0.55f, pad, 40f, 36f, row, TextAnchor.MiddleLeft);
             Place(_northArrow, 0f, 0.58f, pad + 22f, 8f, 64f, row, TextAnchor.MiddleLeft);
