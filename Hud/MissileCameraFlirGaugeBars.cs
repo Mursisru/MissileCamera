@@ -10,12 +10,12 @@ namespace MissileCamera
     /// </summary>
     internal sealed class MissileCameraFlirGaugeBars
     {
-        private static readonly Color FlirGreen = new Color(0.2f, 1f, 0.45f, 1f);
+        private static readonly Color FlirGreen = new Color(0.55f, 1f, 0.9f, 1f);
         private static readonly Color FuelLow = new Color(1f, 0.55f, 0.12f, 1f);
         private static readonly Color FrameHole = new Color(0f, 0f, 0f, 0.94f);
-        private static readonly Color TickDim = new Color(0.2f, 1f, 0.45f, 0.35f);
+        private static readonly Color TickDim = new Color(0.55f, 1f, 0.9f, 0.55f);
 
-        private const float BorderPx = 1.5f;
+        private const float BorderPx = 2.0f;
         private const float FuelWarnFraction = 0.25f;
         private const float FractionEpsilon = 0.004f;
         private const int TickCount = 5;
@@ -260,6 +260,9 @@ namespace MissileCamera
             label.text = text;
             label.alignment = TextAnchor.MiddleCenter;
             label.color = FlirGreen;
+            var outline = go.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+            outline.effectDistance = new Vector2(0.7f, 0.7f);
             label.raycastTarget = false;
             return label;
         }

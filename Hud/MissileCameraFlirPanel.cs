@@ -7,9 +7,9 @@ namespace MissileCamera
     /// <summary>Grouped FLIR telemetry block — hollow green frame + title/body (no fill).</summary>
     internal sealed class MissileCameraFlirPanel
     {
-        private static readonly Color FlirGreen = new Color(0.2f, 1f, 0.45f, 1f);
+        private static readonly Color FlirGreen = new Color(0.55f, 1f, 0.9f, 1f);
 
-        private const float BorderPx = 1.4f;
+        private const float BorderPx = 2.0f;
         private const float TitleH = 15f;
         private const float Pad = 4f;
 
@@ -147,6 +147,9 @@ namespace MissileCamera
             Text text = go.GetComponent<Text>();
             text.alignment = align;
             text.color = FlirGreen;
+            var outline = go.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+            outline.effectDistance = new Vector2(0.7f, 0.7f);
             text.raycastTarget = false;
             return text;
         }

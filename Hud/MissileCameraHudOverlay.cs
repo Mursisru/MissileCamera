@@ -163,6 +163,7 @@ namespace MissileCamera
         internal void Destroy()
         {
             MissileCameraCockpitPipController.Shutdown();
+            _flir?.Shutdown();
 
             if (_root != null)
                 Object.Destroy(_root.gameObject);

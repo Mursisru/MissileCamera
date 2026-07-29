@@ -15,6 +15,9 @@ namespace MissileCamera
         private int _texW;
         private int _texH;
         private bool _forceCockpit;
+        private bool _forceNose;
+        private int _cfgW;
+        private int _cfgH;
 
         internal MissileCameraAircraftRig()
         {
@@ -44,7 +47,25 @@ namespace MissileCamera
         internal Camera FeedCamera => _camera;
         internal bool IsRootAlive => _root != null;
 
-        internal void SetForceCockpit(bool force) => _forceCockpit = force;
+        internal void SetForceCockpit(bool force)
+        {
+            _forceCockpit = force;
+            if (force)
+                _forceNose = false;
+        }
+
+        internal void SetForceNose(bool force)
+        {
+            _forceNose = force;
+            if (force)
+                _forceCockpit = false;
+        }
+
+        internal void ConfigureTexture(int width, int height)
+        {
+            _cfgW = Mathf.Clamp(width, 64, 1024);
+            _cfgH = Mathf.Clamp(height, 64, 1024);
+        }
 
         internal void Attach(Aircraft aircraft)
         {
@@ -77,6 +98,23 @@ namespace MissileCamera
             Transform t = _aircraft.transform;
             Vector3 pos;
             Quaternion rot;
+
+            if (_forceNose)
+            {
+                // Ahead of ownship pivot along forward — exterior nose look without filling the RT with fuselage.
+                float noseFwd = 6.5f;
+                float noseUp = 0.6f;
+                if (_aircraft.definition != null && _aircraft.definition.length > 1f)
+                    noseFwd = Mathf.Clamp(_aircraft.definition.length * 0.55f, 3.5f, 14f);
+
+                pos = t.position + t.forward * noseFwd + t.up * noseUp;
+                rot = Quaternion.LookRotation(t.forward, t.up);
+                _root.transform.SetPositionAndRotation(pos, rot);
+                _camera.fieldOfView = 50f;
+                _camera.nearClipPlane = 0.8f;
+                return;
+            }
+
             switch (MissileCameraAircraftCamConfig.Mode)
             {
                 case MissileCameraAircraftCamMode.TopDown:
@@ -142,8 +180,12 @@ namespace MissileCamera
 
         private void EnsureTexture()
         {
-            int w = Mathf.Clamp(MissileCameraAircraftCamConfig.Width, 64, 1024);
-            int h = Mathf.Clamp(MissileCameraAircraftCamConfig.Height, 64, 1024);
+            int w = _cfgW > 0
+                ? _cfgW
+                : Mathf.Clamp(MissileCameraAircraftCamConfig.Width, 64, 1024);
+            int h = _cfgH > 0
+                ? _cfgH
+                : Mathf.Clamp(MissileCameraAircraftCamConfig.Height, 64, 1024);
             if (_renderTexture != null && _texW == w && _texH == h)
                 return;
 

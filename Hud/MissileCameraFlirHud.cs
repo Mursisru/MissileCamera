@@ -12,7 +12,7 @@ namespace MissileCamera
     /// </summary>
     internal sealed class MissileCameraFlirHud
     {
-        private static readonly Color FlirGreen = new Color(0.2f, 1f, 0.45f, 1f);
+        private static readonly Color FlirGreen = new Color(0.55f, 1f, 0.9f, 1f);
         internal static Color MarkerColor => FlirGreen;
 
         private const int CompassTickCount = 32;
@@ -38,6 +38,7 @@ namespace MissileCamera
         private readonly Text _lrf;
         private readonly Text _dialPitchLabel;
         private readonly Text _dialHdgLabel;
+        private readonly MissileCameraFlirPanel _mslKinPanel;
         private readonly Text _northArrow;
         private readonly Text _sliderLabel;
         private readonly HudLineGraphic _crossL;
@@ -59,6 +60,7 @@ namespace MissileCamera
         private readonly HudLineGraphic _dialFrameL;
         private readonly HudLineGraphic _dialFrameR;
         private readonly MissileCameraFlirGaugeBars _gaugeBars;
+        private readonly MissileCameraFlirOwnshipPip _ownshipPip;
         private float _layoutW = -1f;
         private float _layoutH = -1f;
         private float _smoothHeading;
@@ -91,6 +93,7 @@ namespace MissileCamera
             Text lrf,
             Text dialPitchLabel,
             Text dialHdgLabel,
+            MissileCameraFlirPanel mslKinPanel,
             Text northArrow,
             Text sliderLabel,
             HudLineGraphic crossL,
@@ -111,7 +114,8 @@ namespace MissileCamera
             HudLineGraphic dialFrameB,
             HudLineGraphic dialFrameL,
             HudLineGraphic dialFrameR,
-            MissileCameraFlirGaugeBars gaugeBars)
+            MissileCameraFlirGaugeBars gaugeBars,
+            MissileCameraFlirOwnshipPip ownshipPip)
         {
             _root = root;
             _sys = sys;
@@ -126,6 +130,7 @@ namespace MissileCamera
             _lrf = lrf;
             _dialPitchLabel = dialPitchLabel;
             _dialHdgLabel = dialHdgLabel;
+            _mslKinPanel = mslKinPanel;
             _northArrow = northArrow;
             _sliderLabel = sliderLabel;
             _crossL = crossL;
@@ -147,6 +152,7 @@ namespace MissileCamera
             _dialFrameL = dialFrameL;
             _dialFrameR = dialFrameR;
             _gaugeBars = gaugeBars;
+            _ownshipPip = ownshipPip;
         }
 
         internal static MissileCameraFlirHud Create(RectTransform parent)
@@ -170,6 +176,7 @@ namespace MissileCamera
                 CreateLabel(root, "FlirLrf", TextAnchor.MiddleLeft),
                 CreateLabel(root, "FlirDialPitch", TextAnchor.LowerCenter),
                 CreateLabel(root, "FlirDialHdg", TextAnchor.LowerCenter),
+                MissileCameraFlirPanel.Create(root, "FlirMslKinPanel", TextAnchor.MiddleCenter),
                 CreateLabel(root, "FlirNorth", TextAnchor.MiddleLeft),
                 CreateLabel(root, "FlirSliderLbl", TextAnchor.LowerLeft),
                 CreateLine(root, "FlirCrossL"),
@@ -190,13 +197,15 @@ namespace MissileCamera
                 CreateLine(root, "FlirDialFrameB"),
                 CreateLine(root, "FlirDialFrameL"),
                 CreateLine(root, "FlirDialFrameR"),
-                MissileCameraFlirGaugeBars.Create(root));
+                MissileCameraFlirGaugeBars.Create(root),
+                MissileCameraFlirOwnshipPip.Create(root));
         }
 
         internal void InvalidateLayout()
         {
             _layoutW = -1f;
             _layoutH = -1f;
+            _lastDialRadius = -1f;
         }
 
         internal RectTransform Root => _root;
@@ -204,9 +213,15 @@ namespace MissileCamera
         internal void SetVisible(bool visible)
         {
             if (!visible)
+            {
                 _headingReady = false;
+                _ownshipPip.Hide();
+            }
+
             _root.gameObject.SetActive(visible);
         }
+
+        internal void Shutdown() => _ownshipPip.Shutdown();
 
         internal void Update(MissileCameraHudSnapshot snapshot, MissileCameraPanelMetrics panel)
         {
@@ -225,6 +240,7 @@ namespace MissileCamera
 
             ApplyContent(snapshot, panel);
             _gaugeBars.Update(snapshot, panel);
+            _ownshipPip.Update();
         }
 
         private float SmoothHeading(float targetDeg)
@@ -306,20 +322,21 @@ namespace MissileCamera
 
             _mslPanel.SetTitle("MSL");
             _sb.Length = 0;
-            _sb.Append(mslName)
-                .Append('\n').Append(grid)
-                .Append("\nSPD  ").Append(spd)
-                .Append("\nHDG  ").Append(hdgInt.ToString(CultureInfo.InvariantCulture)).Append("°T")
-                .Append("\nALT  ").Append(FormatAltitudeFlir(snapshot))
-                .Append("\nMACH ").Append(snapshot.Mach.ToString("0.00", CultureInfo.InvariantCulture))
-                .Append("\nPIT  ").Append(pitchInt.ToString(CultureInfo.InvariantCulture)).Append('°')
-                .Append("\nROL  ").Append(Mathf.RoundToInt(snapshot.RollDeg).ToString(CultureInfo.InvariantCulture)).Append('°')
-                .Append("\nG    ").Append(snapshot.InstantG.ToString("0.0", CultureInfo.InvariantCulture))
+            // Most important first: guidance/mode + range/altitude, then kinematics.
+            _sb.Append("MODE ").Append(guide)
                 .Append("\nRNG  ").Append(
                     snapshot.HasTarget
                         ? FormatRangeMeters(snapshot.TargetRangeMeters)
                         : "---")
-                .Append("\nMODE ").Append(guide);
+                .Append("\nALT  ").Append(FormatAltitudeFlir(snapshot))
+                .Append("\nSPD  ").Append(spd)
+                .Append("\nHDG  ").Append(hdgInt.ToString(CultureInfo.InvariantCulture)).Append("°T")
+                .Append("\nMACH ").Append(snapshot.Mach.ToString("0.00", CultureInfo.InvariantCulture))
+                .Append("\nPIT  ").Append(pitchInt.ToString(CultureInfo.InvariantCulture)).Append('°')
+                .Append("\nROL  ").Append(Mathf.RoundToInt(snapshot.RollDeg).ToString(CultureInfo.InvariantCulture)).Append('°')
+                .Append("\nG    ").Append(snapshot.InstantG.ToString("0.0", CultureInfo.InvariantCulture))
+                .Append('\n').Append(mslName)
+                .Append('\n').Append(grid);
             _mslPanel.SetBody(_sb);
 
             string plat = string.IsNullOrEmpty(snapshot.OwnshipName) || snapshot.OwnshipName == "---"
@@ -341,40 +358,41 @@ namespace MissileCamera
                 string tgtHdg = StripPrefix(snapshot.TgpHdgText.Replace("°", "°T"), "HDG ");
                 _tgtTrackPanel.SetTitle("TGT TRACK");
                 _sb.Length = 0;
-                _sb.Append(snapshot.TargetName)
-                    .Append('\n').Append(snapshot.TargetGridText)
+                // Most important first: bearing + relative geometry, then target kinematics.
+                _sb.Append("BRG  ").Append(brgInt.ToString(CultureInfo.InvariantCulture)).Append("°T")
+                    .Append('\n').Append(snapshot.TgpRelText)
+                    .Append("\nALT  ").Append(tgtAlt)
                     .Append("\nSPD  ").Append(StripPrefix(snapshot.TgpTargetSpdText, "SPD "))
                     .Append("\nHDG  ").Append(tgtHdg)
-                    .Append("\nALT  ").Append(tgtAlt)
-                    .Append('\n').Append(snapshot.TgpRelText)
-                    .Append("\nBRG  ").Append(brgInt.ToString(CultureInfo.InvariantCulture)).Append("°T");
+                    .Append('\n').Append(snapshot.TargetName)
+                    .Append('\n').Append(snapshot.TargetGridText);
                 _tgtTrackPanel.SetBody(_sb);
 
                 _tgtEngagePanel.SetTitle("TGT ENGAGE");
                 _sb.Length = 0;
-                _sb.Append("SLT  ").Append(StripPrefix(snapshot.TgpRngText, "RNG "))
-                    .Append('\n').Append(FormatClosSafe(snapshot.ClosingSpeedMs))
-                    .Append('\n');
+                // Most important first: time-to-impact, closure, distance cues, then angles.
                 if (snapshot.HasTimeToImpact)
                     _sb.Append("TTI  ").Append(snapshot.TimeToImpactSec.ToString("0.0", CultureInfo.InvariantCulture)).Append('s');
                 else
                     _sb.Append("TTI  ---");
-                _sb.Append("\nLRF  ").Append(FormatRangeMeters(snapshot.TargetRangeMeters))
-                    .Append('\n').Append(snapshot.TgpRidText)
-                    .Append("\nANG  ").Append(snapshot.TargetAngleDeg.ToString("0.0", CultureInfo.InvariantCulture)).Append('°')
+                _sb.Append('\n').Append(FormatClosSafe(snapshot.ClosingSpeedMs))
+                    .Append("\nLRF  ").Append(FormatRangeMeters(snapshot.TargetRangeMeters))
                     .Append("\nΔBRG ").Append(
                         string.Format(
                             CultureInfo.InvariantCulture,
                             "{0:+0;-0}°",
-                            Mathf.DeltaAngle(ownHdg, snapshot.TargetBearingDeg)));
+                            Mathf.DeltaAngle(ownHdg, snapshot.TargetBearingDeg)))
+                    .Append("\nANG  ").Append(snapshot.TargetAngleDeg.ToString("0.0", CultureInfo.InvariantCulture)).Append('°')
+                    .Append('\n').Append(snapshot.TgpRidText)
+                    .Append("\nSLT  ").Append(StripPrefix(snapshot.TgpRngText, "RNG "));
                 _tgtEngagePanel.SetBody(_sb);
             }
             else
             {
                 _tgtTrackPanel.SetTitle("TGT TRACK");
-                _tgtTrackPanel.SetBody("NO TRACK\nGRID ---\nSPD  ---\nHDG  ---\nALT  ---\nREL  ---\nBRG  ---");
+                _tgtTrackPanel.SetBody("NO TRACK\nBRG  ---\nREL  ---\nALT  ---\nSPD  ---\nHDG  ---\nGRID ---");
                 _tgtEngagePanel.SetTitle("TGT ENGAGE");
-                _tgtEngagePanel.SetBody("SLT  ---\nCLOS ---\nTTI  ---\nLRF  ---\nRID  ---\nANG  ---\nΔBRG ---");
+                _tgtEngagePanel.SetBody("TTI  ---\nCLOS ---\nLRF  ---\nΔBRG ---\nANG  ---\nRID  ---\nSLT  ---");
             }
 
             if (_lrf.gameObject.activeSelf)
@@ -402,16 +420,9 @@ namespace MissileCamera
 
             _guidancePanel.SetTitle("GUIDANCE");
             _sb.Length = 0;
-            if (snapshot.HasAimPoint)
-            {
-                _sb.Append("IP-RA ")
-                    .Append(snapshot.TargetAngleDeg.ToString("0.0", CultureInfo.InvariantCulture)).Append('°')
-                    .Append("\nREL  ").Append(snapshot.RelativeAltitudeMeters.ToString("0", CultureInfo.InvariantCulture)).Append('m');
-            }
-            else
-                _sb.Append("IP-RA OFF");
+            // Most important first: guidance mode + tracking state.
+            _sb.Append("MODE ").Append(guide);
 
-            _sb.Append("\nINS  ").Append(snapshot.TargetAngleDeg.ToString("0.00", CultureInfo.InvariantCulture)).Append('°');
             if (snapshot.Guidance == MissileGuidanceStatus.LostLock)
                 _sb.Append("\nTRK  LOST");
             else if (snapshot.Guidance == MissileGuidanceStatus.Guided && snapshot.ClosingSpeedMs > 1f && snapshot.ClosingSpeedMs < 5000f)
@@ -426,7 +437,16 @@ namespace MissileCamera
             else
                 _sb.Append("\nSLAVE IDLE");
 
-            _sb.Append("\nMODE ").Append(guide);
+            if (snapshot.HasAimPoint)
+            {
+                _sb.Append("\nIP-RA ")
+                    .Append(snapshot.TargetAngleDeg.ToString("0.0", CultureInfo.InvariantCulture)).Append('°')
+                    .Append("\nREL  ").Append(snapshot.RelativeAltitudeMeters.ToString("0", CultureInfo.InvariantCulture)).Append('m');
+            }
+            else
+                _sb.Append("\nIP-RA OFF");
+
+            _sb.Append("\nINS  ").Append(snapshot.TargetAngleDeg.ToString("0.00", CultureInfo.InvariantCulture)).Append('°');
             _guidancePanel.SetBody(_sb);
 
             _sb.Length = 0;
@@ -435,6 +455,14 @@ namespace MissileCamera
             _sb.Length = 0;
             _sb.Append("HDG\n").Append(hdgInt.ToString(CultureInfo.InvariantCulture)).Append('°');
             SetTextIfChanged(_dialHdgLabel, _sb);
+
+            _mslKinPanel.SetTitle("MSL KIN");
+            _sb.Length = 0;
+            _sb.Append("SPD  ").Append(spd)
+                .Append("\nMACH ").Append(snapshot.Mach.ToString("0.00", CultureInfo.InvariantCulture))
+                .Append("\nG    ").Append(snapshot.InstantG.ToString("0.0", CultureInfo.InvariantCulture))
+                .Append("\nALT  ").Append(FormatAltitudeFlir(snapshot));
+            _mslKinPanel.SetBody(_sb);
         }
 
         private static string StripPrefix(string? value, string prefix)
@@ -603,6 +631,40 @@ namespace MissileCamera
             float y = -panel.Height * 0.5f + panel.VerticalInset + 36f;
             float left = -panel.Width * 0.5f + pad + 24f;
             float right = left + Mathf.Clamp(panel.Width * 0.22f, 140f, 240f);
+
+            // Ownship PiP sits bottom-left; if the rail overlaps, shift it to the right just enough
+            // so it remains in a "normal" HUD position and doesn't protrude beside the PiP.
+            float pipSize = _ownshipPip.Size;
+            if (pipSize > 0f && panel.Width > 0f)
+            {
+                float pipXPad = Mathf.Max(panel.HorizontalInset, 8f);
+                float pipRightX = -panel.Width * 0.5f + pipXPad + pipSize;
+                float minLeft = pipRightX + 10f;
+
+                float railW = right - left;
+                if (left < minLeft)
+                {
+                    float delta = minLeft - left;
+                    // Keep inside the right-side padding.
+                    float maxRight = panel.Width * 0.5f - pad - 10f;
+                    float newRight = right + delta;
+                    if (newRight <= maxRight)
+                    {
+                        left += delta;
+                        right = newRight;
+                    }
+                    else
+                    {
+                        float maxDelta = maxRight - right;
+                        if (maxDelta > 0f)
+                        {
+                            left += maxDelta;
+                            right += maxDelta;
+                        }
+                    }
+                }
+            }
+
             _sliderRail.SetLine(new Vector2(left, y), new Vector2(right, y), 1.4f, FlirGreen);
 
             if (snapshot.HasTarget)
@@ -624,16 +686,26 @@ namespace MissileCamera
                 _sliderLabel.text = "W          N";
             }
 
-            Place(_sliderLabel, 0f, 0f, pad + 20f, panel.VerticalInset + 18f, 220f, 16f, TextAnchor.MiddleLeft);
+            // Keep label X in sync with the shifted slider rail.
+            float labelX = left + panel.Width * 0.5f - 4f;
+            Place(_sliderLabel, 0f, 0f, labelX, panel.VerticalInset + 18f, 220f, 16f, TextAnchor.MiddleLeft);
         }
 
         private void UpdateGimbalDials(MissileCameraPanelMetrics panel, float pitchDeg, float headingDeg)
         {
-            // Keep dials clear of bottom SENSOR/GUIDANCE panels.
-            float bottomSafe = Mathf.Max(panel.VerticalInset + 88f, 100f);
-            float cy = -panel.Height * 0.5f + bottomSafe;
+            // Keep dials near the bottom of the screen (center X). Do NOT lift them for ownship PiP.
             float gap = 70f;
             float r = 28f;
+            const float captionH = 30f;
+            const float padX = 10f;
+            const float padY = 8f;
+            const float kinW = 250f;
+            const float kinH = 78f;
+            const float kinGap = 10f;
+
+            float dialStackH = r * 2f + captionH + padY * 2f;
+            float bottomSafe = Mathf.Max(panel.VerticalInset, 8f) + dialStackH * 0.5f + 8f;
+            float cy = -panel.Height * 0.5f + bottomSafe;
             var leftCenter = new Vector2(-gap, cy);
             var rightCenter = new Vector2(gap, cy);
 
@@ -669,9 +741,6 @@ namespace MissileCamera
                 PlaceDialCaption(_dialPitchLabel, -gap, cy - r - 2f);
                 PlaceDialCaption(_dialHdgLabel, gap, cy - r - 2f);
 
-                float captionH = 30f;
-                float padX = 10f;
-                float padY = 8f;
                 float left = -gap - r - padX;
                 float right = gap + r + padX;
                 float top = cy + r + padY;
@@ -681,6 +750,18 @@ namespace MissileCamera
                 _dialFrameB.SetLine(new Vector2(left, bottom), new Vector2(right, bottom), thick, FlirGreen);
                 _dialFrameL.SetLine(new Vector2(left, bottom), new Vector2(left, top), thick, FlirGreen);
                 _dialFrameR.SetLine(new Vector2(right, bottom), new Vector2(right, top), thick, FlirGreen);
+
+                // Separate framed MSL KIN block directly above the dial frame.
+                float kinCenterY = top + kinGap + kinH * 0.5f;
+                _mslKinPanel.Place(
+                    0.5f,
+                    0.5f,
+                    0f,
+                    kinCenterY,
+                    kinW,
+                    kinH,
+                    TextAnchor.MiddleCenter,
+                    TextAnchor.MiddleCenter);
             }
         }
 
@@ -725,9 +806,8 @@ namespace MissileCamera
 
         private void ApplyLayout(MissileCameraPanelMetrics panel)
         {
-            // Leave room for edge FUEL/THR bars (~14px + label).
-            float gaugeClear = 34f;
-            float pad = Mathf.Max(panel.HorizontalInset, 8f) + gaugeClear;
+            // Match all left/right chrome inset to the ownship PiP inset.
+            float pad = Mathf.Max(panel.HorizontalInset, 8f);
             float vPad = Mathf.Max(panel.VerticalInset, 8f);
             float row = 15f;
             float colW = Mathf.Clamp(panel.Width * 0.24f, 180f, 280f);
@@ -751,11 +831,17 @@ namespace MissileCamera
             float yRight = vPad;
             _tgtTrackPanel.Place(1f, 1f, -pad, -yRight, colW, tgtTrackH, TextAnchor.MiddleRight, TextAnchor.UpperRight);
             yRight += tgtTrackH + stackGap;
-            _tgtEngagePanel.Place(1f, 1f, -pad, -yRight, colW, tgtEngageH, TextAnchor.MiddleRight, TextAnchor.UpperRight);
+            _tgtEngagePanel.Place(1f, 1f, -pad, -yRight, colW, tgtEngageH, TextAnchor.MiddleRight, TextAnchor.UpperLeft);
 
             Place(_lrf, 0f, 0.55f, pad, 40f, 36f, row, TextAnchor.MiddleLeft);
             Place(_northArrow, 0f, 0.58f, pad + 22f, 8f, 64f, row, TextAnchor.MiddleLeft);
-            _sensorPanel.Place(0f, 0f, pad, bottomY, colW, sensorH, TextAnchor.MiddleLeft, TextAnchor.UpperLeft);
+
+            float pipPad = Mathf.Clamp(panel.HorizontalInset, 6f, 18f);
+            _ownshipPip.Place(panel, pipPad);
+            // Keep bottom-left blocks readable under potentially large PiP.
+            float pipTopY = pipPad + _ownshipPip.Size;
+            float sensorBottomY = Mathf.Max(bottomY, pipTopY + stackGap);
+            _sensorPanel.Place(0f, 0f, pad, sensorBottomY, colW, sensorH, TextAnchor.MiddleLeft, TextAnchor.UpperLeft);
             _guidancePanel.Place(1f, 0f, -pad, bottomY, colW, guidanceH, TextAnchor.MiddleRight, TextAnchor.UpperRight);
         }
 
@@ -764,6 +850,7 @@ namespace MissileCamera
             const int body = 12;
             const int title = 11;
             const int big = 18;
+            const int kinBody = 15;
             Font font = HudFontHelper.GetFont();
 
             _sys.font = font;
@@ -778,6 +865,7 @@ namespace MissileCamera
             _tgtEngagePanel.ApplyFont(font, title, body);
             _sensorPanel.ApplyFont(font, title, body);
             _guidancePanel.ApplyFont(font, title, body);
+            _mslKinPanel.ApplyFont(font, title, kinBody);
 
             foreach (Text t in new[] { _lrf, _dialPitchLabel, _dialHdgLabel, _northArrow, _sliderLabel })
             {
@@ -842,6 +930,9 @@ namespace MissileCamera
             Text text = go.GetComponent<Text>();
             text.alignment = alignment;
             text.color = FlirGreen;
+            var outline = go.AddComponent<Outline>();
+            outline.effectColor = new Color(0f, 0f, 0f, 0.85f);
+            outline.effectDistance = new Vector2(0.7f, 0.7f);
             text.raycastTarget = false;
             return text;
         }
