@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MissileCamera.Config;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -671,6 +672,7 @@ namespace MissileCamera
                 return;
 
             _nextConfigRefreshTime = now + ConfigRefreshInterval;
+            MissileCameraKeybindConfig.Refresh();
             MissileCameraFeedConfig.Refresh();
             MissileCameraHudConfig.Refresh();
             MissileCameraControlsConfig.Refresh();

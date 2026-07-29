@@ -1,3 +1,5 @@
+using BepInEx.Configuration;
+using MissileCamera.Config;
 using UnityEngine;
 
 namespace MissileCamera
@@ -23,6 +25,7 @@ namespace MissileCamera
             MissileCameraFullscreenConfig.Refresh();
             MissileCameraAircraftCamConfig.Refresh();
             MissileCameraControlsConfig.Refresh();
+            MissileCameraKeybindConfig.Refresh();
 
             ProcessFullscreenToggle();
 
@@ -62,7 +65,7 @@ namespace MissileCamera
             if (MissileCameraVisionModeController.IsBlockedByUi())
                 return;
 
-            if (Input.GetMouseButtonDown(2))
+            if (IsShortcutDown(MissileCameraKeybindConfig.FullscreenZoomReset))
             {
                 MissileCameraFeedController.ResetFullscreenMagnification();
                 return;
@@ -91,30 +94,48 @@ namespace MissileCamera
 
         private static void ProcessMfdZoomKeys()
         {
-            if (Input.GetKey(KeyCode.RightShift) && Input.GetKeyDown(KeyCode.Period))
+            if (IsShortcutDown(MissileCameraKeybindConfig.MfdZoomReset))
             {
                 MissileCameraFeedController.ResetZoom();
                 return;
             }
 
-            if (!Input.GetKey(KeyCode.RightAlt))
-                return;
-
-            if (Input.GetKeyDown(KeyCode.Semicolon))
+            if (IsShortcutDown(MissileCameraKeybindConfig.MfdZoomIn))
                 MissileCameraFeedController.AdjustZoom(MissileCameraControlsConfig.ZoomStep);
-            else if (Input.GetKeyDown(KeyCode.Period))
+            else if (IsShortcutDown(MissileCameraKeybindConfig.MfdZoomOut))
                 MissileCameraFeedController.AdjustZoom(-MissileCameraControlsConfig.ZoomStep);
         }
 
         private static void ProcessMissileCycle()
         {
-            if (!Input.GetKey(KeyCode.RightAlt))
-                return;
-
-            if (Input.GetKeyDown(KeyCode.Slash))
+            if (IsShortcutDown(MissileCameraKeybindConfig.NextMissile))
                 MissileCameraFeedController.SelectNextMissile();
-            else if (Input.GetKeyDown(KeyCode.Comma))
+            else if (IsShortcutDown(MissileCameraKeybindConfig.PreviousMissile))
                 MissileCameraFeedController.SelectPreviousMissile();
+        }
+
+        /// <summary>
+        /// UnityEngine.Input path (same as working main/GitHub hardcodes).
+        /// Do not use BepInEx KeyboardShortcut.IsDown/IsPressed — UnityInput.Current misses keys under Rewired.
+        /// </summary>
+        private static bool IsShortcutDown(KeyboardShortcut shortcut)
+        {
+            KeyCode main = shortcut.MainKey;
+            if (main == KeyCode.None)
+                return false;
+
+            if (!Input.GetKeyDown(main))
+                return false;
+
+            foreach (KeyCode mod in shortcut.Modifiers)
+            {
+                if (mod == KeyCode.None)
+                    continue;
+                if (!Input.GetKey(mod))
+                    return false;
+            }
+
+            return true;
         }
     }
 }

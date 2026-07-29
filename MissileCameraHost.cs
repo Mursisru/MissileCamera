@@ -95,6 +95,7 @@ namespace MissileCamera
         private void StartupMission(string pluginDir, ManualLogSource logger, string scenePath)
         {
             ModPaths.Init(pluginDir);
+            MissileCameraKeybindConfig.Refresh(force: true);
             MfdLayoutConfig.Refresh(force: true);
             MissileCameraFeedConfig.Refresh(force: true);
             MissileCameraHudConfig.Refresh(force: true);

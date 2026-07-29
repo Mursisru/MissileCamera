@@ -4,16 +4,9 @@ using UnityEngine;
 
 namespace MissileCamera
 {
-    internal enum MissileCameraHudStyle : byte
-    {
-        Classic = 0,
-        Tgp = 1
-    }
-
     internal static class MissileCameraHudConfig
     {
         internal static bool Enabled = true;
-        internal static MissileCameraHudStyle Style = MissileCameraHudStyle.Tgp;
         internal static float SalvoWindowSeconds = 0.5f;
         internal static bool ShowCenterCluster = true;
         internal static bool ShowTargetMarker = true;
@@ -43,7 +36,6 @@ namespace MissileCamera
                 return;
 
             bool enabled = MissileCameraBepInConfig.HudEnabled.Value;
-            MissileCameraHudStyle style = ParseStyle(MissileCameraBepInConfig.HudStyle.Value);
             float salvoWindowSeconds = MissileCameraBepInConfig.SalvoWindowSeconds.Value;
             bool showCenterCluster = MissileCameraBepInConfig.ShowCenterCluster.Value;
             bool showTargetMarker = MissileCameraBepInConfig.ShowTargetMarker.Value;
@@ -61,7 +53,6 @@ namespace MissileCamera
 
             if (!force
                 && enabled == Enabled
-                && style == Style
                 && salvoWindowSeconds == SalvoWindowSeconds
                 && showCenterCluster == ShowCenterCluster
                 && showTargetMarker == ShowTargetMarker
@@ -79,7 +70,6 @@ namespace MissileCamera
                 return;
 
             Enabled = enabled;
-            Style = style;
             SalvoWindowSeconds = salvoWindowSeconds;
             ShowCenterCluster = showCenterCluster;
             ShowTargetMarker = showTargetMarker;
@@ -96,17 +86,6 @@ namespace MissileCamera
             LabelBackgroundColor = labelBackgroundColor;
             LabelBackgroundAlpha = labelBackgroundAlpha;
             Revision++;
-        }
-
-        private static MissileCameraHudStyle ParseStyle(string raw)
-        {
-            if (string.IsNullOrEmpty(raw))
-                return MissileCameraHudStyle.Tgp;
-
-            if (System.Enum.TryParse(raw, ignoreCase: true, out MissileCameraHudStyle style))
-                return style;
-
-            return MissileCameraHudStyle.Tgp;
         }
 
         private static Color ParseColor(string raw, Color fallback)

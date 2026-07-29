@@ -4,7 +4,7 @@ namespace MissileCamera
 {
     internal static class MissileCameraEffectsConfig
     {
-        internal static bool InfraredEnabled = true;
+        internal const bool InfraredEnabled = true;
         internal static bool ScanlinesEnabled;
         internal static float ScanlinesIntensity = 0.35f;
         internal static bool MotionBlurEnabled;
@@ -20,7 +20,6 @@ namespace MissileCamera
             if (!MissileCameraBepInConfig.IsBound)
                 return;
 
-            bool infraredEnabled = MissileCameraBepInConfig.FxInfraredEnabled.Value;
             bool scanlinesEnabled = MissileCameraBepInConfig.FxScanlinesEnabled.Value;
             float scanlinesIntensity = MissileCameraBepInConfig.FxScanlinesIntensity.Value;
             bool motionBlurEnabled = MissileCameraBepInConfig.FxMotionBlurEnabled.Value;
@@ -31,7 +30,6 @@ namespace MissileCamera
             float bloomIntensity = MissileCameraBepInConfig.FxBloomIntensity.Value;
 
             if (!force
-                && infraredEnabled == InfraredEnabled
                 && scanlinesEnabled == ScanlinesEnabled
                 && scanlinesIntensity == ScanlinesIntensity
                 && motionBlurEnabled == MotionBlurEnabled
@@ -42,7 +40,6 @@ namespace MissileCamera
                 && bloomIntensity == BloomIntensity)
                 return;
 
-            InfraredEnabled = infraredEnabled;
             ScanlinesEnabled = scanlinesEnabled;
             ScanlinesIntensity = scanlinesIntensity;
             MotionBlurEnabled = motionBlurEnabled;

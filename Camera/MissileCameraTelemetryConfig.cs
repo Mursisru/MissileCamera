@@ -4,12 +4,13 @@ namespace MissileCamera
 {
     internal static class MissileCameraTelemetryConfig
     {
-        internal static bool ShowG;
-        internal static bool ShowFuel;
-        internal static bool ShowGuidance;
-        internal static bool ShowMach;
-        internal static bool ShowTargetRange = true;
-        internal static bool ShowTargetAngle;
+        internal const bool ShowG = false;
+        internal const bool ShowFuel = false;
+        internal const bool ShowGuidance = false;
+        internal const bool ShowMach = false;
+        internal const bool ShowTargetRange = true;
+        internal const bool ShowTargetAngle = false;
+
         internal static float SmoothHz = 10f;
         internal static int Revision;
 
@@ -18,30 +19,11 @@ namespace MissileCamera
             if (!MissileCameraBepInConfig.IsBound)
                 return;
 
-            bool showG = MissileCameraBepInConfig.TelemetryShowG.Value;
-            bool showFuel = MissileCameraBepInConfig.TelemetryShowFuel.Value;
-            bool showGuidance = MissileCameraBepInConfig.TelemetryShowGuidance.Value;
-            bool showMach = MissileCameraBepInConfig.TelemetryShowMach.Value;
-            bool showTargetRange = MissileCameraBepInConfig.TelemetryShowTargetRange.Value;
-            bool showTargetAngle = MissileCameraBepInConfig.TelemetryShowTargetAngle.Value;
             float smoothHz = MissileCameraBepInConfig.TelemetrySmoothHz.Value;
 
-            if (!force
-                && showG == ShowG
-                && showFuel == ShowFuel
-                && showGuidance == ShowGuidance
-                && showMach == ShowMach
-                && showTargetRange == ShowTargetRange
-                && showTargetAngle == ShowTargetAngle
-                && smoothHz == SmoothHz)
+            if (!force && smoothHz == SmoothHz)
                 return;
 
-            ShowG = showG;
-            ShowFuel = showFuel;
-            ShowGuidance = showGuidance;
-            ShowMach = showMach;
-            ShowTargetRange = showTargetRange;
-            ShowTargetAngle = showTargetAngle;
             SmoothHz = smoothHz;
             Revision++;
         }

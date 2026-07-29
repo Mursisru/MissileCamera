@@ -13,8 +13,8 @@ namespace MissileCamera
         internal static bool Enabled = true;
         internal static KeyCode ToggleKey = KeyCode.F;
         internal static bool RequireRightAlt = true;
-        internal static float BootstrapSeconds = 0.6f;
-        internal static int BootstrapSteps = 4;
+        internal const float BootstrapSeconds = 0.6f;
+        internal const int BootstrapSteps = 4;
         internal static int FeedWidth = 1920;
         internal static int FeedHeight = 1080;
         internal static float ZoomMax = 50f;
@@ -34,8 +34,6 @@ namespace MissileCamera
             bool enabled = MissileCameraBepInConfig.FullscreenEnabled.Value;
             KeyCode toggleKey = ParseKey(MissileCameraBepInConfig.FullscreenToggleKey.Value, KeyCode.F);
             bool requireRightAlt = MissileCameraBepInConfig.FullscreenRequireRightAlt.Value;
-            float bootstrapSeconds = MissileCameraBepInConfig.FullscreenBootstrapSeconds.Value;
-            int bootstrapSteps = MissileCameraBepInConfig.FullscreenBootstrapSteps.Value;
             int feedWidth = MissileCameraBepInConfig.FullscreenFeedWidth.Value;
             int feedHeight = MissileCameraBepInConfig.FullscreenFeedHeight.Value;
             float zoomMax = MissileCameraBepInConfig.FullscreenZoomMax.Value;
@@ -50,8 +48,6 @@ namespace MissileCamera
                 && enabled == Enabled
                 && toggleKey == ToggleKey
                 && requireRightAlt == RequireRightAlt
-                && bootstrapSeconds == BootstrapSeconds
-                && bootstrapSteps == BootstrapSteps
                 && feedWidth == FeedWidth
                 && feedHeight == FeedHeight
                 && zoomMax == ZoomMax
@@ -66,8 +62,6 @@ namespace MissileCamera
             Enabled = enabled;
             ToggleKey = toggleKey;
             RequireRightAlt = requireRightAlt;
-            BootstrapSeconds = bootstrapSeconds;
-            BootstrapSteps = bootstrapSteps;
             FeedWidth = feedWidth;
             FeedHeight = feedHeight;
             ZoomMax = Mathf.Clamp(zoomMax, 2f, 50f);

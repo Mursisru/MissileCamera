@@ -88,18 +88,19 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 
 ## Controls & keybinds
 
-Active only while the missile feed overlay is on and you have **player-owned** in-flight missiles. **US English keyboard layout** (Right Alt may act as AltGr on some EU keyboards). Keybinds are **fixed in code** (not in Configuration Manager).
+Active only while the missile feed overlay is on and you have **player-owned** in-flight missiles. **US English keyboard layout** (Right Alt may act as AltGr on some EU keyboards). Keybinds are configurable in **MissileCameraControls** / **MissileCameraFullscreen** via Configuration Manager (`KeyboardShortcut`).
 
-| Keybind | Unity `KeyCode` | Action |
+| Keybind | Default | Action |
 | :--- | :--- | :--- |
-| **Right Alt** + `/` | `RightAlt` + `Slash` | Next missile (newer; wraps 6/6 → 1/6) |
-| **Right Alt** + `,` | `RightAlt` + `Comma` | Previous missile (older; wraps 1/6 → 6/6) |
-| **Right Alt** + `;` | `RightAlt` + `Semicolon` | MFD zoom in (narrower FOV) |
-| **Right Alt** + `.` | `RightAlt` + `Period` | MFD zoom out (wider FOV) |
-| **Right Shift** + `.` | `RightShift` + `Period` | MFD reset zoom offset to `0.0` |
-| **Mouse wheel** | `mouseScrollDelta` | **Fullscreen only:** optical zoom **1×…50×** |
-| **Middle mouse** | `Mouse2` | **Fullscreen only:** reset magnification to **1×** |
-| **J** | `J` (configurable) | **Fullscreen only:** cycle vision filter |
+| **NextMissile** | Right Alt + `/` | Next missile (newer; wraps) |
+| **PreviousMissile** | Right Alt + `,` | Previous missile (older; wraps) |
+| **ZoomIn** | Right Alt + `;` | MFD zoom in (narrower FOV) |
+| **ZoomOut** | Right Alt + `.` | MFD zoom out (wider FOV) |
+| **ResetZoom** | Right Shift + `.` | MFD reset zoom offset to `0.0` |
+| **Mouse wheel** | — | **Fullscreen only:** optical zoom **1×…50×** |
+| **ZoomResetKey** | Middle mouse | **Fullscreen only:** reset magnification to **1×** |
+| **ToggleKey** + **RequireRightAlt** | Right Alt + `F` | Fullscreen toggle (**MissileCameraFullscreen**) |
+| **VisionCycleKey** | `J` | Fullscreen vision cycle (**MissileCameraFullscreen**) |
 
 **Vision cycle (fullscreen):** Color → NightVision → WhiteHot → BlackHot → WhiteContour → BlackContour. NightVision uses a local feed Volume only — never toggles stock cockpit NVG.
 
@@ -121,92 +122,119 @@ BepInEx\config\com.at747.missilecamera.bepinex.cfg
 
 | Key | Default | Description |
 | :--- | :---: | :--- |
-| `Enabled` | `true` | Master switch for MFD layout changes |
-| `DisplayMode` | `split` | `auto` \| `skip` \| `split` |
-| `OverlayMaxWidth` | `0.45` | Max normalized width for tac overlay detection |
-| `LeftWidth` | `0.58` | Target cam column width (0–1) |
-| `MissilePanelBottom` | `0.38` | Bottom edge of missile panel |
-| `WeaponsStripHeight` | `0.12` | Compressed weapons strip height |
-| `ShowDivider` | `true` | Zone divider lines |
-| `DebugStub` | `false` | Bright magenta test panel |
-| `StubLabel` | `MISSILE CAMERA` | Label on debug stub |
+| `Enabled` | `true` | Turns MFD layout splitting on/off |
+| `DisplayMode` | `split` | Changes which aircraft get the missile panel: `auto` \| `skip` \| `split` |
+| `OverlayMaxWidth` | `0.45` | Changes small-tac detection max normalized width |
+| `LeftWidth` | `0.58` | Changes MFD split: target cam column width (0–1) |
+| `MissilePanelBottom` | `0.38` | Changes MFD split: bottom edge of missile feed zone |
+| `WeaponsStripHeight` | `0.12` | Changes MFD split: compressed weapons strip height |
+| `ShowDivider` | `true` | Changes MFD split: zone divider lines |
+| `DebugStub` | `false` | Dev: bright magenta test panel |
+| `StubLabel` | `MISSILE CAMERA` | Dev: label on debug stub |
 
 ### MissileCameraFeed
 
 | Key | Default | Description |
 | :--- | :---: | :--- |
-| `Enabled` | `true` | Live missile camera feed |
-| `NoseSkinInset` | `0.08` | Keep camera outside nose mesh (meters) |
-| `CameraBackOffset` | `0.35` | Pull camera back from nose point (meters) |
-| `Fov` | `60` | Base field of view (degrees) |
-| `FeedWidth` | `512` | RenderTexture width |
-| `FeedHeight` | `512` | RenderTexture height |
-| `HorizonLock` | `true` | World-up roll lock |
-| `TurnLookBankScale` | `1` | G-load turn look scale |
-| `MaxTurnLookDegrees` | `90` | Max turn-look offset (degrees) |
-| `DefaultMissileGLimit` | `20` | Fallback G limit |
-| `TurnLookGDeadband` | `0.15` | G deadband |
-| `TurnLookGFilterHz` | `7` | G filter cutoff (Hz) |
-| `TurnLookSlewDegPerSec` | `120` | Turn-look slew rate (deg/s) |
-| `TurnLookSmoothTime` | `0.18` | Turn-look smoothing |
-| `PostExplosionHoldSeconds` | `0` | Hold last frame after missile loss (0 = off) |
-| `PostLossInterferenceSeconds` | `0.4` | TV-static burst after last missile lost (0 = off) |
-| `RenderFps` | `30` | Feed refresh rate |
-| `InfraredAutoEnabled` | `true` | Auto B/W IR from daylight/ambient lighting only |
-| `InfraredDaylightThreshold` | `0.35` | IR ON when `GetDaylightFactor` &lt; this |
-| `InfraredAmbientThreshold` | `0.12` | IR ON when `GetAmbientLight` &lt; this |
-| `InfraredLightHysteresis` | `0.03` | Extra light margin before IR turns off |
-| `InfraredContrast` | `1` | IR contrast |
-| `InfraredBlackPoint` | `0.05` | IR black clip |
-| `InfraredWhitePoint` | `0.95` | IR white clip |
-| `InfraredRedWeight` | `0.55` | Red luminance weight |
+| `Enabled` | `true` | Turns live missile nose camera on MFD on/off |
+| `NoseSkinInset` | `0.08` | Changes seeker camera distance outside nose mesh (m) |
+| `CameraBackOffset` | `0.35` | Changes seeker camera pull-back from nose point (m) |
+| `Fov` | `60` | Changes seeker base FOV before MFD zoom (degrees) |
+| `FeedWidth` | `512` | Changes MFD feed render texture width |
+| `FeedHeight` | `512` | Changes MFD feed render texture height |
+| `HorizonLock` | `true` | Changes seeker roll lock to world up |
+| `TurnLookBankScale` | `1` | [Advanced] Changes G-load camera sway strength |
+| `MaxTurnLookDegrees` | `90` | [Advanced] Changes max G-load camera offset (degrees) |
+| `DefaultMissileGLimit` | `20` | [Advanced] Fallback G limit |
+| `TurnLookGDeadband` | `0.15` | [Advanced] G deadband |
+| `TurnLookGFilterHz` | `7` | [Advanced] G filter cutoff (Hz) |
+| `TurnLookSlewDegPerSec` | `120` | [Advanced] Turn-look slew rate (deg/s) |
+| `TurnLookSmoothTime` | `0.18` | [Advanced] Turn-look smoothing (seconds) |
+| `PostExplosionHoldSeconds` | `0` | Changes post-loss freeze of last frame (0 = off) |
+| `PostLossInterferenceSeconds` | `0.5` | Changes NO SIGNAL flash length on switch/destroy/FS exit (0 = off) |
+| `RenderFps` | `30` | Changes MFD feed render rate (Hz) |
+| `InfraredAutoEnabled` | `true` | Changes MFD auto B/W IR from lighting at missile |
+| `InfraredDaylightThreshold` | `0.12` | Changes IR ON threshold for daylight factor |
+| `InfraredAmbientThreshold` | `0.06` | Changes IR ON threshold for ambient light |
+| `InfraredLightHysteresis` | `0.03` | Changes anti-flicker margin before IR turns off |
+| `InfraredContrast` | `1` | Changes MFD IR contrast |
+| `InfraredBlackPoint` | `0.05` | Changes MFD IR black clip |
+| `InfraredWhitePoint` | `0.95` | Changes MFD IR white clip |
+| `InfraredRedWeight` | `0.55` | Changes MFD IR red luminance weight |
+| `InfraredExposureBiasEv` | `0` | Changes MFD IR exposure vs TargetCam (0 = match) |
 
 ### MissileCameraHud
 
 | Key | Default | Description |
 | :--- | :---: | :--- |
-| `Enabled` | `true` | HUD overlay on feed |
-| `Style` | `Tgp` | `Tgp` (sensor HUD) or `Classic` (S/A/R corners) |
-| `SalvoWindowSeconds` | `0.5` | Salvo grouping window (seconds) |
-| `ShowCenterCluster` | `true` | Center reticle / intercept ring (MFD classic) |
-| `CockpitPipEnabled` | `true` | TGP bottom-left cockpit PiP |
-| `CockpitPipFps` | `10` | Cockpit PiP render FPS |
-| `InterceptColor` | `0,1,0,1` | Intercept ring RGBA (0–1) |
-| `ReticleColor` | `1,1,1,1` | Reticle RGBA |
-| `HorizonColor` | `0.05,0.35,0.08,1` | Horizon fill |
-| `HorizonOutlineColor` | `0.2,1,0.25,1` | Horizon outline |
-| `MissileNameColor` | `1,0,1,1` | Classic missile name label |
-| `OwnshipNameColor` | `1,0.15,0.15,1` | TGP ownship name |
-| `TargetNameColor` | `0.4,0.9,1,1` | Target name label |
-| `LabelBackgroundColor` | `0.18,0.18,0.18,0.62` | Label backdrop |
-| `LabelBackgroundAlpha` | `0.62` | Backdrop alpha |
+| `Enabled` | `true` | Turns MFD HUD overlay (classic S/A/R) on/off |
+| `SalvoWindowSeconds` | `0.5` | Changes salvo label grouping window (seconds) |
+| `ShowCenterCluster` | `true` | Changes center reticle and intercept ring |
+| `ShowTargetMarker` | `true` | Changes target diamond marker |
+| `CockpitPipEnabled` | `true` | Changes bottom-left cockpit PiP |
+| `CockpitPipFps` | `10` | Changes cockpit PiP render rate (Hz) |
+| `InterceptColor` | `0,1,0,1` | Changes intercept ring RGBA (0–1) |
+| `ReticleColor` | `1,1,1,1` | Changes reticle RGBA |
+| `HorizonColor` | `0.05,0.35,0.08,1` | Changes horizon fill RGBA |
+| `HorizonOutlineColor` | `0.2,1,0.25,1` | Changes horizon outline RGBA |
+| `MissileNameColor` | `1,0,1,1` | Changes missile name label RGBA |
+| `OwnshipNameColor` | `1,0.15,0.15,1` | Changes ownship name RGBA |
+| `TargetNameColor` | `0.4,0.9,1,1` | Changes target name RGBA |
+| `LabelBackgroundColor` | `0.18,0.18,0.18,0.62` | Changes label backdrop RGBA |
+| `LabelBackgroundAlpha` | `0.62` | Changes backdrop opacity |
 
 ### MissileCameraControls
 
 | Key | Default | Description |
 | :--- | :---: | :--- |
-| `Enabled` | `true` | Keyboard missile cycling and zoom (**keybinds fixed in code**) |
-| `ZoomStep` | `0.5` | Offset change per zoom key press |
-| `ZoomMin` | `-4` | Minimum zoom offset |
-| `ZoomMax` | `4` | Maximum zoom offset |
-| `ZoomFovDegreesPerUnit` | `5` | FOV delta (degrees) per offset unit |
-| `IndicatorSeconds` | `0.5` | Zoom HUD readout duration (seconds) |
+| `Enabled` | `true` | Turns keyboard missile cycling and MFD zoom on/off |
+| `ZoomStep` | `0.5` | Changes MFD zoom offset step per key press |
+| `ZoomMin` | `-4` | Changes MFD zoom minimum offset |
+| `ZoomMax` | `4` | Changes MFD zoom maximum offset |
+| `ZoomFovDegreesPerUnit` | `5` | Changes FOV delta (degrees) per offset unit |
+| `IndicatorSeconds` | `0.5` | Changes zoom HUD readout duration (seconds) |
+| `NextMissile` | RightAlt + `/` | Changes keybind: next missile (`KeyboardShortcut`) |
+| `PreviousMissile` | RightAlt + `,` | Changes keybind: previous missile (`KeyboardShortcut`) |
+| `ZoomIn` | RightAlt + `;` | Changes keybind: MFD zoom in (`KeyboardShortcut`) |
+| `ZoomOut` | RightAlt + `.` | Changes keybind: MFD zoom out (`KeyboardShortcut`) |
+| `ResetZoom` | RightShift + `.` | Changes keybind: MFD zoom reset (`KeyboardShortcut`) |
 
 ### MissileCameraFullscreen
 
 | Key | Default | Description |
 | :--- | :---: | :--- |
-| `Enabled` | `true` | Fullscreen missile feed (entire game viewport) |
-| `ToggleKey` | `F` | KeyCode (with RightAlt by default) |
-| `RequireRightAlt` | `true` | Require RightAlt with ToggleKey |
-| `FeedWidth` | `1920` | Fullscreen RenderTexture width |
-| `FeedHeight` | `1080` | Fullscreen RenderTexture height |
-| `ZoomMax` | `50` | Max optical magnification (mouse wheel) |
-| `ZoomWheelFactor` | `1.12` | Multiplier per wheel notch |
-| `VisionCycleKey` | `J` | Cycle Color / NVG / IR / Contour modes |
-| `ZoomResetOnExit` | `true` | Reset magnification to 1× when leaving fullscreen |
-| `BootstrapSeconds` | `0.6` | First-enter bootstrap duration |
-| `BootstrapSteps` | `4` | Bootstrap staged UI steps |
+| `Enabled` | `true` | Turns fullscreen missile feed on/off |
+| `ToggleKey` | `F` | Changes fullscreen toggle KeyCode (with RequireRightAlt) |
+| `RequireRightAlt` | `true` | Changes requirement for RightAlt with ToggleKey |
+| `FeedWidth` | `1920` | Changes fullscreen render texture width |
+| `FeedHeight` | `1080` | Changes fullscreen render texture height |
+| `ZoomMax` | `50` | Changes max optical magnification (mouse wheel) |
+| `ZoomWheelFactor` | `1.12` | Changes zoom multiply per wheel notch |
+| `VisionCycleKey` | `J` | Changes key to cycle Color / NVG / IR / Contour modes |
+| `ZoomResetOnExit` | `true` | Changes reset to 1× magnification when leaving fullscreen |
+| `PitchLadderEnabled` | `true` | Changes stock pitch ladder on fullscreen FLIR |
+| `PitchLadderTint` | `0.55,1,0.9,1` | Changes pitch ladder RGBA tint |
+| `PitchLadderIntensity` | `3.2` | Changes pitch ladder brightness |
+| `ZoomResetKey` | Middle mouse | Changes fullscreen zoom reset (`KeyboardShortcut`) |
+
+### MissileCameraTelemetry
+
+| Key | Default | Description |
+| :--- | :---: | :--- |
+| `SmoothHz` | `10` | Changes telemetry smoothing rate (Hz) |
+
+### MissileCameraEffects
+
+| Key | Default | Description |
+| :--- | :---: | :--- |
+| `ScanlinesEnabled` | `false` | Changes scanlines post-FX (requires shader bundle) |
+| `ScanlinesIntensity` | `0.35` | Changes scanlines strength (0–1) |
+| `MotionBlurEnabled` | `false` | Changes motion blur post-FX |
+| `MotionBlurIntensity` | `0.25` | Changes motion blur strength (0–1) |
+| `ChromaticEnabled` | `false` | Changes chromatic aberration post-FX |
+| `ChromaticIntensity` | `0.2` | Changes chromatic strength (0–1) |
+| `BloomEnabled` | `false` | Changes bloom post-FX |
+| `BloomIntensity` | `0.3` | Changes bloom strength (0–1) |
 
 ---
 
