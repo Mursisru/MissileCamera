@@ -24,16 +24,17 @@ namespace MissileCamera
 
         private static RectTransform? _flirRootStatic;
 
-        internal void EnsureBuilt(RectTransform layoutRt, TargetScreenUI? screenUi)
+        internal void EnsureBuilt(RectTransform layoutRt, TargetScreenUI? screenUi, float? contentRotationZOverride = null)
         {
             MissileCameraHudConfig.Refresh();
             _screenUi = screenUi;
 
-            float contentRotationZ = MfdLayoutController.ActiveStubContentRotationZ;
+            float contentRotationZ = contentRotationZOverride ?? MfdLayoutController.ActiveStubContentRotationZ;
             RectTransform viewRt = MissileCameraFeedLayout.EnsureRotatedView(layoutRt, contentRotationZ);
 
             if (_root != null && _root.parent == viewRt)
             {
+                MissileCameraFeedLayout.ApplyContentRotation(layoutRt, contentRotationZ);
                 _corners?.BindScreenUi(screenUi);
                 _zoomIndicator?.BindScreenUi(screenUi);
                 RectTransform? panelRt = FindMissileCameraPanel(layoutRt);

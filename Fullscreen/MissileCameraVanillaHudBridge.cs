@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
@@ -65,12 +66,21 @@ namespace MissileCamera
             _objectiveMgrWasEnabled = false;
             _designatorWasEnabled = false;
 
-            HideStubsOnMissilePanel();
-            SoftHideDynamicMap();
-            ElevateCombatHudCanvas();
-            ApplyMarkersOnlyVisibility();
-            SuppressIlsAndObjectives();
-            ForceCombatHudMarkerPass();
+            try
+            {
+                HideStubsOnMissilePanel();
+                SoftHideDynamicMap();
+                ElevateCombatHudCanvas();
+                ApplyMarkersOnlyVisibility();
+                SuppressIlsAndObjectives();
+                ForceCombatHudMarkerPass();
+                MissileCameraFullscreenTargetLock.OnFullscreenEntered();
+            }
+            catch (Exception ex)
+            {
+                MfdLog.Info("fullscreen enter hud failed: " + ex.Message);
+            }
+
             MfdLog.Info("fullscreen markers-only"
                 + (_canvasElevated ? " canvas↑" : " canvas miss")
                 + $" hidden={_hiddenChrome.Count}");
@@ -78,6 +88,7 @@ namespace MissileCamera
 
         internal static void OnFullscreenExited()
         {
+            MissileCameraFullscreenTargetLock.OnFullscreenExited();
             RestoreObjectiveManager();
             RestoreDesignatorVisual();
             RestoreCombatHudCanvas();
@@ -93,6 +104,7 @@ namespace MissileCamera
 
         internal static void ResetForMissionUnload()
         {
+            MissileCameraFullscreenTargetLock.ResetForMissionUnload();
             RestoreObjectiveManager();
             RestoreDesignatorVisual();
             RestoreCombatHudCanvas();
@@ -118,6 +130,7 @@ namespace MissileCamera
             // FlightHud / ObjectiveOverlay re-enable themselves in Update — suppress every LateUpdate.
             SuppressIlsAndObjectives();
             ForceCombatHudMarkerPass();
+            MissileCameraFullscreenTargetLock.Maintain();
         }
 
         private static void SoftHideDynamicMap()

@@ -123,8 +123,15 @@ namespace MissileCamera.Patches
         [HarmonyPostfix]
         internal static void Postfix()
         {
-            // Markers-only HUD suppress. Never call camera pose writers here (CAMERA_SAFETY.md).
-            MissileCameraVanillaHudBridge.LateTickMarkers();
+            try
+            {
+                // Markers-only HUD suppress. Never call camera pose writers here (CAMERA_SAFETY.md).
+                MissileCameraVanillaHudBridge.LateTickMarkers();
+            }
+            catch (Exception ex)
+            {
+                MfdLog.Info("LateTickMarkers failed: " + ex.Message);
+            }
         }
     }
 

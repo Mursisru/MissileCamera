@@ -291,10 +291,16 @@ namespace MissileCamera
         internal static bool HasBomberBayMarkersForAircraft(TacScreen tacScreen, string? aircraftJsonKey)
         {
             if (IsDarkreachAircraft(aircraftJsonKey))
-                return MfdWeaponsZoneAccess.HasBomberBayMarkers(tacScreen.gameObject);
+            {
+                GameObject root = ResolveDiscoveryRoot(tacScreen, aircraftJsonKey);
+                if (MfdWeaponsZoneAccess.HasBomberBayMarkers(root))
+                    return true;
 
-            GameObject root = ResolveDiscoveryRoot(tacScreen, aircraftJsonKey);
-            return MfdWeaponsZoneAccess.HasBomberBayMarkers(root);
+                return MfdWeaponsZoneAccess.HasDarkreachTacWeaponUi(tacScreen.gameObject);
+            }
+
+            GameObject discoveryRoot = ResolveDiscoveryRoot(tacScreen, aircraftJsonKey);
+            return MfdWeaponsZoneAccess.HasBomberBayMarkers(discoveryRoot);
         }
 
         internal static Canvas? GetCanvasForRoot(GameObject root)
@@ -393,6 +399,19 @@ namespace MissileCamera
                 GameObject? root = GetHudCanvasRoot(label.rectTransform);
                 if (root != null && root != tacRoot)
                     return root;
+            }
+
+            RectTransform? tacProfile = FindDescendantByName(tacRoot.transform, "rearProfile")
+                ?? FindDescendantByName(tacRoot.transform, "frontProfile");
+            if (tacProfile != null)
+            {
+                GameObject? canvasRoot = GetHudCanvasRoot(tacProfile);
+                if (canvasRoot != null
+                    && canvasRoot != tacRoot
+                    && MfdWeaponsZoneAccess.HasBomberBayMarkers(canvasRoot))
+                {
+                    return canvasRoot;
+                }
             }
 
             return null;

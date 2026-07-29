@@ -123,13 +123,25 @@ namespace MissileCamera
 
         internal static bool HasDarkreachLeftBayMarkers(TacScreen tacScreen)
         {
-            GameObject mfdRoot = tacScreen.gameObject;
+            Component? aircraft = TacScreenAccess.GetAircraft(tacScreen);
+            string? jsonKey = null;
+            if (aircraft != null)
+            {
+                TargetCam? targetCam = TargetCamAccess.GetTargetCam(aircraft);
+                if (targetCam != null)
+                    jsonKey = MfdDisplayMode.GetAircraftJsonKey(targetCam);
+            }
+
+            GameObject mfdRoot = TacScreenAccess.ResolveDiscoveryRoot(tacScreen, jsonKey);
             Canvas? canvas = TacScreenAccess.GetCanvasForRoot(mfdRoot) ?? TacScreenAccess.GetCanvas(tacScreen);
             if (canvas == null)
                 return false;
 
             return HasBomberBayMarkers(mfdRoot) && CanResolveDarkreachLeftColumn(mfdRoot, canvas);
         }
+
+        internal static bool HasDarkreachTacWeaponUi(GameObject mfdRoot) =>
+            FindWeaponPanel(mfdRoot) != null || FindBomberProfileInMfd(mfdRoot) != null;
 
         internal static bool IsBomberBayMarkerText(string? raw) => IsBomberBayMarker(raw ?? string.Empty);
 
@@ -293,6 +305,9 @@ namespace MissileCamera
             if (IsDarkreachAircraft(aircraftJsonKey))
             {
                 if (TryResolveDarkreachWeaponArmedPanel(mfdRoot, canvas, out resolved))
+                    return true;
+
+                if (TryResolveDarkreachTacRightWeaponPanel(mfdRoot, canvas, out resolved))
                     return true;
 
                 MaybeLogDarkreachDiscoveryFailure(mfdRoot, null, canvas, primaryHits);
@@ -483,6 +498,114 @@ namespace MissileCamera
                 hideTargets,
                 isAlkyonFullPanel: true);
             return true;
+        }
+
+        /// <summary>
+        /// SFB-81 target tac MFD: weapon armed strip on the right (rearProfile on weaponPanel).
+        /// Bay labels live on the left bezel — not required on tacScreen root.
+        /// </summary>
+        private static bool TryResolveDarkreachTacRightWeaponPanel(
+            GameObject mfdRoot,
+            Canvas canvas,
+            out ResolvedPanel resolved)
+        {
+            resolved = default;
+
+            RectTransform? profile = FindBomberProfileInMfd(mfdRoot);
+            RectTransform? weaponPanel = profile?.parent != null
+                ? profile.parent.GetComponent<RectTransform>()
+                : FindWeaponPanel(mfdRoot);
+            if (weaponPanel == null)
+                return false;
+
+            if (PanelContainsEngineGauges(weaponPanel))
+                return false;
+
+            Canvas overlayCanvas = TacScreenAccess.GetOverlayCanvas(weaponPanel) ?? canvas;
+            PanelRectState weaponZone = PanelRectNormalizer.CaptureOnCanvas(weaponPanel, overlayCanvas);
+            if (weaponZone.AnchorMin.x < 0.40f)
+                return false;
+
+            RectTransform? columnRoot = SelectDarkreachTacRightColumnRoot(weaponPanel, overlayCanvas);
+            PanelRectState zone = columnRoot != null
+                ? PanelRectNormalizer.CaptureOnCanvas(columnRoot, overlayCanvas)
+                : weaponZone;
+
+            if (!IsDarkreachTacRightColumnZone(zone))
+                zone = ExpandDarkreachTacRightZone(weaponPanel, overlayCanvas);
+
+            if (!IsDarkreachTacRightColumnZone(zone))
+                return false;
+
+            List<RectTransform> hideTargets = CollectDarkreachVisualHideTargets(weaponPanel);
+            if (hideTargets.Count == 0)
+                hideTargets = new List<RectTransform> { weaponPanel };
+
+            float contentRotZ = SampleDarkreachBayLabelRotation(weaponPanel);
+            float fontRef = Mathf.Max(Mathf.Min(weaponPanel.rect.width, weaponPanel.rect.height), 1f);
+
+            MfdLog.Info(
+                $"darkreach tacRight hideRoot={weaponPanel.name} column={(columnRoot != null ? columnRoot.name : "none")} " +
+                $"zone={FormatAnchors(zone)} hideChildren={hideTargets.Count}");
+
+            resolved = new ResolvedPanel(
+                weaponPanel,
+                overlayCanvas,
+                zone,
+                hideTargets,
+                isDarkreachSection: true,
+                stubContentRotationZ: contentRotZ,
+                stubFontRef: fontRef);
+            return true;
+        }
+
+        private static bool IsDarkreachTacRightColumnZone(PanelRectState rect)
+        {
+            float w = rect.AnchorMax.x - rect.AnchorMin.x;
+            float h = rect.AnchorMax.y - rect.AnchorMin.y;
+            return rect.AnchorMin.x >= 0.40f
+                && rect.AnchorMax.x <= 1.01f
+                && w >= 0.04f
+                && h >= 0.35f;
+        }
+
+        private static RectTransform? SelectDarkreachTacRightColumnRoot(RectTransform start, Canvas canvas)
+        {
+            RectTransform? best = null;
+            float bestArea = float.MaxValue;
+            RectTransform? current = start;
+
+            for (int depth = 0; depth < 12 && current != null; depth++)
+            {
+                PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(current, canvas);
+                if (IsDarkreachTacRightColumnZone(zone))
+                {
+                    float area = (zone.AnchorMax.x - zone.AnchorMin.x) * (zone.AnchorMax.y - zone.AnchorMin.y);
+                    if (area < bestArea)
+                    {
+                        bestArea = area;
+                        best = current;
+                    }
+                }
+
+                current = current.parent != null ? current.parent.GetComponent<RectTransform>() : null;
+            }
+
+            return best;
+        }
+
+        private static PanelRectState ExpandDarkreachTacRightZone(RectTransform weaponPanel, Canvas canvas)
+        {
+            PanelRectState z = PanelRectNormalizer.CaptureOnCanvas(weaponPanel, canvas);
+            float minX = Mathf.Clamp(z.AnchorMin.x - 0.04f, 0.45f, 0.95f);
+            float maxX = Mathf.Clamp(z.AnchorMax.x + 0.02f, minX + 0.04f, 0.99f);
+            float minY = Mathf.Clamp(z.AnchorMin.y - 0.02f, 0.02f, 0.95f);
+            float maxY = Mathf.Clamp(z.AnchorMax.y + 0.02f, minY + 0.10f, 0.99f);
+            return new PanelRectState(
+                new Vector2(minX, minY),
+                new Vector2(maxX, maxY),
+                Vector2.zero,
+                Vector2.zero);
         }
 
         private static bool IsDarkreachAircraft(string? jsonKey) =>

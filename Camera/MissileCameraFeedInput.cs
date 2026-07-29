@@ -53,7 +53,8 @@ namespace MissileCamera
                 ProcessMfdZoomKeys();
             }
 
-            ProcessMissileCycle();
+            if (fullscreen || MissileCameraFeedController.HasOverlayInputContext())
+                ProcessMissileCycle();
         }
 
         private static void ProcessFullscreenZoom()

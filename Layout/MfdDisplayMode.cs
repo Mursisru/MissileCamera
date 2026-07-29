@@ -42,7 +42,9 @@ namespace MissileCamera
 
             // Bomber tac MFD (AB-4 Alkyon / SFB-81 Darkreach): weapon UI may live off TacScreen root.
             if (IsBomberTacAircraft(jsonKey)
-                && MfdWeaponsZoneAccess.HasBomberBayMarkersForTacScreen(tacScreen, jsonKey))
+                && (MfdWeaponsZoneAccess.HasBomberBayMarkersForTacScreen(tacScreen, jsonKey)
+                    || (string.Equals(jsonKey, "Darkreach", System.StringComparison.OrdinalIgnoreCase)
+                        && MfdWeaponsZoneAccess.HasDarkreachTacWeaponUi(tacScreen.gameObject))))
             {
                 return MfdLayoutProfile.DedicatedSplit;
             }

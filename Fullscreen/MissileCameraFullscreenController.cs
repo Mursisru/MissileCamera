@@ -4,8 +4,8 @@ using UnityEngine.UI;
 namespace MissileCamera
 {
     /// <summary>
-    /// Fullscreen missile feed host. On pause / maximized map — Exit() (restore panel to MFD)
-    /// so vanilla UI is never covered and the feed is never stolen into a hidden canvas.
+    /// Fullscreen missile feed host. Uses dedicated overlay feed — never reparents MFD panel.
+    /// On pause / maximized map — Exit() so vanilla UI is never covered.
     /// Exit with no missiles: 0.5s NO SIGNAL, then auto-disable.
     /// Never touches CameraStateManager (see CAMERA_SAFETY.md).
     /// </summary>
@@ -18,14 +18,6 @@ namespace MissileCamera
         private static GameObject? _overlayGo;
         private static Canvas? _overlayCanvas;
         private static RectTransform? _fullscreenRoot;
-        private static RectTransform? _panelOriginalParent;
-        private static int _panelOriginalSibling;
-        private static Vector2 _panelAnchorMin;
-        private static Vector2 _panelAnchorMax;
-        private static Vector2 _panelOffsetMin;
-        private static Vector2 _panelOffsetMax;
-        private static Vector3 _panelLocalScale;
-        private static Quaternion _panelLocalRotation;
 
         internal static bool IsActive => _active;
         internal static bool IsDeferredExit => _deferredExit;
@@ -45,6 +37,7 @@ namespace MissileCamera
 
             MissileCameraVanillaHudBridge.ResetForMissionUnload();
             MissileCameraFullscreenBootstrap.ResetForMissionUnload();
+            MissileCameraFullscreenFeedHost.ResetForMissionUnload();
             DestroyOverlayHost();
         }
 
@@ -59,7 +52,7 @@ namespace MissileCamera
                 return;
             }
 
-            if (!MissileCameraFeedController.HasOverlayInputContext() && !_active)
+            if (!MissileCameraFeedController.CanToggleFullscreen() && !_active)
                 return;
 
             if (_active)
@@ -75,7 +68,6 @@ namespace MissileCamera
                 Exit(force: true);
         }
 
-        /// <summary>Called each Tick after interference — finishes exit-no-missile burst.</summary>
         internal static void TickDeferredExit()
         {
             if (!_deferredExit)
@@ -87,7 +79,6 @@ namespace MissileCamera
 
         private static void RequestExit()
         {
-            // No live missiles → NO SIGNAL then auto-off. Otherwise leave immediately.
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
             {
                 BeginDeferredExit();
@@ -163,10 +154,9 @@ namespace MissileCamera
                 }
             }
 
-            RectTransform? panelRt = MissileCameraFeedController.TryGetPanelRt();
-            if (panelRt == null)
+            if (!MissileCameraFeedController.HasTrackableOwnedMissile())
             {
-                MfdLog.Info("fullscreen enter blocked: no panel");
+                MfdLog.Info("fullscreen enter blocked: no missiles");
                 return;
             }
 
@@ -175,29 +165,24 @@ namespace MissileCamera
             if (_fullscreenRoot == null || _overlayGo == null || _overlayCanvas == null)
                 return;
 
-            _panelOriginalParent = panelRt.parent as RectTransform;
-            _panelOriginalSibling = panelRt.GetSiblingIndex();
-            _panelAnchorMin = panelRt.anchorMin;
-            _panelAnchorMax = panelRt.anchorMax;
-            _panelOffsetMin = panelRt.offsetMin;
-            _panelOffsetMax = panelRt.offsetMax;
-            _panelLocalScale = panelRt.localScale;
-            _panelLocalRotation = panelRt.localRotation;
+            MissileCameraFullscreenFeedHost.EnsureBuilt(_fullscreenRoot);
+            if (MissileCameraFullscreenFeedHost.PanelRt == null)
+            {
+                MfdLog.Info("fullscreen enter blocked: feed host failed");
+                return;
+            }
 
             _overlayGo.SetActive(true);
             _overlayCanvas.enabled = true;
             _fullscreenRoot.SetAsLastSibling();
-
-            panelRt.SetParent(_fullscreenRoot, false);
-            Stretch(panelRt);
-            panelRt.localScale = Vector3.one;
-            panelRt.localRotation = Quaternion.identity;
+            MissileCameraFullscreenFeedHost.Show();
 
             _active = true;
+            MissileCameraFeedController.NotifyFullscreenEntered();
             MissileCameraVanillaHudBridge.OnFullscreenEntered();
-            MissileCameraFullscreenBootstrap.StartIfNeeded(panelRt);
+            MissileCameraFullscreenBootstrap.StartIfNeeded(MissileCameraFullscreenFeedHost.PanelRt);
             MissileCameraFeedController.NotifyFullscreenChanged();
-            MfdLog.Info("fullscreen enter (RawImage feed, CSM untouched)");
+            MfdLog.Info("fullscreen enter (independent feed host, CSM untouched)");
         }
 
         private static void Exit(bool force)
@@ -214,19 +199,7 @@ namespace MissileCamera
                 // ignore
             }
 
-            RectTransform? panelRt = MissileCameraFeedController.TryGetPanelRt();
-            if (panelRt != null && _panelOriginalParent != null)
-            {
-                panelRt.SetParent(_panelOriginalParent, false);
-                int maxSibling = Mathf.Max(0, _panelOriginalParent.childCount - 1);
-                panelRt.SetSiblingIndex(Mathf.Clamp(_panelOriginalSibling, 0, maxSibling));
-                panelRt.anchorMin = _panelAnchorMin;
-                panelRt.anchorMax = _panelAnchorMax;
-                panelRt.offsetMin = _panelOffsetMin;
-                panelRt.offsetMax = _panelOffsetMax;
-                panelRt.localScale = _panelLocalScale;
-                panelRt.localRotation = _panelLocalRotation;
-            }
+            MissileCameraFullscreenFeedHost.Hide();
 
             if (_overlayGo != null)
                 _overlayGo.SetActive(false);
@@ -236,6 +209,7 @@ namespace MissileCamera
 
             try
             {
+                MissileCameraFeedController.NotifyFullscreenExited();
                 MissileCameraVanillaHudBridge.OnFullscreenExited();
             }
             catch (System.Exception ex)
@@ -292,7 +266,6 @@ namespace MissileCamera
             RectTransform bgRt = bgGo.GetComponent<RectTransform>();
             Stretch(bgRt);
             Image bg = bgGo.GetComponent<Image>();
-            // Opaque black under RawImage — never rely on hijacking the cockpit camera.
             bg.color = Color.black;
             bg.raycastTarget = false;
         }
