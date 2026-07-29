@@ -17,7 +17,8 @@ namespace MissileCamera
 
         private const float BorderPx = 2.0f;
         private const float FuelWarnFraction = 0.25f;
-        private const float FractionEpsilon = 0.004f;
+        private const float FractionEpsilon = 0.002f;
+        private const float DisplaySmoothHz = 2.5f;
         private const int TickCount = 5;
 
         private readonly Gauge _fuel;
@@ -26,6 +27,9 @@ namespace MissileCamera
         private float _layoutH = -1f;
         private float _lastFuel = -1f;
         private float _lastThrottle = -1f;
+        private float _displayFuel = -1f;
+        private float _displayThrottle = -1f;
+        private bool _displayReady;
         private int _lastFuelPct = int.MinValue;
         private int _lastThrPct = int.MinValue;
 
@@ -52,12 +56,35 @@ namespace MissileCamera
                 ApplyLayout(panel);
             }
 
-            float fuel = Mathf.Clamp01(snapshot.FuelFraction);
-            float thr = Mathf.Clamp01(snapshot.ThrottleFraction);
-            SetFill(_fuel, fuel, fuelStyle: true, ref _lastFuel);
-            SetFill(_throttle, thr, fuelStyle: false, ref _lastThrottle);
-            SetPercent(_fuel, fuel, ref _lastFuelPct);
-            SetPercent(_throttle, thr, ref _lastThrPct);
+            float fuelTarget = Mathf.Clamp01(snapshot.FuelFraction);
+            float thrTarget = Mathf.Clamp01(snapshot.ThrottleFraction);
+
+            // Extra visual smoothing — motor fuel/throttle can step hard from reflection samples.
+            float t = 1f - Mathf.Exp(-DisplaySmoothHz * Time.unscaledDeltaTime);
+            if (!_displayReady || _displayFuel < 0f || _displayThrottle < 0f)
+            {
+                _displayFuel = fuelTarget;
+                _displayThrottle = thrTarget;
+                _displayReady = true;
+            }
+            else
+            {
+                // Snap on missile switch / huge sample jumps, otherwise ease.
+                if (Mathf.Abs(fuelTarget - _displayFuel) > 0.55f)
+                    _displayFuel = fuelTarget;
+                else
+                    _displayFuel = Mathf.Lerp(_displayFuel, fuelTarget, t);
+
+                if (Mathf.Abs(thrTarget - _displayThrottle) > 0.55f)
+                    _displayThrottle = thrTarget;
+                else
+                    _displayThrottle = Mathf.Lerp(_displayThrottle, thrTarget, t);
+            }
+
+            SetFill(_fuel, _displayFuel, fuelStyle: true, ref _lastFuel);
+            SetFill(_throttle, _displayThrottle, fuelStyle: false, ref _lastThrottle);
+            SetPercent(_fuel, _displayFuel, ref _lastFuelPct);
+            SetPercent(_throttle, _displayThrottle, ref _lastThrPct);
         }
 
         private void ApplyLayout(MissileCameraPanelMetrics panel)

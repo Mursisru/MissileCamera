@@ -24,6 +24,7 @@ namespace MissileCamera
         private Text[] _texts = System.Array.Empty<Text>();
         private string[] _targets = System.Array.Empty<string>();
         private char[][] _work = System.Array.Empty<char[]>();
+        private bool[] _skipIndices = System.Array.Empty<bool>();
         private readonly CalSlot[] _slots = new CalSlot[MaxSlots];
         private readonly StringBuilder _sb = new StringBuilder(BufCap);
         private CanvasGroup? _flickerGroup;
@@ -49,14 +50,34 @@ namespace MissileCamera
             if (found == null || found.Length == 0)
                 return;
 
-            _texts = found;
-            _targets = new string[_texts.Length];
-            _work = new char[_texts.Length][];
-            for (int i = 0; i < _texts.Length; i++)
+            // Exclude FUEL/THR gauge labels + percent readouts — drums must not touch them.
+            int keep = 0;
+            for (int i = 0; i < found.Length; i++)
             {
-                string t = _texts[i] != null ? _texts[i].text ?? string.Empty : string.Empty;
-                _targets[i] = t;
-                _work[i] = new char[Mathf.Max(BufCap, t.Length + 8)];
+                if (found[i] != null && !IsUnderFuelThrottleGauge(found[i].transform))
+                    keep++;
+            }
+
+            if (keep <= 0)
+                return;
+
+            _texts = new Text[keep];
+            _targets = new string[keep];
+            _work = new char[keep][];
+            _skipIndices = new bool[keep];
+            int w = 0;
+            for (int i = 0; i < found.Length; i++)
+            {
+                Text? text = found[i];
+                if (text == null || IsUnderFuelThrottleGauge(text.transform))
+                    continue;
+
+                _texts[w] = text;
+                string t = text.text ?? string.Empty;
+                _targets[w] = t;
+                _work[w] = new char[Mathf.Max(BufCap, t.Length + 8)];
+                _skipIndices[w] = IsUnderFuelThrottleGauge(text.transform) || LooksPercent(t);
+                w++;
             }
 
             for (int s = 0; s < MaxSlots; s++)
@@ -91,7 +112,11 @@ namespace MissileCamera
             for (int i = 0; i < _texts.Length; i++)
             {
                 if (_texts[i] != null)
+                {
+                    if (_skipIndices != null && i < _skipIndices.Length && _skipIndices[i])
+                        continue;
                     _texts[i].text = _targets[i] ?? string.Empty;
+                }
             }
 
             if (_flickerGroup != null)
@@ -145,10 +170,24 @@ namespace MissileCamera
                 if (text == null)
                     continue;
 
+                if (_skipIndices != null && i < _skipIndices.Length && _skipIndices[i])
+                {
+                    // Keep gauge values live (drums must not overwrite them).
+                    _targets[i] = text.text ?? string.Empty;
+                    continue;
+                }
+
                 string target = _targets[i] ?? string.Empty;
                 if (target.Length == 0)
                 {
                     text.text = string.Empty;
+                    continue;
+                }
+
+                if (ShouldPreserveStableTelemetry(target))
+                {
+                    // Keep stable telemetry exactly (no scrambling).
+                    text.text = target;
                     continue;
                 }
 
@@ -191,7 +230,20 @@ namespace MissileCamera
                 if (text == null)
                     continue;
 
+                if (_skipIndices != null && i < _skipIndices.Length && _skipIndices[i])
+                {
+                    // Keep gauge values live (drums must not overwrite them).
+                    _targets[i] = text.text ?? string.Empty;
+                    continue;
+                }
+
                 string target = _targets[i] ?? string.Empty;
+                if (ShouldPreserveStableTelemetry(target))
+                {
+                    // Keep stable telemetry exactly (no scrambling).
+                    text.text = target;
+                    continue;
+                }
                 if (LooksNumericHeavy(target))
                     text.text = ScrambleNumericKeepLayout(target);
                 else
@@ -205,6 +257,17 @@ namespace MissileCamera
                 return;
 
             int ti = Random.Range(0, _texts.Length);
+            if (_skipIndices != null && _skipIndices.Length == _texts.Length)
+            {
+                int attempts = 0;
+                while (ti < _skipIndices.Length && _skipIndices[ti] && attempts < _texts.Length)
+                {
+                    ti = Random.Range(0, _texts.Length);
+                    attempts++;
+                }
+                if (ti < _skipIndices.Length && _skipIndices[ti])
+                    return;
+            }
             string target = _targets[ti] ?? string.Empty;
             if (target.Length == 0)
                 return;
@@ -301,6 +364,60 @@ namespace MissileCamera
                 || s.IndexOf("HDG", System.StringComparison.Ordinal) >= 0
                 || s.IndexOf("TTI", System.StringComparison.Ordinal) >= 0
                 || s.IndexOf("G ", System.StringComparison.Ordinal) >= 0;
+        }
+
+        private static bool LooksPercent(string s)
+        {
+            if (string.IsNullOrEmpty(s))
+                return false;
+
+            s = s.Trim();
+            if (s.Length < 2 || !s.EndsWith("%", System.StringComparison.Ordinal))
+                return false;
+
+            bool hasDigit = false;
+            // Allow: spaces (already trimmed), digits, one dot, +/-, then '%'.
+            for (int i = 0; i < s.Length - 1; i++)
+            {
+                char ch = s[i];
+                if (char.IsDigit(ch))
+                {
+                    hasDigit = true;
+                    continue;
+                }
+
+                if (ch == '.' || ch == '+' || ch == '-')
+                    continue;
+
+                return false;
+            }
+
+            return hasDigit;
+        }
+
+        private static bool ShouldPreserveStableTelemetry(string s)
+        {
+            if (string.IsNullOrEmpty(s))
+                return false;
+
+            return s.IndexOf("FUEL", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || s.IndexOf("THR", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || s.IndexOf("THROTTLE", System.StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsUnderFuelThrottleGauge(Transform node)
+        {
+            Transform? t = node;
+            while (t != null)
+            {
+                string n = t.name;
+                if (n.StartsWith("FlirFuelGauge", System.StringComparison.Ordinal)
+                    || n.StartsWith("FlirThrottleGauge", System.StringComparison.Ordinal))
+                    return true;
+                t = t.parent;
+            }
+
+            return false;
         }
 
         /// <summary>
