@@ -61,20 +61,45 @@ namespace MissileCamera
 
         internal static void OnFullscreenEntered()
         {
-            // NO-OP: hiding FlightHud canvas / elevating CombatHUD / TargetLock mutates vanilla
-            // session state and broke 2nd mission. FS video overlay still works without this.
             _hiddenChrome.Clear();
-            MfdLog.Info("fullscreen enter: vanilla HUD bridge disabled");
+            _objectiveMgrWasEnabled = false;
+            _designatorWasEnabled = false;
+
+            try
+            {
+                HideStubsOnMissilePanel();
+                ElevateCombatHudCanvas();
+                ApplyMarkersOnlyVisibility();
+                SuppressIlsAndObjectives();
+                ForceCombatHudMarkerPass();
+                MissileCameraFullscreenTargetLock.OnFullscreenEntered();
+            }
+            catch (Exception ex)
+            {
+                MfdLog.Info("fullscreen enter hud failed: " + ex.Message);
+            }
+
+            MfdLog.Info("fullscreen markers-only"
+                + (_canvasElevated ? " canvas↑" : " canvas miss")
+                + $" hidden={_hiddenChrome.Count}");
         }
 
         internal static void OnFullscreenExited()
         {
-            // NO-OP mirror of enter — nothing to restore.
+            MissileCameraFullscreenTargetLock.OnFullscreenExited();
+            RestoreObjectiveManager();
+            RestoreDesignatorVisual();
+            RestoreCombatHudCanvas();
+            RestoreHiddenChrome();
+            RestoreFlightHudVisuals();
+            ForceCombatHudMarkerPass();
+
             _flightHudWasActive = false;
         }
 
         internal static void ResetForMissionUnload()
         {
+            // Abandon only — never EnableCanvas / RestoreHiddenChrome on dying scene.
             MissileCameraFullscreenTargetLock.AbandonSession();
             _hiddenChrome.Clear();
             _combatCanvas = null;
@@ -86,12 +111,36 @@ namespace MissileCamera
 
         internal static void TickHideStubs()
         {
-            // NO-OP — see OnFullscreenEntered.
+            if (!MissileCameraFullscreenController.IsActive)
+                return;
+
+            HideStubsOnMissilePanel();
         }
 
         internal static void LateTickMarkers()
         {
-            // NO-OP — see OnFullscreenEntered.
+            if (!MissileCameraFullscreenController.IsActive)
+                return;
+
+            // FlightHud / ObjectiveOverlay re-enable themselves in Update — suppress every LateUpdate.
+            SuppressIlsAndObjectives();
+            ForceCombatHudMarkerPass();
+            MissileCameraFullscreenTargetLock.Maintain();
+        }
+
+        private static void SoftHideDynamicMap()
+        {
+            // Never DynamicMap.EnableCanvas — sticky across sorties. FS yields when mapMaximized.
+        }
+
+        private static void RestoreFlightHud()
+        {
+            // Never FlightHud.EnableCanvas.
+        }
+
+        private static void RestoreDynamicMap()
+        {
+            // Never DynamicMap.EnableCanvas.
         }
 
         private static void ApplyMarkersOnlyVisibility()
@@ -119,7 +168,6 @@ namespace MissileCamera
                 }
                 else if (flightCanvas != null)
                 {
-                    // Hide the FlightHud canvas GO locally — never FlightHud.EnableCanvas(false).
                     HideGo(flightCanvas.gameObject);
                 }
             }
