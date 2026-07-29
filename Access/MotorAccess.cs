@@ -10,6 +10,7 @@ namespace MissileCamera
 
         private static FieldInfo? _motorsField;
         private static FieldInfo? _burnTimeField;
+        private static FieldInfo? _throttleField;
         private static bool _fieldsResolved;
 
         internal static void EnsureFields()
@@ -19,9 +20,29 @@ namespace MissileCamera
 
             _fieldsResolved = true;
             _motorsField = typeof(Missile).GetField("motors", InstanceAny);
+            _throttleField = typeof(Missile).GetField("throttle", InstanceAny);
             System.Type? motorType = typeof(Missile).GetNestedType("Motor", InstanceAny);
             if (motorType != null)
                 _burnTimeField = motorType.GetField("burnTime", InstanceAny);
+        }
+
+        /// <summary>0–1 commanded motor throttle; false if field missing.</summary>
+        internal static bool TryGetThrottle(Missile missile, out float throttle)
+        {
+            throttle = 1f;
+            if (missile == null)
+                return false;
+
+            EnsureFields();
+            if (_throttleField == null)
+                return false;
+
+            object? value = _throttleField.GetValue(missile);
+            if (value is not float t || float.IsNaN(t) || float.IsInfinity(t))
+                return false;
+
+            throttle = Mathf.Clamp01(t);
+            return true;
         }
 
         /// <summary>0–1 remaining motor burn fraction; false if no motors.</summary>

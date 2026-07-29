@@ -5,16 +5,17 @@ using UnityEngine.UI;
 namespace MissileCamera
 {
     /// <summary>
-    /// First-enter FS boot ~3.5s: tile puzzle → flicker/char cal → hex drum → value drum + diagnostics.
+    /// First-enter FS boot ~4.0s: tile puzzle → flicker/char cal → hex drum → value drum + diagnostics.
     /// </summary>
     internal static class MissileCameraBootSequence
     {
-        // Original 2.4s timeline scaled by 3.5/2.4.
-        private const float Phase0End = 0.3f * 3.5f / 2.4f;
-        private const float Phase1End = 1.0f * 3.5f / 2.4f;
-        private const float Phase2End = 1.6f * 3.5f / 2.4f;
-        private const float Phase3End = 1.9f * 3.5f / 2.4f;
-        private const float Phase4End = 3.5f;
+        // Original 2.4s timeline scaled to 4.0s proportionally.
+        private const float TimelineScale = 4f / 2.4f;
+        private const float Phase0End = 0.3f * TimelineScale;
+        private const float Phase1End = 1.0f * TimelineScale;
+        private const float Phase2End = 1.6f * TimelineScale;
+        private const float Phase3End = 1.9f * TimelineScale;
+        private const float Phase4End = 4f;
 
         private static bool _destroyed;
         private static MissileCameraBootTilePuzzle? _puzzle;
@@ -96,9 +97,9 @@ namespace MissileCamera
             _diag.CompleteCurrentStage();
             SetFeedAlpha(panelRt, 1f);
 
-            // --- Phase 1: flicker + char cal ---
+            // --- Phase 1: flicker + char cal (reticle still hidden during boot) ---
             _diag.BeginStage("INTERFACE SYMBOL CALIBRATION");
-            SetFlirVisible(panelRt, true);
+            SetFlirVisible(panelRt, false);
             MissileCameraFeedController.RefreshFlirHudOnce();
             RectTransform? flirRoot = MissileCameraHudOverlay.TryGetFlirRoot();
             _textFx.Bind(flirRoot);

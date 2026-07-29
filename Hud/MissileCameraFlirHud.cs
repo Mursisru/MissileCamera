@@ -27,20 +27,15 @@ namespace MissileCamera
 
         private readonly RectTransform _root;
         private readonly Text _sys;
-        private readonly Text _coord;
-        private readonly Text _ownTelemetry;
-        private readonly Text _alt;
-        private readonly Text _date;
-        private readonly Text _time;
+        private readonly MissileCameraFlirPanel _mslPanel;
+        private readonly MissileCameraFlirPanel _launchPanel;
+        private readonly MissileCameraFlirPanel _tgtTrackPanel;
+        private readonly MissileCameraFlirPanel _tgtEngagePanel;
+        private readonly MissileCameraFlirPanel _sensorPanel;
+        private readonly MissileCameraFlirPanel _guidancePanel;
         private readonly Text _headingBig;
         private readonly Text[] _compassMarks;
-        private readonly Text _tgtCoord;
-        private readonly Text _tgtTelemetry;
-        private readonly Text _tgtElv;
         private readonly Text _lrf;
-        private readonly Text _modes;
-        private readonly Text _status;
-        private readonly Text _magRid;
         private readonly Text _dialPitchLabel;
         private readonly Text _dialHdgLabel;
         private readonly Text _northArrow;
@@ -59,6 +54,11 @@ namespace MissileCamera
         private readonly HudLineGraphic[] _dialRightTicks;
         private readonly HudLineGraphic _dialLeftNeedle;
         private readonly HudLineGraphic _dialRightNeedle;
+        private readonly HudLineGraphic _dialFrameT;
+        private readonly HudLineGraphic _dialFrameB;
+        private readonly HudLineGraphic _dialFrameL;
+        private readonly HudLineGraphic _dialFrameR;
+        private readonly MissileCameraFlirGaugeBars _gaugeBars;
         private float _layoutW = -1f;
         private float _layoutH = -1f;
         private float _smoothHeading;
@@ -80,20 +80,15 @@ namespace MissileCamera
         private MissileCameraFlirHud(
             RectTransform root,
             Text sys,
-            Text coord,
-            Text ownTelemetry,
-            Text alt,
-            Text date,
-            Text time,
+            MissileCameraFlirPanel mslPanel,
+            MissileCameraFlirPanel launchPanel,
+            MissileCameraFlirPanel tgtTrackPanel,
+            MissileCameraFlirPanel tgtEngagePanel,
+            MissileCameraFlirPanel sensorPanel,
+            MissileCameraFlirPanel guidancePanel,
             Text headingBig,
             Text[] compassMarks,
-            Text tgtCoord,
-            Text tgtTelemetry,
-            Text tgtElv,
             Text lrf,
-            Text modes,
-            Text status,
-            Text magRid,
             Text dialPitchLabel,
             Text dialHdgLabel,
             Text northArrow,
@@ -111,24 +106,24 @@ namespace MissileCamera
             HudLineGraphic[] dialLeftTicks,
             HudLineGraphic[] dialRightTicks,
             HudLineGraphic dialLeftNeedle,
-            HudLineGraphic dialRightNeedle)
+            HudLineGraphic dialRightNeedle,
+            HudLineGraphic dialFrameT,
+            HudLineGraphic dialFrameB,
+            HudLineGraphic dialFrameL,
+            HudLineGraphic dialFrameR,
+            MissileCameraFlirGaugeBars gaugeBars)
         {
             _root = root;
             _sys = sys;
-            _coord = coord;
-            _ownTelemetry = ownTelemetry;
-            _alt = alt;
-            _date = date;
-            _time = time;
+            _mslPanel = mslPanel;
+            _launchPanel = launchPanel;
+            _tgtTrackPanel = tgtTrackPanel;
+            _tgtEngagePanel = tgtEngagePanel;
+            _sensorPanel = sensorPanel;
+            _guidancePanel = guidancePanel;
             _headingBig = headingBig;
             _compassMarks = compassMarks;
-            _tgtCoord = tgtCoord;
-            _tgtTelemetry = tgtTelemetry;
-            _tgtElv = tgtElv;
             _lrf = lrf;
-            _modes = modes;
-            _status = status;
-            _magRid = magRid;
             _dialPitchLabel = dialPitchLabel;
             _dialHdgLabel = dialHdgLabel;
             _northArrow = northArrow;
@@ -147,6 +142,11 @@ namespace MissileCamera
             _dialRightTicks = dialRightTicks;
             _dialLeftNeedle = dialLeftNeedle;
             _dialRightNeedle = dialRightNeedle;
+            _dialFrameT = dialFrameT;
+            _dialFrameB = dialFrameB;
+            _dialFrameL = dialFrameL;
+            _dialFrameR = dialFrameR;
+            _gaugeBars = gaugeBars;
         }
 
         internal static MissileCameraFlirHud Create(RectTransform parent)
@@ -159,20 +159,15 @@ namespace MissileCamera
             return new MissileCameraFlirHud(
                 root,
                 CreateLabel(root, "FlirSys", TextAnchor.UpperLeft),
-                CreateLabel(root, "FlirCoord", TextAnchor.UpperLeft),
-                CreateLabel(root, "FlirOwnTel", TextAnchor.UpperLeft),
-                CreateLabel(root, "FlirAlt", TextAnchor.UpperLeft),
-                CreateLabel(root, "FlirDate", TextAnchor.UpperLeft),
-                CreateLabel(root, "FlirTime", TextAnchor.UpperLeft),
+                MissileCameraFlirPanel.Create(root, "FlirMslPanel", TextAnchor.UpperLeft),
+                MissileCameraFlirPanel.Create(root, "FlirLaunchPanel", TextAnchor.UpperLeft),
+                MissileCameraFlirPanel.Create(root, "FlirTgtTrackPanel", TextAnchor.UpperRight),
+                MissileCameraFlirPanel.Create(root, "FlirTgtEngagePanel", TextAnchor.UpperRight),
+                MissileCameraFlirPanel.Create(root, "FlirSensorPanel", TextAnchor.UpperLeft),
+                MissileCameraFlirPanel.Create(root, "FlirGuidancePanel", TextAnchor.UpperRight),
                 CreateLabel(root, "FlirHdgBig", TextAnchor.UpperCenter),
                 CreateCenterLabels(root, "FlirCompassMark", CompassMarkLabelCount),
-                CreateLabel(root, "FlirTgtCoord", TextAnchor.UpperRight),
-                CreateLabel(root, "FlirTgtTel", TextAnchor.UpperRight),
-                CreateLabel(root, "FlirTgtElv", TextAnchor.UpperRight),
                 CreateLabel(root, "FlirLrf", TextAnchor.MiddleLeft),
-                CreateLabel(root, "FlirModes", TextAnchor.LowerLeft),
-                CreateLabel(root, "FlirStatus", TextAnchor.LowerRight),
-                CreateLabel(root, "FlirMagRid", TextAnchor.LowerLeft),
                 CreateLabel(root, "FlirDialPitch", TextAnchor.LowerCenter),
                 CreateLabel(root, "FlirDialHdg", TextAnchor.LowerCenter),
                 CreateLabel(root, "FlirNorth", TextAnchor.MiddleLeft),
@@ -190,7 +185,12 @@ namespace MissileCamera
                 CreateLines(root, "FlirDialLTick", DialTickCount),
                 CreateLines(root, "FlirDialRTick", DialTickCount),
                 CreateLine(root, "FlirDialLNeedle"),
-                CreateLine(root, "FlirDialRNeedle"));
+                CreateLine(root, "FlirDialRNeedle"),
+                CreateLine(root, "FlirDialFrameT"),
+                CreateLine(root, "FlirDialFrameB"),
+                CreateLine(root, "FlirDialFrameL"),
+                CreateLine(root, "FlirDialFrameR"),
+                MissileCameraFlirGaugeBars.Create(root));
         }
 
         internal void InvalidateLayout()
@@ -224,6 +224,7 @@ namespace MissileCamera
             }
 
             ApplyContent(snapshot, panel);
+            _gaugeBars.Update(snapshot, panel);
         }
 
         private float SmoothHeading(float targetDeg)
@@ -296,90 +297,6 @@ namespace MissileCamera
             if (string.IsNullOrEmpty(spd))
                 spd = "---";
 
-            SetTextIfChanged(_coord, "— MSL —");
-            _sb.Length = 0;
-            _sb.Append(mslName).Append('\n').Append(grid)
-                .Append("\nSPD ").Append(spd)
-                .Append("  HDG ").Append(hdgInt.ToString(CultureInfo.InvariantCulture)).Append("°T")
-                .Append("\nALT ").Append(FormatAltitudeFlir(snapshot))
-                .Append("  G ").Append(snapshot.InstantG.ToString("0.0", CultureInfo.InvariantCulture));
-            SetTextIfChanged(_ownTelemetry, _sb);
-
-            string plat = string.IsNullOrEmpty(snapshot.OwnshipName) || snapshot.OwnshipName == "---"
-                ? "PLAT ---"
-                : "PLAT " + snapshot.OwnshipName;
-            _sb.Length = 0;
-            _sb.Append("MACH ").Append(snapshot.Mach.ToString("0.00", CultureInfo.InvariantCulture))
-                .Append("  FUEL ").Append(Mathf.RoundToInt(snapshot.FuelFraction * 100f).ToString(CultureInfo.InvariantCulture)).Append('%')
-                .Append('\n').Append(plat)
-                .Append("\nSALVO ").Append((snapshot.SalvoIndex + 1).ToString(CultureInfo.InvariantCulture))
-                .Append('/').Append(salvoTotal.ToString(CultureInfo.InvariantCulture));
-            SetTextIfChanged(_alt, _sb);
-
-            SetTextIfChanged(_date, utc.ToString("MM/dd/yy", CultureInfo.InvariantCulture));
-            _sb.Length = 0;
-            _sb.Append(utc.ToString("HH:mm:ss", CultureInfo.InvariantCulture)).Append(" Z");
-            SetTextIfChanged(_time, _sb);
-
-            if (snapshot.HasTarget)
-            {
-                string tgtAlt = UnitConverter.AltitudeReading(snapshot.TargetPosition.y);
-                _sb.Length = 0;
-                _sb.Append("— TGT —\n").Append(snapshot.TargetName);
-                SetTextIfChanged(_tgtCoord, _sb);
-
-                _sb.Length = 0;
-                _sb.Append(snapshot.TargetGridText)
-                    .Append("\nSPD ").Append(StripPrefix(snapshot.TgpTargetSpdText, "SPD "))
-                    .Append("  ").Append(snapshot.TgpHdgText.Replace("°", "°T"))
-                    .Append("\nALT ").Append(tgtAlt)
-                    .Append("  ").Append(snapshot.TgpRelText);
-                SetTextIfChanged(_tgtTelemetry, _sb);
-
-                _sb.Length = 0;
-                _sb.Append("SLT ").Append(StripPrefix(snapshot.TgpRngText, "RNG "))
-                    .Append("  ").Append(FormatClosSafe(snapshot.ClosingSpeedMs)).Append('\n');
-                if (snapshot.HasTimeToImpact)
-                    _sb.Append("TTI ").Append(snapshot.TimeToImpactSec.ToString("0.0", CultureInfo.InvariantCulture)).Append('s');
-                else
-                    _sb.Append("TTI ---");
-                _sb.Append("  LRF ").Append(FormatRangeMeters(snapshot.TargetRangeMeters))
-                    .Append('\n').Append(snapshot.TgpRidText)
-                    .Append("  ANG ").Append(snapshot.TargetAngleDeg.ToString("0.0", CultureInfo.InvariantCulture)).Append('°');
-                SetTextIfChanged(_tgtElv, _sb);
-            }
-            else
-            {
-                SetTextIfChanged(_tgtCoord, "— TGT —\nNO TRACK");
-                SetTextIfChanged(_tgtTelemetry, "GRID ---\nSPD ---  HDG ---°T\nALT ---  REL ---");
-                SetTextIfChanged(_tgtElv, "SLT ---  CLOS ---\nTTI ---  LRF ---\nRID ---  ANG ---");
-            }
-
-            if (_lrf.gameObject.activeSelf)
-                _lrf.gameObject.SetActive(false);
-
-            MissileCameraVisionMode vision = MissileCameraVisionModeController.Mode;
-            string polarity = MissileCameraVisionModeController.FlirPolarityLabel(vision);
-            _sb.Length = 0;
-            _sb.Append("HDIR ").Append(hdgInt.ToString(CultureInfo.InvariantCulture)).Append("°T\n")
-                .Append(polarity).Append('\n');
-            if (mag <= 1f + ZoomAutoEpsilon)
-                _sb.Append("FOC AUTO\n");
-            else
-                _sb.Append("FOC MAN x").Append(mag.ToString("0.0", CultureInfo.InvariantCulture)).Append('\n');
-            if (MissileCameraVisionModeController.UsesInfraredBlit(vision))
-                _sb.Append("EXP ").Append(snapshot.InfraredExposure.ToString("0.00", CultureInfo.InvariantCulture));
-            else if (MissileCameraVisionModeController.UsesNightVisionVolume(vision))
-                _sb.Append("EXP NVG");
-            else
-                _sb.Append("EXP DAY");
-            SetTextIfChanged(_modes, _sb);
-
-            _sb.Length = 0;
-            _sb.Append("MAG x").Append(mag.ToString("0.0", CultureInfo.InvariantCulture))
-                .Append("\nFOV ").Append(fovInt.ToString(CultureInfo.InvariantCulture)).Append('°');
-            SetTextIfChanged(_magRid, _sb);
-
             string guide = snapshot.Guidance switch
             {
                 MissileGuidanceStatus.Guided => "GUIDED",
@@ -387,23 +304,120 @@ namespace MissileCamera
                 _ => "BALLISTIC"
             };
 
+            _mslPanel.SetTitle("MSL");
+            _sb.Length = 0;
+            _sb.Append(mslName)
+                .Append('\n').Append(grid)
+                .Append("\nSPD  ").Append(spd)
+                .Append("\nHDG  ").Append(hdgInt.ToString(CultureInfo.InvariantCulture)).Append("°T")
+                .Append("\nALT  ").Append(FormatAltitudeFlir(snapshot))
+                .Append("\nMACH ").Append(snapshot.Mach.ToString("0.00", CultureInfo.InvariantCulture))
+                .Append("\nPIT  ").Append(pitchInt.ToString(CultureInfo.InvariantCulture)).Append('°')
+                .Append("\nROL  ").Append(Mathf.RoundToInt(snapshot.RollDeg).ToString(CultureInfo.InvariantCulture)).Append('°')
+                .Append("\nG    ").Append(snapshot.InstantG.ToString("0.0", CultureInfo.InvariantCulture))
+                .Append("\nRNG  ").Append(
+                    snapshot.HasTarget
+                        ? FormatRangeMeters(snapshot.TargetRangeMeters)
+                        : "---")
+                .Append("\nMODE ").Append(guide);
+            _mslPanel.SetBody(_sb);
+
+            string plat = string.IsNullOrEmpty(snapshot.OwnshipName) || snapshot.OwnshipName == "---"
+                ? "---"
+                : snapshot.OwnshipName;
+            _launchPanel.SetTitle("LAUNCH");
+            _sb.Length = 0;
+            _sb.Append("PLAT ").Append(plat)
+                .Append("\nSALVO ").Append((snapshot.SalvoIndex + 1).ToString(CultureInfo.InvariantCulture))
+                .Append('/').Append(salvoTotal.ToString(CultureInfo.InvariantCulture))
+                .Append("\nDATE ").Append(utc.ToString("MM/dd/yy", CultureInfo.InvariantCulture))
+                .Append("\nTIME ").Append(utc.ToString("HH:mm:ss", CultureInfo.InvariantCulture)).Append(" Z");
+            _launchPanel.SetBody(_sb);
+
+            if (snapshot.HasTarget)
+            {
+                string tgtAlt = UnitConverter.AltitudeReading(snapshot.TargetPosition.y);
+                int brgInt = Mathf.RoundToInt(snapshot.TargetBearingDeg);
+                string tgtHdg = StripPrefix(snapshot.TgpHdgText.Replace("°", "°T"), "HDG ");
+                _tgtTrackPanel.SetTitle("TGT TRACK");
+                _sb.Length = 0;
+                _sb.Append(snapshot.TargetName)
+                    .Append('\n').Append(snapshot.TargetGridText)
+                    .Append("\nSPD  ").Append(StripPrefix(snapshot.TgpTargetSpdText, "SPD "))
+                    .Append("\nHDG  ").Append(tgtHdg)
+                    .Append("\nALT  ").Append(tgtAlt)
+                    .Append('\n').Append(snapshot.TgpRelText)
+                    .Append("\nBRG  ").Append(brgInt.ToString(CultureInfo.InvariantCulture)).Append("°T");
+                _tgtTrackPanel.SetBody(_sb);
+
+                _tgtEngagePanel.SetTitle("TGT ENGAGE");
+                _sb.Length = 0;
+                _sb.Append("SLT  ").Append(StripPrefix(snapshot.TgpRngText, "RNG "))
+                    .Append('\n').Append(FormatClosSafe(snapshot.ClosingSpeedMs))
+                    .Append('\n');
+                if (snapshot.HasTimeToImpact)
+                    _sb.Append("TTI  ").Append(snapshot.TimeToImpactSec.ToString("0.0", CultureInfo.InvariantCulture)).Append('s');
+                else
+                    _sb.Append("TTI  ---");
+                _sb.Append("\nLRF  ").Append(FormatRangeMeters(snapshot.TargetRangeMeters))
+                    .Append('\n').Append(snapshot.TgpRidText)
+                    .Append("\nANG  ").Append(snapshot.TargetAngleDeg.ToString("0.0", CultureInfo.InvariantCulture)).Append('°')
+                    .Append("\nΔBRG ").Append(
+                        string.Format(
+                            CultureInfo.InvariantCulture,
+                            "{0:+0;-0}°",
+                            Mathf.DeltaAngle(ownHdg, snapshot.TargetBearingDeg)));
+                _tgtEngagePanel.SetBody(_sb);
+            }
+            else
+            {
+                _tgtTrackPanel.SetTitle("TGT TRACK");
+                _tgtTrackPanel.SetBody("NO TRACK\nGRID ---\nSPD  ---\nHDG  ---\nALT  ---\nREL  ---\nBRG  ---");
+                _tgtEngagePanel.SetTitle("TGT ENGAGE");
+                _tgtEngagePanel.SetBody("SLT  ---\nCLOS ---\nTTI  ---\nLRF  ---\nRID  ---\nANG  ---\nΔBRG ---");
+            }
+
+            if (_lrf.gameObject.activeSelf)
+                _lrf.gameObject.SetActive(false);
+
+            MissileCameraVisionMode vision = MissileCameraVisionModeController.Mode;
+            string polarity = MissileCameraVisionModeController.FlirPolarityLabel(vision);
+            _sensorPanel.SetTitle("SENSOR");
+            _sb.Length = 0;
+            _sb.Append("HDIR ").Append(hdgInt.ToString(CultureInfo.InvariantCulture)).Append("°T")
+                .Append('\n').Append(polarity);
+            if (mag <= 1f + ZoomAutoEpsilon)
+                _sb.Append("\nFOC  AUTO");
+            else
+                _sb.Append("\nFOC  MAN x").Append(mag.ToString("0.0", CultureInfo.InvariantCulture));
+            _sb.Append("\nMAG  x").Append(mag.ToString("0.0", CultureInfo.InvariantCulture))
+                .Append("\nFOV  ").Append(fovInt.ToString(CultureInfo.InvariantCulture)).Append('°');
+            if (MissileCameraVisionModeController.UsesInfraredBlit(vision))
+                _sb.Append("\nEXP  ").Append(snapshot.InfraredExposure.ToString("0.00", CultureInfo.InvariantCulture));
+            else if (MissileCameraVisionModeController.UsesNightVisionVolume(vision))
+                _sb.Append("\nEXP  NVG");
+            else
+                _sb.Append("\nEXP  DAY");
+            _sensorPanel.SetBody(_sb);
+
+            _guidancePanel.SetTitle("GUIDANCE");
             _sb.Length = 0;
             if (snapshot.HasAimPoint)
             {
                 _sb.Append("IP-RA ")
-                    .Append(snapshot.TargetAngleDeg.ToString("0.0", CultureInfo.InvariantCulture)).Append("° / ")
-                    .Append(snapshot.RelativeAltitudeMeters.ToString("0", CultureInfo.InvariantCulture)).Append('m');
+                    .Append(snapshot.TargetAngleDeg.ToString("0.0", CultureInfo.InvariantCulture)).Append('°')
+                    .Append("\nREL  ").Append(snapshot.RelativeAltitudeMeters.ToString("0", CultureInfo.InvariantCulture)).Append('m');
             }
             else
                 _sb.Append("IP-RA OFF");
 
-            _sb.Append("\nINS NAV ").Append(snapshot.TargetAngleDeg.ToString("0.00", CultureInfo.InvariantCulture)).Append('°');
+            _sb.Append("\nINS  ").Append(snapshot.TargetAngleDeg.ToString("0.00", CultureInfo.InvariantCulture)).Append('°');
             if (snapshot.Guidance == MissileGuidanceStatus.LostLock)
-                _sb.Append("\nTRK COR LOST");
+                _sb.Append("\nTRK  LOST");
             else if (snapshot.Guidance == MissileGuidanceStatus.Guided && snapshot.ClosingSpeedMs > 1f && snapshot.ClosingSpeedMs < 5000f)
-                _sb.Append("\nTRK COR ON ").Append(FormatClosSafe(snapshot.ClosingSpeedMs));
+                _sb.Append("\nTRK  ON\n").Append(FormatClosSafe(snapshot.ClosingSpeedMs));
             else
-                _sb.Append("\nTRK COR OFF");
+                _sb.Append("\nTRK  OFF");
 
             if (snapshot.Guidance == MissileGuidanceStatus.LostLock)
                 _sb.Append("\nSLAVE LOST");
@@ -412,8 +426,8 @@ namespace MissileCamera
             else
                 _sb.Append("\nSLAVE IDLE");
 
-            _sb.Append('\n').Append(guide);
-            SetTextIfChanged(_status, _sb);
+            _sb.Append("\nMODE ").Append(guide);
+            _guidancePanel.SetBody(_sb);
 
             _sb.Length = 0;
             _sb.Append("PIT\n").Append(pitchInt.ToString(CultureInfo.InvariantCulture)).Append('°');
@@ -615,11 +629,11 @@ namespace MissileCamera
 
         private void UpdateGimbalDials(MissileCameraPanelMetrics panel, float pitchDeg, float headingDeg)
         {
-            // Keep dials + captions above the bottom safe band (labels used to be bottom-anchored and clipped).
-            float bottomSafe = Mathf.Max(panel.VerticalInset + 132f, 148f);
+            // Keep dials clear of bottom SENSOR/GUIDANCE panels.
+            float bottomSafe = Mathf.Max(panel.VerticalInset + 88f, 100f);
             float cy = -panel.Height * 0.5f + bottomSafe;
-            float gap = 78f;
-            float r = 30f;
+            float gap = 70f;
+            float r = 28f;
             var leftCenter = new Vector2(-gap, cy);
             var rightCenter = new Vector2(gap, cy);
 
@@ -654,6 +668,19 @@ namespace MissileCamera
                 _lastDialRadius = r;
                 PlaceDialCaption(_dialPitchLabel, -gap, cy - r - 2f);
                 PlaceDialCaption(_dialHdgLabel, gap, cy - r - 2f);
+
+                float captionH = 30f;
+                float padX = 10f;
+                float padY = 8f;
+                float left = -gap - r - padX;
+                float right = gap + r + padX;
+                float top = cy + r + padY;
+                float bottom = cy - r - captionH - padY;
+                const float thick = 1.5f;
+                _dialFrameT.SetLine(new Vector2(left, top), new Vector2(right, top), thick, FlirGreen);
+                _dialFrameB.SetLine(new Vector2(left, bottom), new Vector2(right, bottom), thick, FlirGreen);
+                _dialFrameL.SetLine(new Vector2(left, bottom), new Vector2(left, top), thick, FlirGreen);
+                _dialFrameR.SetLine(new Vector2(right, bottom), new Vector2(right, top), thick, FlirGreen);
             }
         }
 
@@ -698,43 +725,61 @@ namespace MissileCamera
 
         private void ApplyLayout(MissileCameraPanelMetrics panel)
         {
-            float pad = panel.HorizontalInset;
-            float vPad = panel.VerticalInset;
-            float row = 18f;
-            float leftW = Mathf.Clamp(panel.Width * 0.34f, 240f, 440f);
-            float rightW = leftW;
+            // Leave room for edge FUEL/THR bars (~14px + label).
+            float gaugeClear = 34f;
+            float pad = Mathf.Max(panel.HorizontalInset, 8f) + gaugeClear;
+            float vPad = Mathf.Max(panel.VerticalInset, 8f);
+            float row = 15f;
+            float colW = Mathf.Clamp(panel.Width * 0.24f, 180f, 280f);
+            float stackGap = 4f;
+            float mslH = row * 11.6f;
+            float launchH = row * 5.0f;
+            float tgtTrackH = row * 8.6f;
+            float tgtEngageH = row * 8.6f;
+            float sensorH = row * 7.6f;
+            float guidanceH = row * 8.8f;
+            float bottomY = vPad + 150f;
 
-            Place(_sys, 0f, 1f, pad, -vPad, leftW, row, TextAnchor.MiddleLeft);
-            Place(_coord, 0f, 1f, pad, -(vPad + row), leftW, row, TextAnchor.MiddleLeft);
-            Place(_ownTelemetry, 0f, 1f, pad, -(vPad + row * 2f), leftW, row * 4.2f, TextAnchor.UpperLeft);
-            Place(_alt, 0f, 1f, pad, -(vPad + row * 6.4f), leftW, row * 3.2f, TextAnchor.UpperLeft);
-            Place(_date, 0f, 1f, pad, -(vPad + row * 9.8f), 120f, row, TextAnchor.MiddleLeft);
-            Place(_time, 0f, 1f, pad, -(vPad + row * 10.8f), 140f, row, TextAnchor.MiddleLeft);
+            Place(_sys, 0f, 1f, pad, -vPad, colW, row, TextAnchor.MiddleLeft);
+            float yLeft = vPad + row + 2f;
+            _mslPanel.Place(0f, 1f, pad, -yLeft, colW, mslH, TextAnchor.MiddleLeft, TextAnchor.UpperLeft);
+            yLeft += mslH + stackGap;
+            _launchPanel.Place(0f, 1f, pad, -yLeft, colW, launchH, TextAnchor.MiddleLeft, TextAnchor.UpperLeft);
 
-            Place(_headingBig, 0.5f, 1f, 0f, -vPad, 160f, row + 4f, TextAnchor.MiddleCenter, center: true);
+            Place(_headingBig, 0.5f, 1f, 0f, -vPad, 140f, row + 4f, TextAnchor.MiddleCenter, center: true);
 
-            Place(_tgtCoord, 1f, 1f, -pad, -vPad, rightW, row * 2.2f, TextAnchor.UpperRight);
-            Place(_tgtTelemetry, 1f, 1f, -pad, -(vPad + row * 2.4f), rightW, row * 3.4f, TextAnchor.UpperRight);
-            Place(_tgtElv, 1f, 1f, -pad, -(vPad + row * 6f), rightW, row * 3.4f, TextAnchor.UpperRight);
+            float yRight = vPad;
+            _tgtTrackPanel.Place(1f, 1f, -pad, -yRight, colW, tgtTrackH, TextAnchor.MiddleRight, TextAnchor.UpperRight);
+            yRight += tgtTrackH + stackGap;
+            _tgtEngagePanel.Place(1f, 1f, -pad, -yRight, colW, tgtEngageH, TextAnchor.MiddleRight, TextAnchor.UpperRight);
 
-            Place(_lrf, 0f, 0.55f, pad, 48f, 40f, row, TextAnchor.MiddleLeft);
-            Place(_northArrow, 0f, 0.55f, pad, 18f, 80f, row, TextAnchor.MiddleLeft);
-            Place(_modes, 0f, 0f, pad, vPad + 120f, 160f, row * 4.5f, TextAnchor.LowerLeft);
-            Place(_magRid, 0f, 0f, pad + 170f, vPad + 120f, 160f, row * 2.5f, TextAnchor.LowerLeft);
-            Place(_status, 1f, 0f, -pad, vPad + 100f, rightW * 0.7f, row * 5.5f, TextAnchor.LowerRight);
+            Place(_lrf, 0f, 0.55f, pad, 40f, 36f, row, TextAnchor.MiddleLeft);
+            Place(_northArrow, 0f, 0.58f, pad + 22f, 8f, 64f, row, TextAnchor.MiddleLeft);
+            _sensorPanel.Place(0f, 0f, pad, bottomY, colW, sensorH, TextAnchor.MiddleLeft, TextAnchor.UpperLeft);
+            _guidancePanel.Place(1f, 0f, -pad, bottomY, colW, guidanceH, TextAnchor.MiddleRight, TextAnchor.UpperRight);
         }
 
         private void ApplyFonts()
         {
-            const int body = 15;
-            const int big = 19;
+            const int body = 12;
+            const int title = 11;
+            const int big = 18;
             Font font = HudFontHelper.GetFont();
-            foreach (Text t in new[]
-                     {
-                         _sys, _coord, _ownTelemetry, _alt, _date, _time,
-                         _tgtCoord, _tgtTelemetry, _tgtElv, _lrf, _modes, _status, _magRid,
-                         _dialPitchLabel, _dialHdgLabel, _northArrow, _sliderLabel
-                     })
+
+            _sys.font = font;
+            _sys.fontSize = body;
+            _sys.horizontalOverflow = HorizontalWrapMode.Overflow;
+            _sys.verticalOverflow = VerticalWrapMode.Truncate;
+            _sys.raycastTarget = false;
+
+            _mslPanel.ApplyFont(font, title, body);
+            _launchPanel.ApplyFont(font, title, body);
+            _tgtTrackPanel.ApplyFont(font, title, body);
+            _tgtEngagePanel.ApplyFont(font, title, body);
+            _sensorPanel.ApplyFont(font, title, body);
+            _guidancePanel.ApplyFont(font, title, body);
+
+            foreach (Text t in new[] { _lrf, _dialPitchLabel, _dialHdgLabel, _northArrow, _sliderLabel })
             {
                 t.font = font;
                 t.fontSize = body;
@@ -755,40 +800,15 @@ namespace MissileCamera
 
             _headingBig.font = font;
             _headingBig.fontSize = big;
-            _modes.alignment = TextAnchor.UpperLeft;
-            _magRid.alignment = TextAnchor.UpperLeft;
-            _status.alignment = TextAnchor.LowerRight;
-            _ownTelemetry.alignment = TextAnchor.UpperLeft;
-            _alt.alignment = TextAnchor.UpperLeft;
-            _tgtCoord.alignment = TextAnchor.UpperRight;
-            _tgtTelemetry.alignment = TextAnchor.UpperRight;
-            _tgtElv.alignment = TextAnchor.UpperRight;
             _dialPitchLabel.alignment = TextAnchor.UpperCenter;
             _dialHdgLabel.alignment = TextAnchor.UpperCenter;
-            _dialPitchLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
-            _dialHdgLabel.horizontalOverflow = HorizontalWrapMode.Overflow;
-            _dialPitchLabel.verticalOverflow = VerticalWrapMode.Overflow;
-            _dialHdgLabel.verticalOverflow = VerticalWrapMode.Overflow;
-            _ownTelemetry.horizontalOverflow = HorizontalWrapMode.Overflow;
-            _ownTelemetry.verticalOverflow = VerticalWrapMode.Overflow;
-            _alt.horizontalOverflow = HorizontalWrapMode.Overflow;
-            _alt.verticalOverflow = VerticalWrapMode.Overflow;
-            _tgtCoord.horizontalOverflow = HorizontalWrapMode.Overflow;
-            _tgtCoord.verticalOverflow = VerticalWrapMode.Overflow;
-            _tgtTelemetry.horizontalOverflow = HorizontalWrapMode.Overflow;
-            _tgtTelemetry.verticalOverflow = VerticalWrapMode.Overflow;
-            _tgtElv.horizontalOverflow = HorizontalWrapMode.Overflow;
-            _tgtElv.verticalOverflow = VerticalWrapMode.Overflow;
         }
 
         private void ApplyColors()
         {
-            foreach (Text t in new[]
-                     {
-                         _sys, _coord, _ownTelemetry, _alt, _date, _time, _headingBig,
-                         _tgtCoord, _tgtTelemetry, _tgtElv, _lrf, _modes, _status, _magRid,
-                         _dialPitchLabel, _dialHdgLabel, _northArrow, _sliderLabel
-                     })
+            _sys.color = FlirGreen;
+            _headingBig.color = FlirGreen;
+            foreach (Text t in new[] { _lrf, _dialPitchLabel, _dialHdgLabel, _northArrow, _sliderLabel })
                 t.color = FlirGreen;
 
             for (int i = 0; i < _compassMarks.Length; i++)

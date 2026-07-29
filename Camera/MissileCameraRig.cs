@@ -167,7 +167,8 @@ namespace MissileCamera
         }
 
         /// <summary>
-        /// Fullscreen: enable camera so URP processes it like TargetCam. MFD: disabled + manual RenderFrame.
+        /// URP Base when pipeline-driven. Manual path keeps camera enabled (ParticleSystem Automatic
+        /// culling ignores disabled cams) as orphan Overlay so URP does not auto-draw; Camera.Render fills RT.
         /// </summary>
         internal void SetPipelineDriven(bool enabled)
         {
@@ -183,6 +184,7 @@ namespace MissileCamera
                     ApplyPipelineInfraredState();
                     MissileCameraRenderPrep.SetPipelineDriven(
                         _camera, true, forceLdr: false, infrared: _infraredVolumeActive);
+                    ApplyFeedCameraActiveState();
                 }
 
                 return;
@@ -192,8 +194,8 @@ namespace MissileCamera
             if (!enabled)
             {
                 MissileCameraRenderPrep.SetPipelineDriven(null, false);
-                _camera.enabled = false;
                 ApplyPipelineInfraredState();
+                ApplyFeedCameraActiveState();
                 return;
             }
 
@@ -203,7 +205,39 @@ namespace MissileCamera
             ApplyPipelineInfraredState();
             MissileCameraRenderPrep.SetPipelineDriven(
                 _camera, true, forceLdr: false, infrared: _infraredVolumeActive);
-            _camera.enabled = true;
+            ApplyFeedCameraActiveState();
+        }
+
+        /// <summary>
+        /// Keep feed Camera.enabled while following so world VFX/particles near the missile stay simulated.
+        /// Manual (non-pipeline) path uses Overlay to avoid a second URP Base pass on the same RT.
+        /// </summary>
+        private void ApplyFeedCameraActiveState()
+        {
+            if (!IsRootAlive)
+                return;
+
+            bool following = _missile != null && !_missile.disabled && _renderTexture != null;
+            UniversalAdditionalCameraData urp = _camera.GetUniversalAdditionalCameraData();
+
+            if (_pipelineDriven)
+            {
+                urp.renderType = CameraRenderType.Base;
+                _camera.targetTexture = _renderTexture;
+                _camera.enabled = true;
+                return;
+            }
+
+            if (following)
+            {
+                urp.renderType = CameraRenderType.Overlay;
+                _camera.targetTexture = _renderTexture;
+                _camera.enabled = true;
+                return;
+            }
+
+            urp.renderType = CameraRenderType.Base;
+            _camera.enabled = false;
         }
 
         /// <summary>
@@ -323,6 +357,7 @@ namespace MissileCamera
             _root.transform.SetParent(missile.transform, false);
             _root.transform.localPosition = new Vector3(0f, 0f, _localNoseZ);
             _root.transform.localRotation = Quaternion.identity;
+            ApplyFeedCameraActiveState();
 
             string unitName = missile.definition != null ? missile.definition.unitName : missile.name;
             MfdLog.Info(
@@ -348,6 +383,8 @@ namespace MissileCamera
 
             if (_root.transform.parent != null)
                 _root.transform.SetParent(null, true);
+
+            ApplyFeedCameraActiveState();
         }
 
         internal void RenderFrame(bool managePrep = true)
@@ -417,7 +454,18 @@ namespace MissileCamera
                     urp.renderPostProcessing = false;
                 }
 
-                _camera.Render();
+                // Overlay keeps URP from auto-drawing; force Base for this manual submit so particles/VFX render.
+                CameraRenderType prevType = urp.renderType;
+                urp.renderType = CameraRenderType.Base;
+                _camera.enabled = true;
+                try
+                {
+                    _camera.Render();
+                }
+                finally
+                {
+                    urp.renderType = prevType;
+                }
 
                 if (useBlit && _hdrRenderTexture != null && _renderTexture != null)
                 {
@@ -446,6 +494,7 @@ namespace MissileCamera
                     MissileCameraRenderPrep.AfterRender();
                 RenderSettings.fog = prevFog;
                 RenderTexture.active = prevActive;
+                ApplyFeedCameraActiveState();
             }
         }
 

@@ -3,29 +3,44 @@ using UnityEngine.UI;
 
 namespace MissileCamera
 {
-    /// <summary>Phase 0: shuffled feed tiles assemble into a full frame (~6 rows of squares).</summary>
+    /// <summary>Phase 0: shuffled feed tiles recursively subdivide (x4 per step) and keep swapping.</summary>
     internal sealed class MissileCameraBootTilePuzzle
     {
-        private const int Rows = 6;
-        private const float StartScale = 0.62f;
+        private const int BaseRows = 4;
+        private const int SubdivideSteps = 2;
+        private const float StartScale = 1f;
         private static readonly Color FallbackTint = new Color(0.15f, 0.55f, 0.28f, 1f);
-        private static readonly Color BorderTint = new Color(0.2f, 1f, 0.45f, 0.85f);
 
         private readonly GameObject _rootGo;
-        private readonly RectTransform[] _tileRts;
-        private readonly Vector2[] _startPos;
-        private readonly Vector2[] _endPos;
+        private readonly Texture? _feedTexture;
+        private readonly float _screenH;
+        private readonly int _baseCols;
+        private readonly int _baseRows;
+        private RectTransform[] _tileRts;
+        private Vector2[] _endPos;
+        private int[] _order;
+        private int _currentLevel;
 
         private MissileCameraBootTilePuzzle(
             GameObject rootGo,
+            Texture? feedTexture,
+            float screenH,
+            int baseCols,
+            int baseRows,
             RectTransform[] tileRts,
-            Vector2[] startPos,
-            Vector2[] endPos)
+            Vector2[] endPos,
+            int[] order,
+            int currentLevel)
         {
             _rootGo = rootGo;
+            _feedTexture = feedTexture;
+            _screenH = screenH;
+            _baseCols = baseCols;
+            _baseRows = baseRows;
             _tileRts = tileRts;
-            _startPos = startPos;
             _endPos = endPos;
+            _order = order;
+            _currentLevel = currentLevel;
         }
 
         internal static MissileCameraBootTilePuzzle? Create(
@@ -37,10 +52,9 @@ namespace MissileCamera
             if (parent == null || screenW < 16f || screenH < 16f)
                 return null;
 
-            float cell = screenH / Rows;
+            float cell = screenH / BaseRows;
             int cols = Mathf.Max(1, Mathf.CeilToInt(screenW / cell));
-            // Keep cells square; may slightly overflow width — OK for assemble look.
-            int count = cols * Rows;
+            int rows = BaseRows;
 
             var rootGo = new GameObject("BootTilePuzzle", typeof(RectTransform));
             rootGo.transform.SetParent(parent, false);
@@ -48,25 +62,141 @@ namespace MissileCamera
             Stretch(root);
             root.SetAsLastSibling();
 
-            var tileRts = new RectTransform[count];
-            var endPos = new Vector2[count];
-            var startPos = new Vector2[count];
-            var order = new int[count];
+            RectTransform[] tileRts = System.Array.Empty<RectTransform>();
+            Vector2[] endPos = System.Array.Empty<Vector2>();
+            int[] order = System.Array.Empty<int>();
+            BuildTiles(
+                root,
+                feedTexture,
+                screenH,
+                cols,
+                rows,
+                0,
+                ref tileRts,
+                ref endPos,
+                ref order);
+
+            MfdLog.Info($"boot tiles created cols={cols} rows={rows} tex={(feedTexture != null ? "ok" : "fallback")}");
+            return new MissileCameraBootTilePuzzle(
+                rootGo,
+                feedTexture,
+                screenH,
+                cols,
+                rows,
+                tileRts,
+                endPos,
+                order,
+                0);
+        }
+
+        internal void Tick(float t)
+        {
+            t = Mathf.Clamp01(t);
+            int desiredLevel = Mathf.Clamp(Mathf.FloorToInt(t * (SubdivideSteps + 1)), 0, SubdivideSteps);
+            if (desiredLevel != _currentLevel)
+            {
+                Rebuild(desiredLevel);
+            }
+
+            if (t >= 1f)
+            {
+                Vector3 doneScale = Vector3.one;
+                for (int i = 0; i < _tileRts.Length; i++)
+                {
+                    RectTransform? rt = _tileRts[i];
+                    if (rt == null)
+                        continue;
+                    rt.anchoredPosition = _endPos[i];
+                    rt.localScale = doneScale;
+                }
+
+                return;
+            }
+
+            // Instant random swaps between tile positions (no interpolation) on each subdivision level.
+            int swaps = Mathf.Clamp(_order.Length / 10, 8, 96);
+            for (int k = 0; k < swaps; k++)
+            {
+                int a = Random.Range(0, _order.Length);
+                int b = Random.Range(0, _order.Length);
+                if (a == b)
+                    continue;
+                int tmp = _order[a];
+                _order[a] = _order[b];
+                _order[b] = tmp;
+            }
+
+            Vector3 s = Vector3.one;
+            for (int i = 0; i < _tileRts.Length; i++)
+            {
+                RectTransform? rt = _tileRts[i];
+                if (rt == null)
+                    continue;
+                rt.anchoredPosition = _endPos[_order[i]];
+                rt.localScale = s;
+            }
+        }
+
+        private void Rebuild(int level)
+        {
+            if (_rootGo == null)
+                return;
+
+            RectTransform root = _rootGo.GetComponent<RectTransform>();
+            BuildTiles(
+                root,
+                _feedTexture,
+                _screenH,
+                _baseCols,
+                _baseRows,
+                level,
+                ref _tileRts,
+                ref _endPos,
+                ref _order);
+            _currentLevel = level;
+        }
+
+        private static void BuildTiles(
+            RectTransform root,
+            Texture? feedTexture,
+            float screenH,
+            int baseCols,
+            int baseRows,
+            int level,
+            ref RectTransform[] tileRts,
+            ref Vector2[] endPos,
+            ref int[] order)
+        {
+            for (int i = root.childCount - 1; i >= 0; i--)
+            {
+                Object.Destroy(root.GetChild(i).gameObject);
+            }
+
+            int rows = baseRows << level;
+            int cols = baseCols << level;
+            int count = cols * rows;
+            float cell = screenH / rows;
+            float originX = -cols * cell * 0.5f + cell * 0.5f;
+            float originY = rows * cell * 0.5f - cell * 0.5f;
+
+            tileRts = new RectTransform[count];
+            endPos = new Vector2[count];
+            order = new int[count];
             for (int i = 0; i < count; i++)
                 order[i] = i;
             Shuffle(order);
-
-            float originX = -cols * cell * 0.5f + cell * 0.5f;
-            float originY = Rows * cell * 0.5f - cell * 0.5f;
 
             for (int i = 0; i < count; i++)
             {
                 int col = i % cols;
                 int row = i / cols;
                 float u = col / (float)cols;
-                float v = 1f - (row + 1) / (float)Rows;
+                float v = 1f - (row + 1) / (float)rows;
                 float uw = 1f / cols;
-                float uh = 1f / Rows;
+                float uh = 1f / rows;
+                // Slight UV inset removes bilinear bleed seams that look like borders.
+                float epsU = uw * 0.02f;
+                float epsV = uh * 0.02f;
 
                 var go = new GameObject("BootTile" + i, typeof(RectTransform));
                 go.transform.SetParent(root, false);
@@ -74,7 +204,7 @@ namespace MissileCamera
                 rt.anchorMin = new Vector2(0.5f, 0.5f);
                 rt.anchorMax = new Vector2(0.5f, 0.5f);
                 rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.sizeDelta = new Vector2(cell - 2f, cell - 2f);
+                rt.sizeDelta = new Vector2(cell, cell);
 
                 Vector2 correct = new Vector2(originX + col * cell, originY - row * cell);
                 endPos[i] = correct;
@@ -82,32 +212,23 @@ namespace MissileCamera
                 int from = order[i];
                 int fromCol = from % cols;
                 int fromRow = from / cols;
-                startPos[i] = new Vector2(originX + fromCol * cell, originY - fromRow * cell);
-
-                rt.anchoredPosition = startPos[i];
+                rt.anchoredPosition = new Vector2(originX + fromCol * cell, originY - fromRow * cell);
                 rt.localScale = new Vector3(StartScale, StartScale, 1f);
-
-                // Border so tiles read as squares even on dark feed.
-                var borderGo = new GameObject("Border", typeof(RectTransform), typeof(Image));
-                borderGo.transform.SetParent(rt, false);
-                RectTransform borderRt = borderGo.GetComponent<RectTransform>();
-                Stretch(borderRt);
-                Image border = borderGo.GetComponent<Image>();
-                border.color = BorderTint;
-                border.raycastTarget = false;
 
                 var fillGo = new GameObject("Fill", typeof(RectTransform), typeof(RawImage));
                 fillGo.transform.SetParent(rt, false);
                 RectTransform fillRt = fillGo.GetComponent<RectTransform>();
                 Stretch(fillRt);
-                fillRt.offsetMin = new Vector2(2f, 2f);
-                fillRt.offsetMax = new Vector2(-2f, -2f);
                 RawImage img = fillGo.GetComponent<RawImage>();
                 img.raycastTarget = false;
                 if (feedTexture != null)
                 {
                     img.texture = feedTexture;
-                    img.uvRect = new Rect(u, v, uw, uh);
+                    img.uvRect = new Rect(
+                        u + epsU,
+                        v + epsV,
+                        Mathf.Max(0f, uw - epsU * 2f),
+                        Mathf.Max(0f, uh - epsV * 2f));
                     img.color = Color.white;
                 }
                 else
@@ -117,25 +238,6 @@ namespace MissileCamera
                 }
 
                 tileRts[i] = rt;
-            }
-
-            MfdLog.Info($"boot tiles created cols={cols} rows={Rows} cell={cell:F0} tex={(feedTexture != null ? "ok" : "fallback")}");
-            return new MissileCameraBootTilePuzzle(rootGo, tileRts, startPos, endPos);
-        }
-
-        internal void Tick(float t)
-        {
-            t = Mathf.Clamp01(t);
-            float e = EaseOutCubic(t);
-            float scale = Mathf.Lerp(StartScale, 1f, e);
-            Vector3 s = new Vector3(scale, scale, 1f);
-            for (int i = 0; i < _tileRts.Length; i++)
-            {
-                RectTransform? rt = _tileRts[i];
-                if (rt == null)
-                    continue;
-                rt.anchoredPosition = Vector2.Lerp(_startPos[i], _endPos[i], e);
-                rt.localScale = s;
             }
         }
 
@@ -154,16 +256,6 @@ namespace MissileCamera
                 a[i] = a[j];
                 a[j] = tmp;
             }
-        }
-
-        private static float EaseOutCubic(float x)
-        {
-            if (x <= 0f)
-                return 0f;
-            if (x >= 1f)
-                return 1f;
-            float u = 1f - x;
-            return 1f - u * u * u;
         }
 
         private static void Stretch(RectTransform rt)

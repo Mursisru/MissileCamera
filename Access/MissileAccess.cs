@@ -161,6 +161,9 @@ namespace MissileCamera
         internal static bool TryGetFuelFraction(Missile missile, out float fraction) =>
             MotorAccess.TryGetFuelFraction(missile, out fraction);
 
+        internal static bool TryGetThrottle(Missile missile, out float throttle) =>
+            MotorAccess.TryGetThrottle(missile, out throttle);
+
         internal static MissileGuidanceStatus GetGuidanceStatus(Missile missile) =>
             MissileSeekerAccess.ResolveGuidance(missile);
 

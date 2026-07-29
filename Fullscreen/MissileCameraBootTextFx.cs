@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
@@ -9,7 +8,7 @@ namespace MissileCamera
     internal sealed class MissileCameraBootTextFx
     {
         private const int MaxSlots = 8;
-        private const int BufCap = 96;
+        private const int BufCap = 192;
         private const string Hex = "0123456789ABCDEF";
 
         private struct CalSlot
@@ -17,7 +16,7 @@ namespace MissileCamera
             internal int TextIndex;
             internal int CharIndex;
             internal float PhaseT;
-            internal byte Stage; // 0 fill/noise, 1 random, 2 done wait
+            internal byte Stage;
             internal float StageDur;
             internal bool Active;
         }
@@ -27,10 +26,9 @@ namespace MissileCamera
         private char[][] _work = System.Array.Empty<char[]>();
         private readonly CalSlot[] _slots = new CalSlot[MaxSlots];
         private readonly StringBuilder _sb = new StringBuilder(BufCap);
-        private readonly char[] _lineBuf = new char[BufCap];
         private CanvasGroup? _flickerGroup;
         private float _nextValueTime;
-        private float _valueInterval = 1f / 20f;
+        private float _valueInterval = 1f / 18f;
         private bool _bound;
 
         internal void Bind(RectTransform? flirRoot)
@@ -130,14 +128,10 @@ namespace MissileCamera
                 }
                 else if (_slots[s].Stage == 1)
                 {
-                    // restore char then free slot
                     RestoreChar(_slots[s].TextIndex, _slots[s].CharIndex);
                     _slots[s].Active = false;
                 }
             }
-
-            // Keep non-active chars at target (in case drum wasn't running).
-            FlushWorkToTexts();
         }
 
         internal void TickHexLineDrum()
@@ -151,26 +145,34 @@ namespace MissileCamera
                 if (text == null)
                     continue;
 
-                int len = Mathf.Clamp((_targets[i] ?? string.Empty).Length, 8, BufCap - 1);
-                for (int c = 0; c < len; c++)
+                string target = _targets[i] ?? string.Empty;
+                if (target.Length == 0)
                 {
-                    if ((c & 3) == 3)
-                        _lineBuf[c] = ' ';
-                    else if ((c & 7) == 0)
-                        _lineBuf[c] = '0';
-                    else if ((c & 7) == 1)
-                        _lineBuf[c] = 'x';
-                    else
-                        _lineBuf[c] = Hex[Random.Range(0, 16)];
+                    text.text = string.Empty;
+                    continue;
                 }
 
-                // short hash tail
-                int hashStart = Mathf.Max(0, len - 8);
-                for (int c = hashStart; c < len; c++)
-                    _lineBuf[c] = Hex[Random.Range(0, 16)];
+                // Preserve newlines / whitespace layout; scramble glyph cells only.
+                EnsureWork(i, target);
+                char[] buf = _work[i];
+                target.CopyTo(0, buf, 0, target.Length);
+                for (int c = 0; c < target.Length; c++)
+                {
+                    char ch = target[c];
+                    if (ch == '\n' || ch == '\r' || ch == ' ' || ch == '\t')
+                        continue;
+                    if ((c & 3) == 3)
+                        buf[c] = ' ';
+                    else if ((c & 7) == 0)
+                        buf[c] = '0';
+                    else if ((c & 7) == 1)
+                        buf[c] = 'x';
+                    else
+                        buf[c] = Hex[Random.Range(0, 16)];
+                }
 
                 _sb.Length = 0;
-                _sb.Append(_lineBuf, 0, len);
+                _sb.Append(buf, 0, target.Length);
                 text.text = _sb.ToString();
             }
         }
@@ -191,7 +193,7 @@ namespace MissileCamera
 
                 string target = _targets[i] ?? string.Empty;
                 if (LooksNumericHeavy(target))
-                    text.text = BuildChaoticTelemetryLine(target);
+                    text.text = ScrambleNumericKeepLayout(target);
                 else
                     text.text = target;
             }
@@ -208,7 +210,7 @@ namespace MissileCamera
                 return;
 
             int ci = Random.Range(0, target.Length);
-            if (char.IsWhiteSpace(target[ci]))
+            if (char.IsWhiteSpace(target[ci]) || target[ci] == '\n' || target[ci] == '\r')
                 return;
 
             slot.Active = true;
@@ -269,11 +271,6 @@ namespace MissileCamera
             _texts[textIndex].text = _sb.ToString();
         }
 
-        private void FlushWorkToTexts()
-        {
-            // no-op: active slots write themselves; inactive keep last restore
-        }
-
         private static char PerlinGlyph(int a, int b, float t)
         {
             float n = Mathf.PerlinNoise(a * 0.37f + t * 3.1f, b * 0.53f + t * 2.7f);
@@ -294,57 +291,94 @@ namespace MissileCamera
                     digits++;
             }
 
-            return digits >= 2 || s.IndexOf("SPD", System.StringComparison.Ordinal) >= 0
+            return digits >= 2
+                || s.IndexOf("SPD", System.StringComparison.Ordinal) >= 0
                 || s.IndexOf("ALT", System.StringComparison.Ordinal) >= 0
                 || s.IndexOf("MACH", System.StringComparison.Ordinal) >= 0
                 || s.IndexOf("MAG", System.StringComparison.Ordinal) >= 0
                 || s.IndexOf("RNG", System.StringComparison.Ordinal) >= 0
+                || s.IndexOf("PIT", System.StringComparison.Ordinal) >= 0
+                || s.IndexOf("HDG", System.StringComparison.Ordinal) >= 0
+                || s.IndexOf("TTI", System.StringComparison.Ordinal) >= 0
                 || s.IndexOf("G ", System.StringComparison.Ordinal) >= 0;
         }
 
-        private string BuildChaoticTelemetryLine(string template)
+        /// <summary>
+        /// Keep newlines and labels; only scramble digit / decimal runs so multiline panels stay multiline.
+        /// </summary>
+        private string ScrambleNumericKeepLayout(string template)
         {
-            float spd = Random.Range(120f, 980f);
-            float alt = Random.Range(50f, 12000f);
-            float mach = Random.Range(0.2f, 2.8f);
-            float g = Random.Range(0.2f, 9.5f);
-            float rng = Random.Range(200f, 45000f);
-            float mag = Random.Range(1f, 48f);
+            EnsureScratch(template.Length);
+            template.CopyTo(0, _scratch, 0, template.Length);
 
-            if (template.IndexOf("MACH", System.StringComparison.Ordinal) >= 0)
+            int i = 0;
+            while (i < template.Length)
             {
-                return "MACH " + mach.ToString("F2", CultureInfo.InvariantCulture)
-                    + "  FUEL " + Random.Range(5, 99).ToString(CultureInfo.InvariantCulture) + "%";
+                char ch = template[i];
+                if (ch == '\n' || ch == '\r')
+                {
+                    i++;
+                    continue;
+                }
+
+                if (char.IsDigit(ch) || ch == '.' || ch == '+' || ch == '-')
+                {
+                    int start = i;
+                    bool hasDot = ch == '.';
+                    i++;
+                    while (i < template.Length)
+                    {
+                        char n = template[i];
+                        if (char.IsDigit(n))
+                        {
+                            i++;
+                            continue;
+                        }
+
+                        if (n == '.' && !hasDot)
+                        {
+                            hasDot = true;
+                            i++;
+                            continue;
+                        }
+
+                        break;
+                    }
+
+                    int len = i - start;
+                    if (len <= 0)
+                        continue;
+
+                    // Leading sign alone — leave it.
+                    if (len == 1 && (template[start] == '+' || template[start] == '-'))
+                        continue;
+
+                    for (int c = start; c < i; c++)
+                    {
+                        char t = template[c];
+                        if (t == '.' || t == '+' || t == '-')
+                            _scratch[c] = t;
+                        else
+                            _scratch[c] = (char)('0' + Random.Range(0, 10));
+                    }
+
+                    continue;
+                }
+
+                i++;
             }
 
-            if (template.IndexOf("MAG", System.StringComparison.Ordinal) >= 0)
-            {
-                return "MAG x" + mag.ToString("F1", CultureInfo.InvariantCulture)
-                    + "\nFOV " + Random.Range(2, 90).ToString(CultureInfo.InvariantCulture) + "°";
-            }
+            _sb.Length = 0;
+            _sb.Append(_scratch, 0, template.Length);
+            return _sb.ToString();
+        }
 
-            if (template.IndexOf("SPD", System.StringComparison.Ordinal) >= 0
-                || template.IndexOf("ALT", System.StringComparison.Ordinal) >= 0)
-            {
-                return "SPD " + spd.ToString("F0", CultureInfo.InvariantCulture)
-                    + "  HDG " + Random.Range(0, 359).ToString(CultureInfo.InvariantCulture) + "°T"
-                    + "\nALT " + alt.ToString("F0", CultureInfo.InvariantCulture)
-                    + "  G " + g.ToString("F1", CultureInfo.InvariantCulture);
-            }
+        private char[] _scratch = new char[BufCap];
 
-            if (template.IndexOf("SLT", System.StringComparison.Ordinal) >= 0
-                || template.IndexOf("RNG", System.StringComparison.Ordinal) >= 0
-                || template.IndexOf("LRF", System.StringComparison.Ordinal) >= 0)
-            {
-                return "SLT " + rng.ToString("F0", CultureInfo.InvariantCulture)
-                    + "  CLOS " + Random.Range(50, 900).ToString(CultureInfo.InvariantCulture)
-                    + "\nTTI " + Random.Range(0.2f, 40f).ToString("F1", CultureInfo.InvariantCulture) + "s"
-                    + "  LRF " + rng.ToString("F0", CultureInfo.InvariantCulture) + "m";
-            }
-
-            return "V " + spd.ToString("F0", CultureInfo.InvariantCulture)
-                + " A " + alt.ToString("F0", CultureInfo.InvariantCulture)
-                + " M " + mach.ToString("F2", CultureInfo.InvariantCulture);
+        private void EnsureScratch(int len)
+        {
+            if (_scratch.Length < len)
+                _scratch = new char[len + 16];
         }
     }
 }

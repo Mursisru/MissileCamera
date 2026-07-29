@@ -6,7 +6,7 @@ namespace MissileCamera
     /// <summary>Center stacked diagnostic lines + final SUCCESSFUL badge.</summary>
     internal sealed class MissileCameraBootDiagnostics
     {
-        private static readonly Color FlirGreen = new Color(0.2f, 1f, 0.45f, 1f);
+        private static readonly Color DiagBlue = new Color(0.35f, 0.75f, 1f, 1f);
         private const int MaxLines = 8;
         private const float LineHeight = 22f;
 
@@ -89,7 +89,7 @@ namespace MissileCamera
             if (_badgeGo != null)
                 return;
 
-            _badgeGo = new GameObject("BootSuccessfulBadge", typeof(RectTransform), typeof(Image));
+            _badgeGo = new GameObject("BootSuccessfulBadge", typeof(RectTransform));
             _badgeGo.transform.SetParent(_root, false);
             RectTransform rt = _badgeGo.GetComponent<RectTransform>();
             rt.anchorMin = new Vector2(0.5f, 0.5f);
@@ -97,9 +97,11 @@ namespace MissileCamera
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = Vector2.zero;
             rt.sizeDelta = new Vector2(280f, 48f);
-            Image bg = _badgeGo.GetComponent<Image>();
-            bg.color = new Color(0.02f, 0.08f, 0.04f, 0.92f);
-            bg.raycastTarget = false;
+
+            CreateFrameEdge(rt, "Top", new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 2f));
+            CreateFrameEdge(rt, "Bottom", new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 2f));
+            CreateFrameEdge(rt, "Left", new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f), new Vector2(2f, 0f));
+            CreateFrameEdge(rt, "Right", new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(1f, 0.5f), new Vector2(2f, 0f));
 
             Text label = CreateLabel(rt, "BadgeText");
             RectTransform lrt = label.rectTransform;
@@ -107,7 +109,7 @@ namespace MissileCamera
             label.alignment = TextAnchor.MiddleCenter;
             label.fontSize = 20;
             label.text = "SUCCESSFUL";
-            label.color = FlirGreen;
+            label.color = DiagBlue;
         }
 
         internal void Destroy()
@@ -139,12 +141,33 @@ namespace MissileCamera
             Text text = go.GetComponent<Text>();
             text.font = HudFontHelper.GetFont();
             text.fontSize = 15;
-            text.color = FlirGreen;
+            text.color = DiagBlue;
             text.alignment = TextAnchor.MiddleCenter;
             text.horizontalOverflow = HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Overflow;
             text.raycastTarget = false;
             return text;
+        }
+
+        private static void CreateFrameEdge(
+            RectTransform parent,
+            string name,
+            Vector2 anchorMin,
+            Vector2 anchorMax,
+            Vector2 pivot,
+            Vector2 sizeDelta)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            RectTransform rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = anchorMin;
+            rt.anchorMax = anchorMax;
+            rt.pivot = pivot;
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = sizeDelta;
+            Image img = go.GetComponent<Image>();
+            img.color = DiagBlue;
+            img.raycastTarget = false;
         }
 
         private static void Stretch(RectTransform rt)

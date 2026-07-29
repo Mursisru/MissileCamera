@@ -251,9 +251,12 @@ namespace MissileCamera
             int rendererIndex = GetRendererIndex(refUrp);
             bool wantHdr = !forceLdr && reference.allowHDR;
             bool wantPp = _pipelineInfrared || _pipelineNightVision;
+            int desiredCulling = reference.cullingMask
+                | (int)PhysicsLayers.EffectsMask
+                | (int)PhysicsLayers.TransparentFXMask;
 
             bool dirty = !ReferenceEquals(reference, _lastMirrorReference)
-                || _lastMirrorCulling != reference.cullingMask
+                || _lastMirrorCulling != desiredCulling
                 || _lastMirrorAllowHdr != wantHdr
                 || _lastMirrorAllowMsaa != reference.allowMSAA
                 || _lastMirrorClearFlags != reference.clearFlags
@@ -274,7 +277,7 @@ namespace MissileCamera
                 return;
             }
 
-            feedCamera.cullingMask = reference.cullingMask;
+            feedCamera.cullingMask = desiredCulling;
             feedCamera.allowHDR = wantHdr;
             feedCamera.allowMSAA = reference.allowMSAA;
             feedCamera.clearFlags = reference.clearFlags;
@@ -292,7 +295,7 @@ namespace MissileCamera
             feedUrp.requiresColorOption = CameraOverrideOption.UsePipelineSettings;
 
             _lastMirrorReference = reference;
-            _lastMirrorCulling = reference.cullingMask;
+            _lastMirrorCulling = desiredCulling;
             _lastMirrorAllowHdr = wantHdr;
             _lastMirrorAllowMsaa = reference.allowMSAA;
             _lastMirrorClearFlags = reference.clearFlags;

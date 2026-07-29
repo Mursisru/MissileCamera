@@ -235,9 +235,13 @@ namespace MissileCamera
             Vector3 missilePos = missile.transform.position;
             bool autoInfrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
 
-            // MFD and fullscreen both use dedicated feed camera → RawImage.
-            // NEVER drive CameraStateManager.mainCamera (see Fullscreen/CAMERA_SAFETY.md).
-            rig.SetPipelineDriven(false);
+            // Dedicated feed RT → RawImage only. Never touch CameraStateManager (CAMERA_SAFETY).
+            // COLOR/NVG: pipeline-driven (camera enabled → ParticleSystem culling + URP draw).
+            // IR blit modes: manual RenderFrame (HDR→blit); camera stays enabled as Overlay between frames.
+            bool needIrBlit = fullscreen
+                ? MissileCameraVisionModeController.UsesInfraredBlit(MissileCameraVisionModeController.Mode)
+                : autoInfrared;
+            rig.SetPipelineDriven(!needIrBlit);
 
             if (fullscreen)
                 MissileCameraVanillaHudBridge.TickHideStubs();
@@ -270,28 +274,36 @@ namespace MissileCamera
                 _nextRenderTimeUnscaled = Time.unscaledTime + interval;
                 rig.SyncPose();
 
-                bool aircraftMulti = MissileCameraAircraftCamConfig.Enabled && MfdLayoutController.IsLayoutActive;
-                bool cockpitMulti = MissileCameraCockpitPipController.IsActive;
-                bool multi = !fullscreen && (aircraftMulti || cockpitMulti);
-                if (multi)
-                    MissileCameraFrameRenderContext.BeginMultiRender();
-
-                try
+                if (!rig.IsPipelineDriven)
                 {
+                    bool aircraftMulti = MissileCameraAircraftCamConfig.Enabled && MfdLayoutController.IsLayoutActive;
+                    bool cockpitMulti = MissileCameraCockpitPipController.IsActive;
+                    bool multi = !fullscreen && (aircraftMulti || cockpitMulti);
                     if (multi)
-                        MissileCameraFrameRenderContext.PrepareCamera(rig.FeedCamera, forceLdr: false);
+                        MissileCameraFrameRenderContext.BeginMultiRender();
 
-                    rig.RenderFrame(managePrep: !multi);
-                    if (!fullscreen)
+                    try
                     {
-                        MissileCameraAircraftCamController.RenderIfDue(useSharedPrep: multi);
-                        MissileCameraCockpitPipController.RenderIfDue(useSharedPrep: multi);
+                        if (multi)
+                            MissileCameraFrameRenderContext.PrepareCamera(rig.FeedCamera, forceLdr: false);
+
+                        rig.RenderFrame(managePrep: !multi);
+                        if (!fullscreen)
+                        {
+                            MissileCameraAircraftCamController.RenderIfDue(useSharedPrep: multi);
+                            MissileCameraCockpitPipController.RenderIfDue(useSharedPrep: multi);
+                        }
+                    }
+                    finally
+                    {
+                        if (multi)
+                            MissileCameraFrameRenderContext.FinishMultiRender();
                     }
                 }
-                finally
+                else if (!fullscreen)
                 {
-                    if (multi)
-                        MissileCameraFrameRenderContext.FinishMultiRender();
+                    MissileCameraAircraftCamController.RenderIfDue(useSharedPrep: false);
+                    MissileCameraCockpitPipController.RenderIfDue(useSharedPrep: false);
                 }
             }
 

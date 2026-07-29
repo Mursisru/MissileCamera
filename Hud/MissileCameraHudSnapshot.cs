@@ -51,6 +51,7 @@ namespace MissileCamera
         internal readonly float TargetAngleDeg;
         internal readonly float InstantG;
         internal readonly float FuelFraction;
+        internal readonly float ThrottleFraction;
         internal readonly float Mach;
         internal readonly MissileGuidanceStatus Guidance;
         internal readonly float PitchDeg;
@@ -68,6 +69,7 @@ namespace MissileCamera
         private static readonly StringBuilder Scratch = new StringBuilder(64);
         private static float _smoothG;
         private static float _smoothFuel = 1f;
+        private static float _smoothThrottle = 1f;
         private static float _smoothMach;
         private static float _smoothRange;
         private static float _smoothAngle;
@@ -117,6 +119,7 @@ namespace MissileCamera
             float targetAngleDeg,
             float instantG,
             float fuelFraction,
+            float throttleFraction,
             float mach,
             MissileGuidanceStatus guidance,
             float pitchDeg,
@@ -171,6 +174,7 @@ namespace MissileCamera
             TargetAngleDeg = targetAngleDeg;
             InstantG = instantG;
             FuelFraction = fuelFraction;
+            ThrottleFraction = throttleFraction;
             Mach = mach;
             Guidance = guidance;
             PitchDeg = pitchDeg;
@@ -227,6 +231,7 @@ namespace MissileCamera
             targetAngleDeg: 0f,
             instantG: 0f,
             fuelFraction: 0f,
+            throttleFraction: 0f,
             mach: 0f,
             guidance: MissileGuidanceStatus.Ballistic,
             pitchDeg: 0f,
@@ -262,6 +267,8 @@ namespace MissileCamera
             MissileAccess.TryGetInstantG(missile, out gLoad);
             float fuel = 1f;
             MissileAccess.TryGetFuelFraction(missile, out fuel);
+            float throttle = 1f;
+            MissileAccess.TryGetThrottle(missile, out throttle);
             float mach = 0f;
             MissileAccess.TryGetMach(missile, out mach);
             MissileGuidanceStatus guidance = MissileAccess.GetGuidanceStatus(missile);
@@ -277,6 +284,7 @@ namespace MissileCamera
                 missile.GetInstanceID(),
                 ref gLoad,
                 ref fuel,
+                ref throttle,
                 ref mach,
                 ref rangeM,
                 ref angleDeg,
@@ -392,6 +400,7 @@ namespace MissileCamera
                 targetAngleDeg: angleDeg,
                 instantG: gLoad,
                 fuelFraction: fuel,
+                throttleFraction: throttle,
                 mach: mach,
                 guidance: guidance,
                 pitchDeg: pitchDeg,
@@ -411,6 +420,7 @@ namespace MissileCamera
             int missileId,
             ref float g,
             ref float fuel,
+            ref float throttle,
             ref float mach,
             ref float range,
             ref float angle,
@@ -431,6 +441,7 @@ namespace MissileCamera
                 _smoothMissileId = missileId;
                 _smoothG = g;
                 _smoothFuel = fuel;
+                _smoothThrottle = throttle;
                 _smoothMach = mach;
                 _smoothRange = range;
                 _smoothAngle = angle;
@@ -442,6 +453,7 @@ namespace MissileCamera
 
             _smoothG = Mathf.Lerp(_smoothG, g, t);
             _smoothFuel = Mathf.Lerp(_smoothFuel, fuel, t);
+            _smoothThrottle = Mathf.Lerp(_smoothThrottle, throttle, t);
             _smoothMach = Mathf.Lerp(_smoothMach, mach, t);
             _smoothRange = Mathf.Lerp(_smoothRange, range, t);
             _smoothAngle = Mathf.Lerp(_smoothAngle, angle, t);
@@ -454,6 +466,7 @@ namespace MissileCamera
 
             g = _smoothG;
             fuel = _smoothFuel;
+            throttle = _smoothThrottle;
             mach = _smoothMach;
             range = _smoothRange;
             angle = _smoothAngle;
