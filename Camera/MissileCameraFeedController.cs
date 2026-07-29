@@ -186,6 +186,7 @@ namespace MissileCamera
         internal static void Tick()
         {
             RefreshConfigsIfDue();
+            MissileCameraFullscreenController.HealIfOrphaned();
             MissileCameraFullscreenController.TickYieldToVanillaUi();
 
             // Fullscreen/MFD NO SIGNAL burst (switch / destroy / exit-no-missile).
@@ -469,7 +470,6 @@ namespace MissileCamera
         internal static void NotifyOverlayGone()
         {
             _overlayActive = false;
-            MissileCameraFullscreenController.ExitIfActive();
             CancelPostLossSequence();
             MissileCameraInfraredEffect.Clear(_feedImage, _rig);
             MissileCameraPostFxStack.Release();
@@ -487,6 +487,7 @@ namespace MissileCamera
             _zoomOffset = 0f;
             DetachRig();
             MissileCameraTelemetry.ResetThrottle();
+            // FS IsActive self-heals when scene-local overlay dies — do not Exit/restore here.
         }
 
         private static void BindPanel(RectTransform panelRt)
@@ -886,6 +887,7 @@ namespace MissileCamera
         private static void DetachRig()
         {
             _followedMissile = null;
+            MissileCameraRenderPrep.ForceRestoreWorldState();
             if (_rig == null)
                 return;
 

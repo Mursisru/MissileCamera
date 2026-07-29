@@ -4,8 +4,8 @@ namespace MissileCamera
 {
     /// <summary>
     /// Aircraft MFD layouts differ (see reference screenshots):
-    /// - Dedicated split: wide target display — apply mod.
-    /// - Tac overlay: small radar widget on corner — skip mod (size-based only).
+    /// - Dedicated split: wide target display тАФ apply mod.
+    /// - Tac overlay: small radar widget on corner тАФ skip mod (size-based only).
     /// </summary>
     internal enum MfdLayoutProfile
     {
@@ -42,9 +42,7 @@ namespace MissileCamera
 
             // Bomber tac MFD (AB-4 Alkyon / SFB-81 Darkreach): weapon UI may live off TacScreen root.
             if (IsBomberTacAircraft(jsonKey)
-                && (MfdWeaponsZoneAccess.HasBomberBayMarkersForTacScreen(tacScreen, jsonKey)
-                    || (string.Equals(jsonKey, "Darkreach", System.StringComparison.OrdinalIgnoreCase)
-                        && MfdWeaponsZoneAccess.HasDarkreachTacWeaponUi(tacScreen.gameObject))))
+                && MfdWeaponsZoneAccess.HasBomberBayMarkersForTacScreen(tacScreen, jsonKey))
             {
                 return MfdLayoutProfile.DedicatedSplit;
             }
@@ -55,7 +53,7 @@ namespace MissileCamera
                 return MfdLayoutProfile.DedicatedSplit;
             }
 
-            // Corner radar widget only — not a half-screen target feed (even if roughly square).
+            // Corner radar widget only тАФ not a half-screen target feed (even if roughly square).
             if (width < 0.32f && height < 0.42f)
                 return MfdLayoutProfile.Skip;
 

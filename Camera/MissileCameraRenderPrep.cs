@@ -113,6 +113,17 @@ namespace MissileCamera
             return 1;
         }
 
+        internal static void ForceRestoreWorldState()
+        {
+            if (_pipelineFogActive)
+            {
+                RenderSettings.fog = _pipelineFogPrev;
+                _pipelineFogActive = false;
+            }
+
+            _pipelineFeedCamera = null;
+        }
+
         private static void RegisterPipelineHooks()
         {
             if (_pipelineHooksRegistered)

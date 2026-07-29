@@ -126,6 +126,7 @@ namespace MissileCamera.Patches
             try
             {
                 // Markers-only HUD suppress. Never call camera pose writers here (CAMERA_SAFETY.md).
+                MissileCameraFullscreenController.HealIfOrphaned();
                 MissileCameraVanillaHudBridge.LateTickMarkers();
             }
             catch (Exception ex)

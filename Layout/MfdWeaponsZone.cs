@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.UI;
@@ -123,25 +123,13 @@ namespace MissileCamera
 
         internal static bool HasDarkreachLeftBayMarkers(TacScreen tacScreen)
         {
-            Component? aircraft = TacScreenAccess.GetAircraft(tacScreen);
-            string? jsonKey = null;
-            if (aircraft != null)
-            {
-                TargetCam? targetCam = TargetCamAccess.GetTargetCam(aircraft);
-                if (targetCam != null)
-                    jsonKey = MfdDisplayMode.GetAircraftJsonKey(targetCam);
-            }
-
-            GameObject mfdRoot = TacScreenAccess.ResolveDiscoveryRoot(tacScreen, jsonKey);
+            GameObject mfdRoot = tacScreen.gameObject;
             Canvas? canvas = TacScreenAccess.GetCanvasForRoot(mfdRoot) ?? TacScreenAccess.GetCanvas(tacScreen);
             if (canvas == null)
                 return false;
 
             return HasBomberBayMarkers(mfdRoot) && CanResolveDarkreachLeftColumn(mfdRoot, canvas);
         }
-
-        internal static bool HasDarkreachTacWeaponUi(GameObject mfdRoot) =>
-            FindWeaponPanel(mfdRoot) != null || FindBomberProfileInMfd(mfdRoot) != null;
 
         internal static bool IsBomberBayMarkerText(string? raw) => IsBomberBayMarker(raw ?? string.Empty);
 
@@ -304,9 +292,6 @@ namespace MissileCamera
                 if (TryResolveDarkreachWeaponArmedPanel(mfdRoot, canvas, out resolved))
                     return true;
 
-                if (TryResolveDarkreachTacRightWeaponPanel(mfdRoot, canvas, out resolved))
-                    return true;
-
                 MaybeLogDarkreachDiscoveryFailure(mfdRoot, null, canvas, primaryHits);
                 return false;
             }
@@ -386,7 +371,7 @@ namespace MissileCamera
             if (TryResolveIfritFlatStrip(mfdRoot, canvas, out resolved))
                 return true;
 
-            // Legacy Ifrit path — only when TryResolveIfritFlatStrip fails.
+            // Legacy Ifrit path тАФ only when TryResolveIfritFlatStrip fails.
             RectTransform? legacyIfrit = ResolveIfritWeaponsStrip(hardpointHits, gunHits, primaryHits, mfdRoot, canvas);
             if (legacyIfrit != null)
                 return TryFinalizeSinglePanel(legacyIfrit, canvas, mfdRoot, allHits, primaryHits, hardpointHits, gunHits, out resolved);
@@ -497,114 +482,6 @@ namespace MissileCamera
             return true;
         }
 
-        /// <summary>
-        /// SFB-81 target tac MFD: weapon armed strip on the right (rearProfile on weaponPanel).
-        /// Bay labels live on the left bezel — not required on tacScreen root.
-        /// </summary>
-        private static bool TryResolveDarkreachTacRightWeaponPanel(
-            GameObject mfdRoot,
-            Canvas canvas,
-            out ResolvedPanel resolved)
-        {
-            resolved = default;
-
-            RectTransform? profile = FindBomberProfileInMfd(mfdRoot);
-            RectTransform? weaponPanel = profile?.parent != null
-                ? profile.parent.GetComponent<RectTransform>()
-                : FindWeaponPanel(mfdRoot);
-            if (weaponPanel == null)
-                return false;
-
-            if (PanelContainsEngineGauges(weaponPanel))
-                return false;
-
-            Canvas overlayCanvas = TacScreenAccess.GetOverlayCanvas(weaponPanel) ?? canvas;
-            PanelRectState weaponZone = PanelRectNormalizer.CaptureOnCanvas(weaponPanel, overlayCanvas);
-            if (weaponZone.AnchorMin.x < 0.40f)
-                return false;
-
-            RectTransform? columnRoot = SelectDarkreachTacRightColumnRoot(weaponPanel, overlayCanvas);
-            PanelRectState zone = columnRoot != null
-                ? PanelRectNormalizer.CaptureOnCanvas(columnRoot, overlayCanvas)
-                : weaponZone;
-
-            if (!IsDarkreachTacRightColumnZone(zone))
-                zone = ExpandDarkreachTacRightZone(weaponPanel, overlayCanvas);
-
-            if (!IsDarkreachTacRightColumnZone(zone))
-                return false;
-
-            List<RectTransform> hideTargets = CollectDarkreachVisualHideTargets(weaponPanel);
-            if (hideTargets.Count == 0)
-                hideTargets = new List<RectTransform> { weaponPanel };
-
-            float contentRotZ = SampleDarkreachBayLabelRotation(weaponPanel);
-            float fontRef = Mathf.Max(Mathf.Min(weaponPanel.rect.width, weaponPanel.rect.height), 1f);
-
-            MfdLog.Info(
-                $"darkreach tacRight hideRoot={weaponPanel.name} column={(columnRoot != null ? columnRoot.name : "none")} " +
-                $"zone={FormatAnchors(zone)} hideChildren={hideTargets.Count}");
-
-            resolved = new ResolvedPanel(
-                weaponPanel,
-                overlayCanvas,
-                zone,
-                hideTargets,
-                isDarkreachSection: true,
-                stubContentRotationZ: contentRotZ,
-                stubFontRef: fontRef);
-            return true;
-        }
-
-        private static bool IsDarkreachTacRightColumnZone(PanelRectState rect)
-        {
-            float w = rect.AnchorMax.x - rect.AnchorMin.x;
-            float h = rect.AnchorMax.y - rect.AnchorMin.y;
-            return rect.AnchorMin.x >= 0.40f
-                && rect.AnchorMax.x <= 1.01f
-                && w >= 0.04f
-                && h >= 0.35f;
-        }
-
-        private static RectTransform? SelectDarkreachTacRightColumnRoot(RectTransform start, Canvas canvas)
-        {
-            RectTransform? best = null;
-            float bestArea = float.MaxValue;
-            RectTransform? current = start;
-
-            for (int depth = 0; depth < 12 && current != null; depth++)
-            {
-                PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(current, canvas);
-                if (IsDarkreachTacRightColumnZone(zone))
-                {
-                    float area = (zone.AnchorMax.x - zone.AnchorMin.x) * (zone.AnchorMax.y - zone.AnchorMin.y);
-                    if (area < bestArea)
-                    {
-                        bestArea = area;
-                        best = current;
-                    }
-                }
-
-                current = current.parent != null ? current.parent.GetComponent<RectTransform>() : null;
-            }
-
-            return best;
-        }
-
-        private static PanelRectState ExpandDarkreachTacRightZone(RectTransform weaponPanel, Canvas canvas)
-        {
-            PanelRectState z = PanelRectNormalizer.CaptureOnCanvas(weaponPanel, canvas);
-            float minX = Mathf.Clamp(z.AnchorMin.x - 0.04f, 0.45f, 0.95f);
-            float maxX = Mathf.Clamp(z.AnchorMax.x + 0.02f, minX + 0.04f, 0.99f);
-            float minY = Mathf.Clamp(z.AnchorMin.y - 0.02f, 0.02f, 0.95f);
-            float maxY = Mathf.Clamp(z.AnchorMax.y + 0.02f, minY + 0.10f, 0.99f);
-            return new PanelRectState(
-                new Vector2(minX, minY),
-                new Vector2(maxX, maxY),
-                Vector2.zero,
-                Vector2.zero);
-        }
-
         private static bool IsDarkreachAircraft(string? jsonKey) =>
             string.Equals(jsonKey, "Darkreach", System.StringComparison.OrdinalIgnoreCase);
 
@@ -673,7 +550,7 @@ namespace MissileCamera
                 return false;
             }
 
-            // Bezel maps canvas X → screen vertical: column anchors on X (Darkreach), not rows on Y.
+            // Bezel maps canvas X тЖТ screen vertical: column anchors on X (Darkreach), not rows on Y.
             PanelRectState zone = BuildCricketEngineOverlayZone(canvasZone);
             float contentRotZ = SampleCricketEngineLabelRotation(engPanel);
             float fontRef = Mathf.Max(
@@ -728,7 +605,7 @@ namespace MissileCamera
             return engPanel.rect.height > engPanel.rect.width * 1.15f ? 90f : 0f;
         }
 
-        // COIN/Cricket manual bezel tuning — canvas X = screen vertical on engine MFD.
+        // COIN/Cricket manual bezel tuning тАФ canvas X = screen vertical on engine MFD.
         // MinX = physical top, MaxX = physical bottom. Positive expand pulls edge outward.
         private const float CricketManualExpandMinX = 0.01f;
         private const float CricketManualExpandMaxX = 0.085f;
@@ -952,7 +829,7 @@ namespace MissileCamera
                 zone = stripZone;
             }
 
-            // Profile labels use 270° in hierarchy; left MFD bezel reads stub correctly at 90° (see Cricket).
+            // Profile labels use 270┬░ in hierarchy; left MFD bezel reads stub correctly at 90┬░ (see Cricket).
             float contentRotZ = 90f;
             float fontRef = Mathf.Max(
                 Mathf.Max(weaponPanel.rect.width, weaponPanel.rect.height),
@@ -981,7 +858,7 @@ namespace MissileCamera
         }
 
         /// <summary>
-        /// Left MFD bezel is portrait: canvas Y → screen horizontal, canvas X → screen vertical.
+        /// Left MFD bezel is portrait: canvas Y тЖТ screen horizontal, canvas X тЖТ screen vertical.
         /// Widen Y; cap X above FUEL/StatusGauges.
         /// </summary>
         private static PanelRectState BuildIbisWeaponOverlayZone(
@@ -1185,7 +1062,7 @@ namespace MissileCamera
             return true;
         }
 
-        /// <summary>SAH-46: L/R TURBINE blocks only — TAIL DUCT stays vanilla.</summary>
+        /// <summary>SAH-46: L/R TURBINE blocks only тАФ TAIL DUCT stays vanilla.</summary>
         private static List<RectTransform> CollectChicaneEngineHideTargets(
             GameObject mfdRoot,
             Transform? aircraftRoot,
@@ -1616,7 +1493,7 @@ namespace MissileCamera
                 return false;
 
             // Only collapse to a common parent when it still fits the NOZZLE+ENGINE band
-            // (otherwise climbing pulls in the weapons silhouette → reject at y≈0.95).
+            // (otherwise climbing pulls in the weapons silhouette тЖТ reject at yтЙИ0.95).
             RectTransform? commonParent = TryFindVagrantCommonParent(hideTargets, overlayCanvas);
             List<RectTransform> finalTargets = hideTargets;
             if (commonParent != null)
@@ -1709,7 +1586,7 @@ namespace MissileCamera
                     TryAdd(ResolveVagrantGaugeFrame(telemetryRt, canvas));
                 }
 
-                // RPM lives under ENGINE on Vagrant — only take if already under an accepted engine frame.
+                // RPM lives under ENGINE on Vagrant тАФ only take if already under an accepted engine frame.
                 foreach (RPMGauge rpm in root.GetComponentsInChildren<RPMGauge>(true))
                 {
                     if (rpm == null || !rpm.TryGetComponent(out RectTransform rpmRt))
@@ -1939,8 +1816,8 @@ namespace MissileCamera
 
         private static RectTransform ResolveVagrantGaugeFrame(RectTransform gaugeRt, Canvas canvas)
         {
-            // Prefer the gauge itself or a tight local frame — never climb into the full right column
-            // (that pulls weapons silhouette and rejects at maxY≈0.95).
+            // Prefer the gauge itself or a tight local frame тАФ never climb into the full right column
+            // (that pulls weapons silhouette and rejects at maxYтЙИ0.95).
             RectTransform? best = null;
             float bestScore = float.MaxValue;
             RectTransform? current = gaugeRt;
@@ -2311,7 +2188,7 @@ namespace MissileCamera
             return CollectCompassEngineGaugeRows(weaponPanel);
         }
 
-        /// <summary>WeaponPanel direct children with RPM/Status gauges — mirror Ifrit status-child scan.</summary>
+        /// <summary>WeaponPanel direct children with RPM/Status gauges тАФ mirror Ifrit status-child scan.</summary>
         private static List<RectTransform> CollectCompassEngineDirectChildren(RectTransform weaponPanel)
         {
             var targets = new List<RectTransform>();
@@ -2614,7 +2491,7 @@ namespace MissileCamera
                 hideTargets = new List<RectTransform> { hideRoot };
 
             // Left MFD bezel is portrait: vanilla bay labels use rotated Text (typically Z=270).
-            // Landscape stub rows inside a rotated content root — same idea as other aircraft, one group rotation.
+            // Landscape stub rows inside a rotated content root тАФ same idea as other aircraft, one group rotation.
             PanelRectState zone = BuildDarkreachCanvasColumnZone(canvasZone);
             float contentRotZ = SampleDarkreachBayLabelRotation(hideRoot);
             float fontRef = Mathf.Max(Mathf.Min(hideRoot.rect.width, hideRoot.rect.height), 1f);
@@ -2674,7 +2551,7 @@ namespace MissileCamera
             return hideRoot.rect.height > hideRoot.rect.width * 1.15f ? 90f : 0f;
         }
 
-        /// <summary>Full-height canvas column at weaponPanel X — matches left MFD bezel viewport.</summary>
+        /// <summary>Full-height canvas column at weaponPanel X тАФ matches left MFD bezel viewport.</summary>
         private static PanelRectState BuildDarkreachCanvasColumnZone(PanelRectState weaponPanelOnCanvas)
         {
             float minX = Mathf.Clamp(weaponPanelOnCanvas.AnchorMin.x - 0.01f, 0.02f, 0.95f);
@@ -4771,7 +4648,7 @@ namespace MissileCamera
                 return;
 
             _ifritStatusDiagDone = true;
-            MfdLog.Info($"ifrit statusTop unresolved stripMinY={stripMinY:F2} — WeaponPanel children:");
+            MfdLog.Info($"ifrit statusTop unresolved stripMinY={stripMinY:F2} тАФ WeaponPanel children:");
 
             for (int i = 0; i < weaponPanel.childCount; i++)
             {
@@ -4981,25 +4858,25 @@ namespace MissileCamera
 
             var zone = new MissileCameraZone(resolved.Zone);
             string label = resolved.IsAlkyonFullPanel
-                ? $"alkyon×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                ? $"alkyon├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
                 : resolved.IsDarkreachSection
-                    ? $"darkreach×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                    ? $"darkreach├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsMedusaSection
-                    ? $"medusa×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                    ? $"medusa├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsCricketEngineSection
-                        ? $"cricket-engine×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"cricket-engine├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsChicaneEngineSection
-                        ? $"chicane-engine×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"chicane-engine├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsIbisSection
-                        ? $"ibis×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"ibis├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsTarantulaSection
-                        ? $"tarantula×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"tarantula├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsVagrantNozzleEngineSection
-                        ? $"vagrant-nozzle-engine×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"vagrant-nozzle-engine├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsCompassEngineSection
-                        ? $"engine×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"engine├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
                     : resolved.IsIfritStrip
-                        ? $"ifrit-strip×{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"ifrit-strip├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
                         : resolved.Panel.name;
             string statusDiag = resolved.IsIfritStrip || resolved.IsMedusaSection || resolved.IsTarantulaSection
                 || resolved.IsIbisSection

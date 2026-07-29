@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -174,10 +174,8 @@ namespace MissileCamera
 
         internal static void OnSetLandingCam(TargetCam targetCam)
         {
-            if (_activeTargetCam != targetCam)
-                return;
-
-            ClearLayout("landing_cam");
+            if (_activeTargetCam == targetCam)
+                ClearLayout("landing_cam");
         }
 
         internal static void OnCancelTarget(TargetCam targetCam)
@@ -269,14 +267,14 @@ namespace MissileCamera
 
             if (!MfdWeaponsZoneAccess.CanDiscoverWeaponsPanel(tacScreen, jsonKey))
             {
-                LogNoOpThrottled("weapons panel not found — no-op");
+                LogNoOpThrottled("weapons panel not found тАФ no-op");
                 return;
             }
 
             WeaponsReplacementResult replacement = MfdWeaponsZoneAccess.PrepareReplacement(tacScreen, jsonKey);
             if (!replacement.Success)
             {
-                LogNoOpThrottled("weapons panel not found — no-op");
+                LogNoOpThrottled("weapons panel not found тАФ no-op");
                 return;
             }
 
@@ -306,7 +304,7 @@ namespace MissileCamera
             MfdLayoutRetryHost.Cancel();
 
             MfdLog.Info(
-                $"weapons→missilecam profile={profile} jsonKey={MfdDisplayMode.GetAircraftJsonKey(targetCam)} " +
+                $"weaponsтЖТmissilecam profile={profile} jsonKey={MfdDisplayMode.GetAircraftJsonKey(targetCam)} " +
                 $"stub={stubCreated} zone={zone.MinX:F2}-{zone.MaxX:F2} y={zone.MinY:F2}-{zone.MaxY:F2}");
         }
 
@@ -324,14 +322,14 @@ namespace MissileCamera
             if (!MfdWeaponsZoneAccess.CanDiscoverCricketEnginePanel(tacScreen, jsonKey))
             {
                 MfdWeaponsZoneAccess.LogCricketDiscoveryFailure(tacScreen);
-                LogNoOpThrottled("cricket engine MFD not found — no-op");
+                LogNoOpThrottled("cricket engine MFD not found тАФ no-op");
                 return;
             }
 
             WeaponsReplacementResult replacement = MfdWeaponsZoneAccess.PrepareCricketEngineReplacement(tacScreen, jsonKey);
             if (!replacement.Success)
             {
-                LogNoOpThrottled("cricket engine MFD not found — no-op");
+                LogNoOpThrottled("cricket engine MFD not found тАФ no-op");
                 return;
             }
 
@@ -361,7 +359,7 @@ namespace MissileCamera
             MfdLayoutRetryHost.Cancel();
 
             MfdLog.Info(
-                $"cricket→missilecam jsonKey={jsonKey} stub={stubCreated} " +
+                $"cricketтЖТmissilecam jsonKey={jsonKey} stub={stubCreated} " +
                 $"zone={zone.MinX:F2}-{zone.MaxX:F2} y={zone.MinY:F2}-{zone.MaxY:F2}");
         }
 

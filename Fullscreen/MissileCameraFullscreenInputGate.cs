@@ -4,8 +4,8 @@ using UnityEngine;
 namespace MissileCamera
 {
     /// <summary>
-    /// Fullscreen: block only vanilla Zoom/FOV Rewired actions while mod zoom keys/wheel are active.
-    /// Never zero pitch/roll/throttle — that made aircraft "fall" when RAlt/etc was held in FS.
+    /// Fullscreen: block only vanilla Zoom/FOV Rewired actions while live FS + mod zoom keys/wheel.
+    /// IsActive is live-overlay-gated — never suppresses after sortie change.
     /// </summary>
     internal static class MissileCameraFullscreenInputGate
     {

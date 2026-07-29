@@ -4,41 +4,69 @@ using UnityEngine.UI;
 namespace MissileCamera
 {
     /// <summary>
-    /// Fullscreen missile feed host. Uses dedicated overlay feed — never reparents MFD panel.
-    /// On pause / maximized map — Exit() so vanilla UI is never covered.
-    /// Exit with no missiles: 0.5s NO SIGNAL, then auto-disable.
+    /// Fullscreen missile feed host. Overlay lives in the active scene (NOT DontDestroyOnLoad).
+    /// IsActive is true only while the live overlay exists — prevents sticky HUD/input after sortie change.
     /// Never touches CameraStateManager (see CAMERA_SAFETY.md).
     /// </summary>
     internal static class MissileCameraFullscreenController
     {
         private const int OverlaySortingOrder = 50;
 
-        private static bool _active;
+        private static bool _sessionWanted;
         private static bool _deferredExit;
         private static GameObject? _overlayGo;
         private static Canvas? _overlayCanvas;
         private static RectTransform? _fullscreenRoot;
 
-        internal static bool IsActive => _active;
-        internal static bool IsDeferredExit => _deferredExit;
+        /// <summary>True only if session wanted AND overlay GameObject still alive.</summary>
+        internal static bool IsActive
+        {
+            get
+            {
+                if (!_sessionWanted)
+                    return false;
+
+                if (IsOverlayAlive())
+                    return true;
+
+                DropOrphanedSession("IsActive");
+                return false;
+            }
+        }
+
+        internal static bool IsDeferredExit
+        {
+            get
+            {
+                if (!_deferredExit)
+                    return false;
+
+                if (_sessionWanted && !IsOverlayAlive())
+                {
+                    DropOrphanedSession("deferred");
+                    return false;
+                }
+
+                return true;
+            }
+        }
 
         internal static bool TryGetFullscreenRoot(out RectTransform? root)
         {
-            root = _fullscreenRoot;
+            root = IsActive ? _fullscreenRoot : null;
             return root != null;
         }
 
+        /// <summary>Flag-only drop — never Exit→RestoreHiddenChrome (dying/wrong scene).</summary>
         internal static void ResetForMissionUnload()
         {
-            // Drop FS without Exit()/OnFullscreenExited restore — chrome SetActive + WM
-            // restore on a dying scene is what corrupts the next sortie.
-            _deferredExit = false;
-            _active = false;
-            MissileCameraLossInterference.Stop();
-            DestroyOverlayHost();
-            MissileCameraVanillaHudBridge.ResetForMissionUnload();
-            MissileCameraFullscreenBootstrap.ResetForMissionUnload();
-            MissileCameraFullscreenFeedHost.ResetForMissionUnload();
+            DropOrphanedSession("reset");
+        }
+
+        internal static void HealIfOrphaned()
+        {
+            if (_sessionWanted || _deferredExit)
+                _ = IsActive;
         }
 
         internal static void Toggle()
@@ -52,10 +80,10 @@ namespace MissileCamera
                 return;
             }
 
-            if (!MissileCameraFeedController.CanToggleFullscreen() && !_active)
+            if (!MissileCameraFeedController.CanToggleFullscreen() && !IsActive)
                 return;
 
-            if (_active)
+            if (IsActive)
                 RequestExit();
             else
                 Enter();
@@ -64,13 +92,15 @@ namespace MissileCamera
         internal static void ExitIfActive()
         {
             _deferredExit = false;
-            if (_active)
+            if (IsActive)
                 Exit(force: true);
+            else if (_sessionWanted)
+                DropOrphanedSession("ExitIfActive");
         }
 
         internal static void TickDeferredExit()
         {
-            if (!_deferredExit)
+            if (!IsDeferredExit)
                 return;
 
             if (MissileCameraLossInterference.ConsumeExitCompletion())
@@ -103,14 +133,16 @@ namespace MissileCamera
         {
             _deferredExit = false;
             MissileCameraLossInterference.Stop();
-            if (_active)
+            if (IsActive)
                 Exit(force: false);
+            else if (_sessionWanted)
+                DropOrphanedSession("deferred-complete");
             MfdLog.Info("fullscreen deferred exit complete");
         }
 
         internal static void TickYieldToVanillaUi()
         {
-            if (!_active)
+            if (!IsActive)
                 return;
 
             if (ShouldDeferToVanillaUi())
@@ -170,18 +202,18 @@ namespace MissileCamera
             _fullscreenRoot.SetAsLastSibling();
             MissileCameraFullscreenFeedHost.Show();
 
-            _active = true;
+            _sessionWanted = true;
             MissileCameraFeedController.NotifyFullscreenEntered();
             MissileCameraVanillaHudBridge.OnFullscreenEntered();
             MissileCameraFullscreenBootstrap.StartIfNeeded(MissileCameraFullscreenFeedHost.PanelRt);
             MissileCameraFeedController.NotifyFullscreenChanged();
-            MfdLog.Info("fullscreen enter (independent feed host, CSM untouched)");
+            MfdLog.Info("fullscreen enter (scene-local overlay, CSM untouched)");
         }
 
         private static void Exit(bool force)
         {
             _deferredExit = false;
-            _active = false;
+            _sessionWanted = false;
 
             try
             {
@@ -194,16 +226,20 @@ namespace MissileCamera
 
             MissileCameraFullscreenFeedHost.Hide();
 
-            if (_overlayGo != null)
+            if (_overlayGo != null && _overlayGo)
                 _overlayGo.SetActive(false);
 
-            if (_overlayCanvas != null)
+            if (_overlayCanvas != null && _overlayCanvas)
                 _overlayCanvas.enabled = true;
 
             try
             {
                 MissileCameraFeedController.NotifyFullscreenExited();
-                MissileCameraVanillaHudBridge.OnFullscreenExited();
+                // Only restore vanilla chrome while we still have a live mission HUD scene.
+                if (SceneSingleton<CombatHUD>.i != null)
+                    MissileCameraVanillaHudBridge.OnFullscreenExited();
+                else
+                    MissileCameraVanillaHudBridge.ResetForMissionUnload();
             }
             catch (System.Exception ex)
             {
@@ -220,9 +256,26 @@ namespace MissileCamera
                 MfdLog.Info("fullscreen exit");
         }
 
+        private static bool IsOverlayAlive() =>
+            _overlayGo != null && _overlayGo;
+
+        private static void DropOrphanedSession(string reason)
+        {
+            bool had = _sessionWanted || _deferredExit || _overlayGo != null;
+            _deferredExit = false;
+            _sessionWanted = false;
+            MissileCameraLossInterference.Stop();
+            DestroyOverlayHost();
+            MissileCameraVanillaHudBridge.ResetForMissionUnload();
+            MissileCameraFullscreenBootstrap.ResetForMissionUnload();
+            MissileCameraFullscreenFeedHost.ResetForMissionUnload();
+            if (had)
+                MfdLog.Info("fullscreen session dropped reason=" + reason);
+        }
+
         private static void EnsureOverlayHost()
         {
-            if (_overlayGo != null && _fullscreenRoot != null && _overlayCanvas != null)
+            if (IsOverlayAlive() && _fullscreenRoot != null && _overlayCanvas != null)
             {
                 EnsureOverlayDoesNotBlockRaycasts();
                 return;
@@ -230,8 +283,8 @@ namespace MissileCamera
 
             DestroyOverlayHost();
 
+            // Scene-local — destroyed with GameWorld. Never DontDestroyOnLoad (sticky FS root cause).
             _overlayGo = new GameObject("MissileCamera.GameFullscreen");
-            Object.DontDestroyOnLoad(_overlayGo);
             _overlayGo.hideFlags = HideFlags.HideAndDontSave;
 
             _overlayCanvas = _overlayGo.AddComponent<Canvas>();

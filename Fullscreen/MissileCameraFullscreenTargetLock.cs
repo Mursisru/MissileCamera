@@ -180,14 +180,6 @@ namespace MissileCamera
                 }
             }
 
-            List<Unit>? targets = hud.GetTargetList();
-            if (targets == null)
-                return;
-
-            targets.Clear();
-            if (keep != null && !keep.disabled)
-                targets.Add(keep);
-
             try
             {
                 hud.SetTargetArrow(false, Vector3.zero, Vector3.zero);
@@ -210,7 +202,6 @@ namespace MissileCamera
 
             ApplyVisualFilter(hud, keep: null);
 
-            bool restoredAny = false;
             for (int i = SavedTargets.Count - 1; i >= 0; i--)
             {
                 Unit? unit = SavedTargets[i];
@@ -222,18 +213,6 @@ namespace MissileCamera
 
                 if (!marker.selected)
                     marker.SelectMarker();
-
-                List<Unit>? targets = hud.GetTargetList();
-                if (targets != null && !targets.Contains(unit))
-                {
-                    targets.Insert(0, unit);
-                    restoredAny = true;
-                }
-            }
-
-            if (restoredAny && hud.aircraft.weaponManager != null)
-            {
-                // Do not call TargetListChanged — tears down MFD / weapons UI.
             }
 
             SavedTargets.Clear();
@@ -254,17 +233,7 @@ namespace MissileCamera
             if (!ReferenceEquals(_lastFilteredKeep, keep))
                 return false;
 
-            List<Unit>? targets = hud.GetTargetList();
-            int expectedCount = keep != null && !keep.disabled ? 1 : 0;
-            if (targets == null)
-                return keep == null;
-
-            if (targets.Count != expectedCount)
-                return false;
-
-            if (expectedCount == 1 && targets[0] != keep)
-                return false;
-
+            // Markers only — do not require GetTargetList() shape (we no longer mutate it).
             if (keep != null && hud.MarkerExists(keep))
             {
                 if (!hud.TryGetMarker(keep, out HUDUnitMarker keepMarker) || keepMarker == null || !keepMarker.selected)

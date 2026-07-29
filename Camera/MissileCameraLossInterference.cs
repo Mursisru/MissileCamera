@@ -164,7 +164,7 @@ namespace MissileCamera
                 return;
 
             _fullscreenGo = new GameObject(FullscreenHostName);
-            Object.DontDestroyOnLoad(_fullscreenGo);
+            // Scene-local — same rule as GameFullscreen (no DDOL sticky overlays).
             _fullscreenGo.hideFlags = HideFlags.HideAndDontSave;
 
             Canvas canvas = _fullscreenGo.AddComponent<Canvas>();

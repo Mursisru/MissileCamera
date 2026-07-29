@@ -102,7 +102,7 @@ namespace MissileCamera
         internal static bool IsDarkreachLeftBayCandidate(PanelRectState rect) =>
             rect.AnchorMin.x < 0.20f && rect.AnchorMax.x <= 0.25f;
 
-        /// <summary>Darkreach Bay Armed section (structural — no left-x assumption; bays logged at x~0.86).</summary>
+        /// <summary>Darkreach Bay Armed section (structural тАФ no left-x assumption; bays logged at x~0.86).</summary>
         internal static bool IsDarkreachBaySectionZone(PanelRectState rect)
         {
             float w = rect.AnchorMax.x - rect.AnchorMin.x;
@@ -264,7 +264,7 @@ namespace MissileCamera
                 && w <= 0.58f;
         }
 
-        /// <summary>Canvas rect of discovered WEAPON ARMED panel — Revoker (top-right) or Ifrit (right column strip).</summary>
+        /// <summary>Canvas rect of discovered WEAPON ARMED panel тАФ Revoker (top-right) or Ifrit (right column strip).</summary>
         internal static bool IsWeaponsReplacementZone(PanelRectState rect)
         {
             float w = rect.AnchorMax.x - rect.AnchorMin.x;

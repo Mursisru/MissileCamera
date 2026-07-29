@@ -33,18 +33,19 @@ namespace MissileCamera
             _instance._pluginDir = pluginDir;
             _instance._logger = logger;
             SceneManager.sceneLoaded += _instance.OnSceneLoaded;
+            SceneManager.sceneUnloaded += _instance.OnSceneUnloaded;
             _instance.TryBootstrapCurrentScene();
         }
 
         private void OnDestroy()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            SceneManager.sceneUnloaded -= OnSceneUnloaded;
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            // Identical to working MissileCamera-main: never unload between sorties.
-            // Previous menu/mission unload wiped MFD mid/post-sortie and broke 2nd mission.
+            // Match working main: no SoftSessionReset. FS overlay is scene-local; IsActive self-heals.
             if (_missionReady)
                 return;
 
@@ -52,6 +53,65 @@ namespace MissileCamera
                 return;
 
             ScheduleMissionStartup(scene.path);
+        }
+
+        private void OnSceneUnloaded(Scene scene)
+        {
+            if (scene.path.IndexOf("GameWorld", StringComparison.OrdinalIgnoreCase) < 0)
+                return;
+
+            // Tear down DDOL session state when GameWorld dies — restore live HUD first if present.
+            SafeMissionTeardown("GameWorld unloaded");
+        }
+
+        private static void SafeMissionTeardown(string reason)
+        {
+            MfdLog.Info("mission teardown — " + reason);
+            try
+            {
+                MissileCameraFullscreenController.ResetForMissionUnload();
+            }
+            catch (Exception ex)
+            {
+                MfdLog.Info("teardown FS failed: " + ex.Message);
+            }
+
+            try
+            {
+                MfdLayoutController.ResetForMissionUnload();
+            }
+            catch (Exception ex)
+            {
+                MfdLog.Info("teardown layout failed: " + ex.Message);
+            }
+
+            try
+            {
+                MissileCameraFeedController.ResetForMissionUnload();
+            }
+            catch (Exception ex)
+            {
+                MfdLog.Info("teardown feed failed: " + ex.Message);
+            }
+
+            try
+            {
+                MissileCameraRenderPrep.ForceRestoreWorldState();
+            }
+            catch
+            {
+                // ignore
+            }
+
+            try
+            {
+                MissileCameraStockPitchLadder.ResetSourceCache();
+                MissileCameraEffectsAvailability.Reset();
+            }
+            catch
+            {
+                // ignore
+            }
         }
 
         private void TryBootstrapCurrentScene()
@@ -140,7 +200,8 @@ namespace MissileCamera
         private void OnApplicationQuit()
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
-            MissileCameraFullscreenController.ResetForMissionUnload();
+            SceneManager.sceneUnloaded -= OnSceneUnloaded;
+            SafeMissionTeardown("application quit");
             MissileCameraFeedDriverHost.Shutdown();
             _harmony?.UnpatchSelf();
             _harmony = null;
