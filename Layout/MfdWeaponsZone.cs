@@ -266,11 +266,8 @@ namespace MissileCamera
 
             HiddenStripNodes.Clear();
 
-            if (_hiddenWeaponsPanel == null)
-                return;
-
-            if (_hiddenWeaponsPanel)
-                _hiddenWeaponsPanel.gameObject.SetActive(_weaponsWasActive);
+            if (_hiddenWeaponsPanel is { } livePanel && livePanel)
+                livePanel.gameObject.SetActive(_weaponsWasActive);
 
             _hiddenWeaponsPanel = null;
             _overlayOnlyReplacement = false;

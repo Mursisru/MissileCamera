@@ -91,9 +91,6 @@ namespace MissileCamera
             if (targetCam != null && _activeTargetCam != null && _activeTargetCam != targetCam)
                 return;
 
-            if (ShouldRetainLayoutForMissileFeed())
-                return;
-
             ClearLayout("target_cam_disabled");
         }
 
@@ -119,6 +116,11 @@ namespace MissileCamera
             ClearLayout("missile_feed_ended");
         }
 
+        internal static void ResetForMissionUnload()
+        {
+            ClearLayout("mission_unload");
+        }
+
         internal static void EnsureLayoutForMissileFeed()
         {
             if (!MfdLayoutConfig.Enabled)
@@ -126,9 +128,16 @@ namespace MissileCamera
 
             if (_layoutActive)
             {
-                if (_tacOverlayRoot != null && !_tacOverlayRoot.activeSelf)
-                    _tacOverlayRoot.SetActive(true);
-                return;
+                if (_tacOverlayRoot == null)
+                {
+                    ClearLayout("overlay_destroyed");
+                }
+                else
+                {
+                    if (!_tacOverlayRoot.activeSelf)
+                        _tacOverlayRoot.SetActive(true);
+                    return;
+                }
             }
 
             if (!GameManager.GetLocalAircraft(out Aircraft aircraft))
@@ -166,9 +175,6 @@ namespace MissileCamera
         internal static void OnSetLandingCam(TargetCam targetCam)
         {
             if (_activeTargetCam != targetCam)
-                return;
-
-            if (ShouldRetainLayoutForMissileFeed())
                 return;
 
             ClearLayout("landing_cam");

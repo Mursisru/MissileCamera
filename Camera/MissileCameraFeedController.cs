@@ -47,23 +47,37 @@ namespace MissileCamera
 
         internal static void Shutdown()
         {
+            ResetForMissionUnload();
+            MissileCameraInfraredEffect.Shutdown();
+            MissileCameraLossInterference.Shutdown();
+            MissileCameraAircraftCamController.Shutdown();
+            MissileCameraCockpitPipController.Shutdown();
+            MissileCameraFullscreenController.ExitIfActive();
+            _rig?.Destroy();
+            _rig = null;
+        }
+
+        /// <summary>
+        /// Drop DDOL feed/layout session without EnableCanvas / chrome restore.
+        /// Call after FullscreenController.ResetForMissionUnload.
+        /// </summary>
+        internal static void ResetForMissionUnload()
+        {
             NotifyOverlayGone();
             TryUnbindAircraft();
             OwnedActive.Clear();
             MissileCameraSalvoTracker.Reset();
-            MissileCameraInfraredEffect.Shutdown();
-            MissileCameraLossInterference.Shutdown();
             MissileCameraPostFxStack.Release();
-            MissileCameraAircraftCamController.Shutdown();
-            MissileCameraCockpitPipController.Shutdown();
-            MissileCameraFullscreenController.ExitIfActive();
             _postLossSequenceActive = false;
             _manualFollowActive = false;
+            _followedMissile = null;
             _zoomOffset = 0f;
             _fullscreenMagnification = 1f;
+            _restoreAfterLossAtUnscaled = -1f;
+            UseIdleDriverWait = true;
             MissileCameraVisionModeController.Reset();
-            _rig?.Destroy();
-            _rig = null;
+            MissileCameraInfraredPolicy.Reset();
+            DetachRig();
         }
 
         internal static void SelectNextMissile()
@@ -191,6 +205,10 @@ namespace MissileCamera
             if (_subscribedAircraft != null)
                 ReconcileOwnedMissiles(_subscribedAircraft);
             PruneOwnedMissiles();
+
+            // Scene may have destroyed TacStub while DDOL left _overlayActive sticky.
+            if (_overlayActive && (_panelRt == null || !_panelRt))
+                NotifyOverlayGone();
 
             if (HasTrackableOwnedMissile() && !_overlayActive)
                 MfdLayoutController.EnsureLayoutForMissileFeed();
@@ -861,13 +879,9 @@ namespace MissileCamera
                 MfdLayoutController.ReleaseLayoutIfNoMissileFeed();
         }
 
-        /// <summary>Keep MFD overlay while missiles fly or post-loss NO SIGNAL/hold plays.</summary>
+        /// <summary>Keep MFD overlay while missiles fly (match working main — no FS/interference retain).</summary>
         internal static bool ShouldRetainLayoutForMissileFeed() =>
-            HasTrackableOwnedMissile()
-            || _postLossSequenceActive
-            || MissileCameraLossInterference.IsActive
-            || MissileCameraFullscreenController.IsActive
-            || MissileCameraFullscreenController.IsDeferredExit;
+            HasTrackableOwnedMissile();
 
         private static void DetachRig()
         {

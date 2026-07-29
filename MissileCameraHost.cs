@@ -43,27 +43,15 @@ namespace MissileCamera
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (IsMenuOrSystemScene(scene.path))
-            {
-                if (_missionReady)
-                    OnMissionUnload();
-                return;
-            }
-
+            // Identical to working MissileCamera-main: never unload between sorties.
+            // Previous menu/mission unload wiped MFD mid/post-sortie and broke 2nd mission.
             if (_missionReady)
                 return;
 
-            ScheduleMissionStartup(scene.path);
-        }
+            if (IsMenuOrSystemScene(scene.path))
+                return;
 
-        private void OnMissionUnload()
-        {
-            MfdLog.Info("mission unload — reset per-mission fullscreen bootstrap");
-            MissileCameraFullscreenController.ResetForMissionUnload();
-            MissileCameraStockPitchLadder.ResetSourceCache();
-            MissileCameraEffectsAvailability.Reset();
-            _missionReady = false;
-            _startupScheduled = false;
+            ScheduleMissionStartup(scene.path);
         }
 
         private void TryBootstrapCurrentScene()

@@ -4,8 +4,8 @@ using UnityEngine;
 namespace MissileCamera
 {
     /// <summary>
-    /// Fullscreen: swallow vanilla Rewired only for mod-owned inputs (wheel + RShift/RCtrl/RAlt + , . / ;).
-    /// MissileCamera reads UnityEngine.Input directly and is unaffected.
+    /// Fullscreen: block only vanilla Zoom/FOV Rewired actions while mod zoom keys/wheel are active.
+    /// Never zero pitch/roll/throttle — that made aircraft "fall" when RAlt/etc was held in FS.
     /// </summary>
     internal static class MissileCameraFullscreenInputGate
     {
@@ -18,18 +18,15 @@ namespace MissileCamera
 
         internal static bool ShouldSuppressRewiredAxis(string actionName)
         {
-            if (!IsFullscreenContext)
+            if (!IsFullscreenContext || !IsZoomAxis(actionName))
                 return false;
 
-            if (IsWheelGateActive() && IsZoomAxis(actionName))
-                return true;
-
-            return IsKeyGateActive();
+            return IsWheelGateActive() || IsKeyGateActive();
         }
 
         internal static bool ShouldSuppressRewiredButton(string actionName)
         {
-            if (!IsFullscreenContext)
+            if (!IsFullscreenContext || !IsZoomButton(actionName))
                 return false;
 
             return IsKeyGateActive();
@@ -54,6 +51,17 @@ namespace MissileCamera
 
             return ActionComparer.Equals(actionName, "Zoom View")
                 || ActionComparer.Equals(actionName, "FOV");
+        }
+
+        private static bool IsZoomButton(string actionName)
+        {
+            if (string.IsNullOrEmpty(actionName))
+                return false;
+
+            return ActionComparer.Equals(actionName, "Zoom View")
+                || ActionComparer.Equals(actionName, "FOV")
+                || ActionComparer.Equals(actionName, "Zoom In")
+                || ActionComparer.Equals(actionName, "Zoom Out");
         }
     }
 }

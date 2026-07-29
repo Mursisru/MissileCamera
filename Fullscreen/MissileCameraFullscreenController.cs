@@ -30,15 +30,15 @@ namespace MissileCamera
 
         internal static void ResetForMissionUnload()
         {
+            // Drop FS without Exit()/OnFullscreenExited restore — chrome SetActive + WM
+            // restore on a dying scene is what corrupts the next sortie.
             _deferredExit = false;
+            _active = false;
             MissileCameraLossInterference.Stop();
-            if (_active)
-                Exit(force: true);
-
+            DestroyOverlayHost();
             MissileCameraVanillaHudBridge.ResetForMissionUnload();
             MissileCameraFullscreenBootstrap.ResetForMissionUnload();
             MissileCameraFullscreenFeedHost.ResetForMissionUnload();
-            DestroyOverlayHost();
         }
 
         internal static void Toggle()
@@ -143,15 +143,8 @@ namespace MissileCamera
 
             if (DynamicMap.mapMaximized)
             {
-                try
-                {
-                    SceneSingleton<DynamicMap>.i?.Minimize();
-                }
-                catch
-                {
-                    MfdLog.Info("fullscreen enter blocked: map maximized");
-                    return;
-                }
+                MfdLog.Info("fullscreen enter blocked: map maximized");
+                return;
             }
 
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
