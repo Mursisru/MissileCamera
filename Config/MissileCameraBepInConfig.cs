@@ -79,6 +79,9 @@ namespace MissileCamera.Config
         internal static ConfigEntry<float> FullscreenZoomWheelFactor { get; private set; } = null!;
         internal static ConfigEntry<string> FullscreenVisionCycleKey { get; private set; } = null!;
         internal static ConfigEntry<bool> FullscreenZoomResetOnExit { get; private set; } = null!;
+        internal static ConfigEntry<bool> FullscreenPitchLadderEnabled { get; private set; } = null!;
+        internal static ConfigEntry<string> FullscreenPitchLadderTint { get; private set; } = null!;
+        internal static ConfigEntry<float> FullscreenPitchLadderIntensity { get; private set; } = null!;
 
         internal static ConfigEntry<bool> TelemetryShowG { get; private set; } = null!;
         internal static ConfigEntry<bool> TelemetryShowFuel { get; private set; } = null!;
@@ -254,6 +257,12 @@ namespace MissileCamera.Config
                 "KeyCode to cycle fullscreen vision filters (Color/NVG/WhiteHot/BlackHot/Contour).");
             FullscreenZoomResetOnExit = config.Bind(fullscreen, "ZoomResetOnExit", true,
                 "Reset fullscreen magnification to 1x when leaving fullscreen.");
+            FullscreenPitchLadderEnabled = config.Bind(fullscreen, "PitchLadderEnabled", true,
+                "Stock FlightHud pitch ladder on fullscreen FLIR (cloned texture, FLIR tint).");
+            FullscreenPitchLadderTint = config.Bind(fullscreen, "PitchLadderTint", "0.55,1,0.9,1",
+                "RGBA tint for fullscreen stock pitch ladder.");
+            FullscreenPitchLadderIntensity = config.Bind(fullscreen, "PitchLadderIntensity", 3.2f,
+                new ConfigDescription("Pitch ladder brightness (single additive layer; higher = brighter FLIR).", new AcceptableValueRange<float>(1f, 4f)));
 
             const string telemetry = "MissileCameraTelemetry";
             TelemetryShowG = config.Bind(telemetry, "ShowG", false, "Reserved extended G readout (off = classic MFD HUD like 1.30.1).");

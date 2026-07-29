@@ -60,6 +60,7 @@ namespace MissileCamera
         {
             MfdLog.Info("mission unload — reset per-mission fullscreen bootstrap");
             MissileCameraFullscreenController.ResetForMissionUnload();
+            MissileCameraStockPitchLadder.ResetSourceCache();
             MissileCameraEffectsAvailability.Reset();
             _missionReady = false;
             _startupScheduled = false;

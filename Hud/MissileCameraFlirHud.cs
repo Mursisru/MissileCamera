@@ -61,6 +61,7 @@ namespace MissileCamera
         private readonly HudLineGraphic _dialFrameR;
         private readonly MissileCameraFlirGaugeBars _gaugeBars;
         private readonly MissileCameraFlirOwnshipPip _ownshipPip;
+        private readonly MissileCameraStockPitchLadder _pitchLadder = new MissileCameraStockPitchLadder();
         private float _layoutW = -1f;
         private float _layoutH = -1f;
         private float _smoothHeading;
@@ -162,7 +163,7 @@ namespace MissileCamera
             RectTransform root = rootGo.GetComponent<RectTransform>();
             Stretch(root);
 
-            return new MissileCameraFlirHud(
+            var hud = new MissileCameraFlirHud(
                 root,
                 CreateLabel(root, "FlirSys", TextAnchor.UpperLeft),
                 MissileCameraFlirPanel.Create(root, "FlirMslPanel", TextAnchor.UpperLeft),
@@ -199,6 +200,9 @@ namespace MissileCamera
                 CreateLine(root, "FlirDialFrameR"),
                 MissileCameraFlirGaugeBars.Create(root),
                 MissileCameraFlirOwnshipPip.Create(root));
+
+            hud._pitchLadder.EnsureBuilt(root);
+            return hud;
         }
 
         internal void InvalidateLayout()
@@ -216,12 +220,17 @@ namespace MissileCamera
             {
                 _headingReady = false;
                 _ownshipPip.Hide();
+                _pitchLadder.SetVisible(false);
             }
 
             _root.gameObject.SetActive(visible);
         }
 
-        internal void Shutdown() => _ownshipPip.Shutdown();
+        internal void Shutdown()
+        {
+            _ownshipPip.Shutdown();
+            _pitchLadder.Shutdown();
+        }
 
         internal void Update(MissileCameraHudSnapshot snapshot, MissileCameraPanelMetrics panel)
         {
@@ -241,6 +250,11 @@ namespace MissileCamera
             ApplyContent(snapshot, panel);
             _gaugeBars.Update(snapshot, panel);
             _ownshipPip.Update();
+
+            bool showLadder = snapshot.HasFeed && !MissileCameraFullscreenBootstrap.IsRunning;
+            Camera? feedCamera = MissileCameraFeedController.TryGetFeedCamera();
+            Missile? missile = MissileCameraFeedController.TryGetFollowedMissile();
+            _pitchLadder.Update(feedCamera, missile != null ? missile.transform : null, showLadder);
         }
 
         internal void UpdateGaugeBarsOnly(MissileCameraHudSnapshot snapshot, MissileCameraPanelMetrics panel)
