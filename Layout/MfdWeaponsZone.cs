@@ -303,6 +303,7 @@ namespace MissileCamera
             _compassDiagDone = false;
             _tarantulaDiagDone = false;
             _chicaneDiagDone = false;
+            _chicaneTmpDiagDone = false;
             _cricketDiagDone = false;
             _ibisDiagDone = false;
         }
@@ -464,7 +465,7 @@ namespace MissileCamera
             if (TryResolveIfritFlatStrip(mfdRoot, canvas, out resolved))
                 return true;
 
-            // Legacy Ifrit path тАФ only when TryResolveIfritFlatStrip fails.
+            // Legacy Ifrit path С‚РђР¤ only when TryResolveIfritFlatStrip fails.
             RectTransform? legacyIfrit = ResolveIfritWeaponsStrip(hardpointHits, gunHits, primaryHits, mfdRoot, canvas);
             if (legacyIfrit != null)
                 return TryFinalizeSinglePanel(legacyIfrit, canvas, mfdRoot, allHits, primaryHits, hardpointHits, gunHits, out resolved);
@@ -579,8 +580,8 @@ namespace MissileCamera
             string.Equals(jsonKey, "Darkreach", System.StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
-        /// SFB-81 target tac MFD: right-column weapon strip (weaponPanel/rearProfile, x≥0.40).
-        /// Hide targets are scoped to that strip only — no shared-canvas root rewrite.
+        /// SFB-81 target tac MFD: right-column weapon strip (weaponPanel/rearProfile, xв‰Ґ0.40).
+        /// Hide targets are scoped to that strip only вЂ” no shared-canvas root rewrite.
         /// </summary>
         private static bool TryResolveDarkreachTacRightWeaponPanel(
             GameObject mfdRoot,
@@ -751,7 +752,7 @@ namespace MissileCamera
                 return false;
             }
 
-            // Bezel maps canvas X тЖТ screen vertical: column anchors on X (Darkreach), not rows on Y.
+            // Bezel maps canvas X С‚Р–Рў screen vertical: column anchors on X (Darkreach), not rows on Y.
             PanelRectState zone = BuildCricketEngineOverlayZone(canvasZone);
             float contentRotZ = SampleCricketEngineLabelRotation(engPanel);
             float fontRef = Mathf.Max(
@@ -806,7 +807,7 @@ namespace MissileCamera
             return engPanel.rect.height > engPanel.rect.width * 1.15f ? 90f : 0f;
         }
 
-        // COIN/Cricket manual bezel tuning тАФ canvas X = screen vertical on engine MFD.
+        // COIN/Cricket manual bezel tuning С‚РђР¤ canvas X = screen vertical on engine MFD.
         // MinX = physical top, MaxX = physical bottom. Positive expand pulls edge outward.
         private const float CricketManualExpandMinX = 0.01f;
         private const float CricketManualExpandMaxX = 0.085f;
@@ -1030,7 +1031,7 @@ namespace MissileCamera
                 zone = stripZone;
             }
 
-            // Profile labels use 270┬░ in hierarchy; left MFD bezel reads stub correctly at 90┬░ (see Cricket).
+            // Profile labels use 270в”¬в–‘ in hierarchy; left MFD bezel reads stub correctly at 90в”¬в–‘ (see Cricket).
             float contentRotZ = 90f;
             float fontRef = Mathf.Max(
                 Mathf.Max(weaponPanel.rect.width, weaponPanel.rect.height),
@@ -1059,7 +1060,7 @@ namespace MissileCamera
         }
 
         /// <summary>
-        /// Left MFD bezel is portrait: canvas Y тЖТ screen horizontal, canvas X тЖТ screen vertical.
+        /// Left MFD bezel is portrait: canvas Y С‚Р–Рў screen horizontal, canvas X С‚Р–Рў screen vertical.
         /// Widen Y; cap X above FUEL/StatusGauges.
         /// </summary>
         private static PanelRectState BuildIbisWeaponOverlayZone(
@@ -1229,41 +1230,315 @@ namespace MissileCamera
             out ResolvedPanel resolved)
         {
             resolved = default;
-            Component? aircraft = TacScreenAccess.GetAircraft(tacScreen);
-            Transform? aircraftRoot = aircraft != null ? aircraft.transform : null;
 
-            List<RectTransform> hideTargets = CollectChicaneEngineHideTargets(
-                mfdRoot,
-                aircraftRoot,
-                canvas,
-                out Canvas overlayCanvas);
+            // TMP-first: L/R TURBINE titles identify real blocks (not TelemetryPanel false friends).
+            if (!TryCollectChicaneTurbineByTmp(
+                    tacScreen,
+                    canvas,
+                    out List<RectTransform> hideTargets,
+                    out Canvas overlayCanvas,
+                    out RectTransform? overlayParent,
+                    out PanelRectState zone,
+                    out string source))
+            {
+                GameObject? turbineRoot = TacScreenAccess.FindChicaneTurbineMfdRoot(tacScreen);
+                if (turbineRoot == null)
+                {
+                    MfdLog.Info("chicane turbine blocks not found (TMP L/R TURBINE + EngineTelemetry)");
+                    return false;
+                }
 
-            if (hideTargets.Count < 2)
-                return false;
+                Canvas? turbineCanvas = TacScreenAccess.GetCanvasForRoot(turbineRoot)
+                    ?? TacScreenAccess.GetCanvas(tacScreen)
+                    ?? canvas;
+                if (turbineCanvas == null)
+                    return false;
 
-            PanelRectState zone = PanelRectNormalizer.UnionOnCanvas(overlayCanvas, hideTargets);
-            if (!PanelRectNormalizer.IsChicaneEngineZone(zone))
+                if (!TryCollectChicaneEngineTelemetryTop2(turbineRoot, turbineCanvas, out hideTargets, out overlayCanvas))
+                {
+                    hideTargets = CollectChicaneEngineHideTargets(
+                        turbineRoot,
+                        aircraftRoot: null,
+                        turbineCanvas,
+                        out overlayCanvas);
+                    source = "turbineL+R-tmp-fallback";
+                }
+                else
+                {
+                    source = "engineTelemetry-top2-fallback";
+                }
+
+                if (hideTargets.Count < 2)
+                    return false;
+
+                overlayParent = FindChicaneOverlayHost(hideTargets);
+                zone = overlayParent != null
+                    ? PanelRectNormalizer.CaptureRelativeUnion(overlayParent, hideTargets)
+                    : PanelRectNormalizer.UnionOnCanvas(overlayCanvas, hideTargets);
+            }
+
+            if (!PanelRectNormalizer.IsChicaneEngineZone(zone)
+                && overlayParent == null)
             {
                 MfdLog.Info(
-                    $"chicane engine zone rejected union={FormatAnchors(zone)} hideChildren={hideTargets.Count}");
+                    $"chicane engine zone rejected source={source} " +
+                    $"union={FormatAnchors(zone)} hideChildren={hideTargets.Count}");
                 return false;
             }
 
-            MfdLog.Info(
-                $"chicane engine source=turbineL+R hideChildren={hideTargets.Count} " +
-                $"zone={FormatAnchors(zone)} panels={FormatPanelNames(hideTargets)}");
+            // OverlayParent host: zone is local to host вЂ” always accept full/local union.
+            if (overlayParent != null && (zone.AnchorMax.x - zone.AnchorMin.x) < 0.08f)
+                zone = new PanelRectState(Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 
+            MfdLog.Info(
+                $"chicane engine source={source} host={(overlayParent != null ? overlayParent.name : overlayCanvas.name)} " +
+                $"hideChildren={hideTargets.Count} zone={FormatAnchors(zone)} panels={FormatPanelNames(hideTargets)}");
+
+            // SAH-46: never SetActive(false) on Turbine MFD nodes — overlay only (TAIL DUCT stays live).
             resolved = new ResolvedPanel(
                 hideTargets[0],
                 overlayCanvas,
                 zone,
                 hideTargets,
                 isChicaneEngineSection: true,
-                overlayOnly: true);
+                overlayOnly: true,
+                overlayParent: overlayParent);
             return true;
         }
 
-        /// <summary>SAH-46: L/R TURBINE blocks only тАФ TAIL DUCT stays vanilla.</summary>
+        /// <summary>
+        /// Find L/R TURBINE via TMP titles, hide those EngineTelemetry frames, place overlay on shared host.
+        /// </summary>
+        private static bool TryCollectChicaneTurbineByTmp(
+            TacScreen tacScreen,
+            Canvas fallbackCanvas,
+            out List<RectTransform> hideTargets,
+            out Canvas overlayCanvas,
+            out RectTransform? overlayParent,
+            out PanelRectState zone,
+            out string source)
+        {
+            hideTargets = new List<RectTransform>(2);
+            overlayCanvas = fallbackCanvas;
+            overlayParent = null;
+            zone = default;
+            source = "tmp-turbine";
+
+            var turbines = new List<(RectTransform Section, Canvas Canvas, float MaxY, float Width)>();
+            var seen = new HashSet<int>();
+            bool diag = !_chicaneTmpDiagDone;
+            if (diag)
+                _chicaneTmpDiagDone = true;
+
+            foreach (TMPro.TMP_Text label in Resources.FindObjectsOfTypeAll<TMPro.TMP_Text>())
+            {
+                if (label == null || string.IsNullOrEmpty(label.text))
+                    continue;
+
+                // Prefab assets only вЂ” keep DDOL / additive scene UI.
+                if (!label.gameObject.scene.IsValid())
+                    continue;
+
+                if (!IsChicaneTurbineBlockMarker(label.text))
+                    continue;
+
+                if (!label.TryGetComponent(out RectTransform labelRt))
+                    continue;
+
+                Canvas? labelCanvas = TacScreenAccess.GetOverlayCanvas(labelRt) ?? fallbackCanvas;
+                RectTransform? section = ResolveChicaneTurbineSection(labelRt, labelCanvas);
+                if (section == null || ContainsChicaneTailDuctMarker(section))
+                    continue;
+
+                if (!seen.Add(section.GetInstanceID()))
+                    continue;
+
+                PanelRectState onCanvas = PanelRectNormalizer.CaptureOnCanvas(section, labelCanvas);
+                float w = onCanvas.AnchorMax.x - onCanvas.AnchorMin.x;
+                turbines.Add((section, labelCanvas, onCanvas.AnchorMax.y, w));
+
+                if (diag)
+                {
+                    MfdLog.Info(
+                        $"chicane TMP TURBINE text=\"{Normalize(label.text)}\" section={section.name} " +
+                        $"canvas={labelCanvas.name} norm={FormatAnchors(onCanvas)} " +
+                        $"path={BuildTransformPath(section)}");
+                }
+            }
+
+            if (turbines.Count < 2)
+                return false;
+
+            // Prefer canvas whose turbine blocks are widest (dedicated Turbine MFD beats tac strip).
+            Canvas? bestCanvas = null;
+            float bestWidth = -1f;
+            var byCanvas = new Dictionary<int, List<(RectTransform Section, Canvas Canvas, float MaxY, float Width)>>();
+            for (int i = 0; i < turbines.Count; i++)
+            {
+                int id = turbines[i].Canvas.GetInstanceID();
+                if (!byCanvas.TryGetValue(id, out var list))
+                {
+                    list = new List<(RectTransform, Canvas, float, float)>();
+                    byCanvas[id] = list;
+                }
+
+                list.Add(turbines[i]);
+            }
+
+            foreach (var pair in byCanvas)
+            {
+                if (pair.Value.Count < 2)
+                    continue;
+
+                float avgW = 0f;
+                for (int i = 0; i < pair.Value.Count; i++)
+                    avgW += pair.Value[i].Width;
+                avgW /= pair.Value.Count;
+
+                if (avgW <= bestWidth)
+                    continue;
+
+                bestWidth = avgW;
+                bestCanvas = pair.Value[0].Canvas;
+            }
+
+            if (bestCanvas == null)
+                bestCanvas = turbines[0].Canvas;
+
+            var onBest = new List<(RectTransform Section, float MaxY)>();
+            for (int i = 0; i < turbines.Count; i++)
+            {
+                if (turbines[i].Canvas != bestCanvas)
+                    continue;
+                onBest.Add((turbines[i].Section, turbines[i].MaxY));
+            }
+
+            if (onBest.Count < 2)
+                return false;
+
+            onBest.Sort((a, b) => b.MaxY.CompareTo(a.MaxY));
+            hideTargets.Add(onBest[0].Section);
+            hideTargets.Add(onBest[1].Section);
+            overlayCanvas = bestCanvas;
+            overlayParent = FindChicaneOverlayHost(hideTargets);
+            zone = overlayParent != null
+                ? PanelRectNormalizer.CaptureRelativeUnion(overlayParent, hideTargets)
+                : PanelRectNormalizer.UnionOnCanvas(overlayCanvas, hideTargets);
+            source = overlayParent != null ? "tmp-turbine+host" : "tmp-turbine+canvas";
+            return true;
+        }
+
+        private static bool _chicaneTmpDiagDone;
+
+        private static RectTransform? ResolveChicaneTurbineSection(RectTransform labelRt, Canvas canvas)
+        {
+            EngineTelemetry? telemetry = labelRt.GetComponentInParent<EngineTelemetry>();
+            if (telemetry != null)
+            {
+                RectTransform? etRt = telemetry.GetComponent<RectTransform>();
+                if (etRt != null)
+                    return etRt;
+            }
+
+            return ResolveChicaneEngineSectionFromLabel(labelRt, canvas);
+        }
+
+        private static RectTransform? FindChicaneOverlayHost(IReadOnlyList<RectTransform> turbines)
+        {
+            if (turbines.Count < 2 || turbines[0] == null || turbines[1] == null)
+                return null;
+
+            Transform? a = turbines[0];
+            Transform? b = turbines[1];
+            var ancestors = new HashSet<Transform>();
+            for (Transform? t = a; t != null; t = t.parent)
+            {
+                ancestors.Add(t);
+                if (t.GetComponent<Canvas>() != null)
+                    break;
+            }
+
+            RectTransform? best = null;
+            for (Transform? t = b; t != null; t = t.parent)
+            {
+                if (!ancestors.Contains(t))
+                    continue;
+
+                if (!t.TryGetComponent(out RectTransform rt))
+                {
+                    if (t.GetComponent<Canvas>() != null)
+                        break;
+                    continue;
+                }
+
+                // Prefer lowest common ancestor that does not include TAIL DUCT.
+                if (!ContainsChicaneTailDuctMarker(rt))
+                    return rt;
+
+                best = rt;
+                if (t.GetComponent<Canvas>() != null)
+                    break;
+            }
+
+            return best;
+        }
+
+        private static bool TryCollectChicaneEngineTelemetryTop2(
+            GameObject turbineRoot,
+            Canvas canvas,
+            out List<RectTransform> targets,
+            out Canvas overlayCanvas)
+        {
+            targets = new List<RectTransform>(2);
+            overlayCanvas = canvas;
+
+            var blocks = new List<(RectTransform Rt, float MaxY, bool IsTail)>();
+            foreach (EngineTelemetry telemetry in turbineRoot.GetComponentsInChildren<EngineTelemetry>(true))
+            {
+                if (telemetry == null)
+                    continue;
+
+                RectTransform? rt = telemetry.GetComponent<RectTransform>()
+                    ?? telemetry.GetComponentInParent<RectTransform>();
+                if (rt == null)
+                    continue;
+
+                PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(rt, canvas);
+                float h = zone.AnchorMax.y - zone.AnchorMin.y;
+                // Dedicated Turbine MFD: each block ~1/3 height; allow taller frames.
+                if (h > 0 && h <= 0.85f)
+                    blocks.Add((rt, zone.AnchorMax.y, ContainsChicaneTailDuctMarker(rt)));
+                else if (h <= 0f)
+                    blocks.Add((rt, rt.position.y, ContainsChicaneTailDuctMarker(rt)));
+            }
+
+            if (blocks.Count < 2)
+                return false;
+
+            List<(RectTransform Rt, float MaxY, bool IsTail)> turbines = blocks.FindAll(b => !b.IsTail);
+            if (turbines.Count < 2)
+            {
+                // No TMP marker вЂ” assume bottom block is TAIL DUCT when 3+ stacked.
+                blocks.Sort((a, b) => b.MaxY.CompareTo(a.MaxY));
+                int take = blocks.Count >= 3 ? 2 : Mathf.Min(2, blocks.Count);
+                for (int i = 0; i < take; i++)
+                    targets.Add(blocks[i].Rt);
+            }
+            else
+            {
+                turbines.Sort((a, b) => b.MaxY.CompareTo(a.MaxY));
+                targets.Add(turbines[0].Rt);
+                targets.Add(turbines[1].Rt);
+            }
+
+            if (targets.Count < 2)
+                return false;
+
+            overlayCanvas = TacScreenAccess.GetOverlayCanvas(targets[0]) ?? canvas;
+            return true;
+        }
+
+        /// <summary>SAH-46: L/R TURBINE blocks only вЂ” TAIL DUCT stays vanilla.</summary>
         private static List<RectTransform> CollectChicaneEngineHideTargets(
             GameObject mfdRoot,
             Transform? aircraftRoot,
@@ -1277,6 +1552,23 @@ namespace MissileCamera
 
             void ScanRoot(Transform root)
             {
+                // Game uses TMP for L/R TURBINE / TAIL DUCT titles.
+                foreach (TMPro.TMP_Text label in root.GetComponentsInChildren<TMPro.TMP_Text>(true))
+                {
+                    if (label == null || !IsChicaneTurbineBlockMarker(label.text))
+                        continue;
+
+                    if (!label.TryGetComponent(out RectTransform labelRt))
+                        continue;
+
+                    resolvedOverlay = TacScreenAccess.GetOverlayCanvas(labelRt) ?? canvas;
+                    RectTransform? section = ResolveChicaneEngineSectionFromLabel(labelRt, resolvedOverlay);
+                    if (section == null || !seen.Add(section))
+                        continue;
+
+                    targets.Add(section);
+                }
+
                 foreach (Text label in root.GetComponentsInChildren<Text>(true))
                 {
                     if (label == null || !IsChicaneTurbineBlockMarker(label.text))
@@ -1286,7 +1578,7 @@ namespace MissileCamera
                         continue;
 
                     resolvedOverlay = TacScreenAccess.GetOverlayCanvas(labelRt) ?? canvas;
-                    RectTransform? section = ResolveChicaneEngineSectionFromLabel(label, canvas);
+                    RectTransform? section = ResolveChicaneEngineSectionFromLabel(labelRt, resolvedOverlay);
                     if (section == null || !seen.Add(section))
                         continue;
 
@@ -1302,8 +1594,8 @@ namespace MissileCamera
             {
                 targets.Sort((a, b) =>
                 {
-                    float ay = PanelRectNormalizer.CaptureOnCanvas(a, canvas).AnchorMax.y;
-                    float by = PanelRectNormalizer.CaptureOnCanvas(b, canvas).AnchorMax.y;
+                    float ay = PanelRectNormalizer.CaptureOnCanvas(a, resolvedOverlay).AnchorMax.y;
+                    float by = PanelRectNormalizer.CaptureOnCanvas(b, resolvedOverlay).AnchorMax.y;
                     return by.CompareTo(ay);
                 });
                 targets.RemoveRange(2, targets.Count - 2);
@@ -1333,6 +1625,12 @@ namespace MissileCamera
 
         private static bool ContainsChicaneTailDuctMarker(RectTransform section)
         {
+            foreach (TMPro.TMP_Text label in section.GetComponentsInChildren<TMPro.TMP_Text>(true))
+            {
+                if (label != null && IsChicaneTailDuctMarker(label.text))
+                    return true;
+            }
+
             foreach (Text label in section.GetComponentsInChildren<Text>(true))
             {
                 if (label != null && IsChicaneTailDuctMarker(label.text))
@@ -1342,11 +1640,8 @@ namespace MissileCamera
             return false;
         }
 
-        private static RectTransform? ResolveChicaneEngineSectionFromLabel(Text label, Canvas canvas)
+        private static RectTransform? ResolveChicaneEngineSectionFromLabel(RectTransform start, Canvas canvas)
         {
-            if (!label.TryGetComponent(out RectTransform start))
-                return null;
-
             RectTransform? best = null;
             float bestArea = float.MaxValue;
             RectTransform? current = start;
@@ -1362,18 +1657,25 @@ namespace MissileCamera
                     continue;
                 }
 
-                bool hasGauges = current.GetComponentInChildren<StatusGauges>(true) != null
-                    || current.GetComponentInChildren<EngineTelemetry>(true) != null
+                bool hasEngine = current.GetComponentInChildren<EngineTelemetry>(true) != null
+                    || current.GetComponentInChildren<StatusGauges>(true) != null
                     || current.GetComponentInChildren<RPMGauge>(true) != null;
 
-                if (!hasGauges)
+                if (!hasEngine)
                 {
                     current = current.parent != null ? current.parent.GetComponent<RectTransform>() : null;
                     continue;
                 }
 
+                // Prefer the EngineTelemetry node itself when walking up from its TMP title.
+                EngineTelemetry? selfTelemetry = current.GetComponent<EngineTelemetry>();
+                if (selfTelemetry != null)
+                    return current;
+
                 PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(current, canvas);
-                if (zone.AnchorMin.x < 0.40f)
+                float w = zone.AnchorMax.x - zone.AnchorMin.x;
+                float h = zone.AnchorMax.y - zone.AnchorMin.y;
+                if (h < 0.08f || h > 0.55f || w < 0.35f)
                 {
                     current = current.parent != null ? current.parent.GetComponent<RectTransform>() : null;
                     continue;
@@ -1413,13 +1715,14 @@ namespace MissileCamera
                 return;
 
             _chicaneDiagDone = true;
-            Component? aircraft = TacScreenAccess.GetAircraft(tacScreen);
+            GameObject? turbineRoot = TacScreenAccess.FindChicaneTurbineMfdRoot(tacScreen);
             int turbineLabels = 0;
             int tailDuctLabels = 0;
+            int engineTelemetry = 0;
 
             void CountLabels(Transform root)
             {
-                foreach (Text label in root.GetComponentsInChildren<Text>(true))
+                foreach (TMPro.TMP_Text label in root.GetComponentsInChildren<TMPro.TMP_Text>(true))
                 {
                     if (label == null)
                         continue;
@@ -1429,32 +1732,18 @@ namespace MissileCamera
                     else if (IsChicaneTailDuctMarker(label.text))
                         tailDuctLabels++;
                 }
+
+                engineTelemetry += root.GetComponentsInChildren<EngineTelemetry>(true).Length;
             }
 
             CountLabels(mfdRoot.transform);
-            if (aircraft != null)
-                CountLabels(aircraft.transform);
+            if (turbineRoot != null)
+                CountLabels(turbineRoot.transform);
 
             MfdLog.Info(
-                $"chicane engine discovery failed root={mfdRoot.name} turbineLabels={turbineLabels} " +
-                $"tailDuctLabels={tailDuctLabels}");
-
-            RectTransform? host = canvas.GetComponent<RectTransform>();
-            if (host == null)
-                return;
-
-            int childDump = Mathf.Min(host.childCount, 12);
-            for (int i = 0; i < childDump; i++)
-            {
-                RectTransform? child = host.GetChild(i).GetComponent<RectTransform>();
-                if (child == null)
-                    continue;
-
-                PanelRectState childNorm = PanelRectNormalizer.CaptureOnCanvas(child, canvas);
-                MfdLog.Info(
-                    $"  chicane canvasChild[{i}] {child.name} norm={FormatAnchors(childNorm)} " +
-                    $"gauges={PanelContainsEngineGauges(child)}");
-            }
+                $"chicane engine discovery failed tacRoot={mfdRoot.name} " +
+                $"turbineRoot={(turbineRoot != null ? turbineRoot.name : "null")} " +
+                $"tmpTurbine={turbineLabels} tmpTail={tailDuctLabels} engineTelemetry={engineTelemetry}");
         }
 
         private static bool TryResolveTarantulaWeaponArmedSection(
@@ -1694,7 +1983,7 @@ namespace MissileCamera
                 return false;
 
             // Only collapse to a common parent when it still fits the NOZZLE+ENGINE band
-            // (otherwise climbing pulls in the weapons silhouette тЖТ reject at yтЙИ0.95).
+            // (otherwise climbing pulls in the weapons silhouette С‚Р–Рў reject at yС‚Р™Р0.95).
             RectTransform? commonParent = TryFindVagrantCommonParent(hideTargets, overlayCanvas);
             List<RectTransform> finalTargets = hideTargets;
             if (commonParent != null)
@@ -1787,7 +2076,7 @@ namespace MissileCamera
                     TryAdd(ResolveVagrantGaugeFrame(telemetryRt, canvas));
                 }
 
-                // RPM lives under ENGINE on Vagrant тАФ only take if already under an accepted engine frame.
+                // RPM lives under ENGINE on Vagrant С‚РђР¤ only take if already under an accepted engine frame.
                 foreach (RPMGauge rpm in root.GetComponentsInChildren<RPMGauge>(true))
                 {
                     if (rpm == null || !rpm.TryGetComponent(out RectTransform rpmRt))
@@ -2017,8 +2306,8 @@ namespace MissileCamera
 
         private static RectTransform ResolveVagrantGaugeFrame(RectTransform gaugeRt, Canvas canvas)
         {
-            // Prefer the gauge itself or a tight local frame тАФ never climb into the full right column
-            // (that pulls weapons silhouette and rejects at maxYтЙИ0.95).
+            // Prefer the gauge itself or a tight local frame С‚РђР¤ never climb into the full right column
+            // (that pulls weapons silhouette and rejects at maxYС‚Р™Р0.95).
             RectTransform? best = null;
             float bestScore = float.MaxValue;
             RectTransform? current = gaugeRt;
@@ -2389,7 +2678,7 @@ namespace MissileCamera
             return CollectCompassEngineGaugeRows(weaponPanel);
         }
 
-        /// <summary>WeaponPanel direct children with RPM/Status gauges тАФ mirror Ifrit status-child scan.</summary>
+        /// <summary>WeaponPanel direct children with RPM/Status gauges С‚РђР¤ mirror Ifrit status-child scan.</summary>
         private static List<RectTransform> CollectCompassEngineDirectChildren(RectTransform weaponPanel)
         {
             var targets = new List<RectTransform>();
@@ -2692,7 +2981,7 @@ namespace MissileCamera
                 hideTargets = new List<RectTransform> { hideRoot };
 
             // Left MFD bezel is portrait: vanilla bay labels use rotated Text (typically Z=270).
-            // Landscape stub rows inside a rotated content root тАФ same idea as other aircraft, one group rotation.
+            // Landscape stub rows inside a rotated content root С‚РђР¤ same idea as other aircraft, one group rotation.
             PanelRectState zone = BuildDarkreachCanvasColumnZone(canvasZone);
             float contentRotZ = SampleDarkreachBayLabelRotation(hideRoot);
             float fontRef = Mathf.Max(Mathf.Min(hideRoot.rect.width, hideRoot.rect.height), 1f);
@@ -2752,7 +3041,7 @@ namespace MissileCamera
             return hideRoot.rect.height > hideRoot.rect.width * 1.15f ? 90f : 0f;
         }
 
-        /// <summary>Full-height canvas column at weaponPanel X тАФ matches left MFD bezel viewport.</summary>
+        /// <summary>Full-height canvas column at weaponPanel X С‚РђР¤ matches left MFD bezel viewport.</summary>
         private static PanelRectState BuildDarkreachCanvasColumnZone(PanelRectState weaponPanelOnCanvas)
         {
             float minX = Mathf.Clamp(weaponPanelOnCanvas.AnchorMin.x - 0.01f, 0.02f, 0.95f);
@@ -4849,7 +5138,7 @@ namespace MissileCamera
                 return;
 
             _ifritStatusDiagDone = true;
-            MfdLog.Info($"ifrit statusTop unresolved stripMinY={stripMinY:F2} тАФ WeaponPanel children:");
+            MfdLog.Info($"ifrit statusTop unresolved stripMinY={stripMinY:F2} С‚РђР¤ WeaponPanel children:");
 
             for (int i = 0; i < weaponPanel.childCount; i++)
             {
@@ -5076,25 +5365,25 @@ namespace MissileCamera
             string panelName = resolved.Panel != null ? resolved.Panel.name : "overlay-only";
             var zone = new MissileCameraZone(resolved.Zone);
             string label = resolved.IsAlkyonFullPanel
-                ? $"alkyon├Ч{resolved.HideTargets.Count} ({panelName})"
+                ? $"alkyonв”њР§{resolved.HideTargets.Count} ({panelName})"
                 : resolved.IsDarkreachSection
-                    ? $"darkreach├Ч{resolved.HideTargets.Count} ({panelName})"
+                    ? $"darkreachв”њР§{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsMedusaSection
-                    ? $"medusa├Ч{resolved.HideTargets.Count} ({panelName})"
+                    ? $"medusaв”њР§{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsCricketEngineSection
-                        ? $"cricket-engine├Ч{resolved.HideTargets.Count} ({panelName})"
+                        ? $"cricket-engineв”њР§{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsChicaneEngineSection
-                        ? $"chicane-engine├Ч{resolved.HideTargets.Count} ({panelName})"
+                        ? $"chicane-engineв”њР§{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsIbisSection
-                        ? $"ibis├Ч{resolved.HideTargets.Count} ({panelName})"
+                        ? $"ibisв”њР§{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsTarantulaSection
-                        ? $"tarantula├Ч{resolved.HideTargets.Count} ({panelName})"
+                        ? $"tarantulaв”њР§{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsVagrantNozzleEngineSection
-                        ? $"vagrant-nozzle-engine├Ч{resolved.HideTargets.Count} ({panelName})"
+                        ? $"vagrant-nozzle-engineв”њР§{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsCompassEngineSection
-                        ? $"engine├Ч{resolved.HideTargets.Count} ({panelName})"
+                        ? $"engineв”њР§{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsIfritStrip
-                        ? $"ifrit-strip├Ч{resolved.HideTargets.Count} ({panelName})"
+                        ? $"ifrit-stripв”њР§{resolved.HideTargets.Count} ({panelName})"
                         : panelName;
             string statusDiag = resolved.IsIfritStrip || resolved.IsMedusaSection || resolved.IsTarantulaSection
                 || resolved.IsIbisSection

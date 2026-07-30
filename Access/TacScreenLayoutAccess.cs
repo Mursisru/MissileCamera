@@ -202,19 +202,83 @@ namespace MissileCamera
                 && w <= 0.35f;
         }
 
-        /// <summary>SAH-46 Chicane: L/R TURBINE blocks on right column (TAIL DUCT excluded).</summary>
+        /// <summary>
+        /// SAH-46 left Turbine MFD: L+R TURBINE stacked above TAIL DUCT.
+        /// Dedicated MFD = wide stack; shared cockpit canvas may map turbine column narrowly.
+        /// </summary>
         internal static bool IsChicaneEngineZone(PanelRectState rect)
         {
             float w = rect.AnchorMax.x - rect.AnchorMin.x;
             float h = rect.AnchorMax.y - rect.AnchorMin.y;
-            if (w < 0.06f || h < 0.10f)
+            if (w < 0.10f || h < 0.20f)
                 return false;
 
-            return rect.AnchorMin.x >= 0.40f
-                && rect.AnchorMax.x <= 1.01f
-                && rect.AnchorMin.y >= 0.30f
-                && h <= 0.55f
-                && w <= 0.45f;
+            // Dedicated Turbine MFD: near full-width top stack.
+            bool dedicated = w >= 0.35f
+                && rect.AnchorMin.x >= -0.02f
+                && rect.AnchorMax.x <= 1.02f
+                && rect.AnchorMin.y >= 0.18f
+                && rect.AnchorMax.y <= 1.02f
+                && h <= 0.85f
+                && w <= 1.05f;
+
+            // Shared canvas column (AttackHelo maps L/R TURBINE into a side strip).
+            bool column = w >= 0.10f
+                && w <= 0.40f
+                && h >= 0.25f
+                && h <= 0.70f
+                && rect.AnchorMin.y >= 0.35f
+                && rect.AnchorMax.y <= 1.02f;
+
+            return dedicated || column;
+        }
+
+        /// <summary>Local union of panels relative to a parent host (for OverlayParent placement).</summary>
+        internal static PanelRectState CaptureRelativeUnion(RectTransform parent, IReadOnlyList<RectTransform> panels)
+        {
+            if (panels.Count == 0)
+                return new PanelRectState(Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+
+            float minX = 1f, minY = 1f, maxX = 0f, maxY = 0f;
+            Rect pr = parent.rect;
+            bool any = false;
+
+            for (int i = 0; i < panels.Count; i++)
+            {
+                RectTransform? panel = panels[i];
+                if (panel == null)
+                    continue;
+
+                Bounds bounds = RectTransformUtility.CalculateRelativeRectTransformBounds(parent, panel);
+                if (pr.width <= 1f || pr.height <= 1f)
+                {
+                    minX = Mathf.Min(minX, panel.anchorMin.x);
+                    minY = Mathf.Min(minY, panel.anchorMin.y);
+                    maxX = Mathf.Max(maxX, panel.anchorMax.x);
+                    maxY = Mathf.Max(maxY, panel.anchorMax.y);
+                    any = true;
+                    continue;
+                }
+
+                float x0 = (bounds.min.x - pr.xMin) / pr.width;
+                float x1 = (bounds.max.x - pr.xMin) / pr.width;
+                float y0 = (bounds.min.y - pr.yMin) / pr.height;
+                float y1 = (bounds.max.y - pr.yMin) / pr.height;
+                minX = Mathf.Min(minX, x0);
+                minY = Mathf.Min(minY, y0);
+                maxX = Mathf.Max(maxX, x1);
+                maxY = Mathf.Max(maxY, y1);
+                any = true;
+            }
+
+            if (!any || maxX - minX < 0.01f || maxY - minY < 0.01f)
+                return new PanelRectState(Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+
+            return new PanelRectState(
+                new Vector2(Mathf.Clamp01(minX), Mathf.Clamp01(minY)),
+                new Vector2(Mathf.Clamp01(maxX), Mathf.Clamp01(maxY)),
+                Vector2.zero,
+                Vector2.zero);
         }
 
         /// <summary>UH-90 Ibis: Weapon Armed strip on left MFD bezel (canvas Y = screen horizontal).</summary>

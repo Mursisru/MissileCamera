@@ -66,6 +66,10 @@
       <HintPath>$(NuclearOptionRoot)\NuclearOption_Data\Managed\UnityEngine.UIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(NuclearOptionRoot)\NuclearOption_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Rewired_Core">
       <HintPath>$(NuclearOptionRoot)\NuclearOption_Data\Managed\Rewired_Core.dll</HintPath>
       <Private>false</Private>
