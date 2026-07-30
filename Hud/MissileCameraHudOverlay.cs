@@ -91,7 +91,8 @@ namespace MissileCamera
                 return;
             }
 
-            bool bootPlaying = MissileCameraFullscreenBootstrap.IsRunning;
+            bool bootPlaying = MissileCameraFullscreenController.IsActive
+                && MissileCameraFullscreenBootstrap.IsRunning;
             bool flir = MissileCameraHudConfig.UseFullscreenFlirHud;
             _corners?.SetVisible(!flir && !bootPlaying);
 

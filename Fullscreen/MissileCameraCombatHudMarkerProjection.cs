@@ -24,6 +24,41 @@ namespace MissileCamera
             _feedCameraCached = null;
         }
 
+        /// <summary>
+        /// After FS exit/unload: re-enable images that ReprojectIfFullscreen disabled (z&lt;=0).
+        /// Vanilla UpdatePosition will correct behind-camera markers next frame.
+        /// </summary>
+        internal static void RestoreMarkerImages()
+        {
+            try
+            {
+                CombatHUD? hud = SceneSingleton<CombatHUD>.i;
+                if (hud == null)
+                    return;
+
+                FieldInfo? markersField = AccessTools.Field(typeof(CombatHUD), "markers");
+                if (markersField?.GetValue(hud) is not System.Collections.Generic.List<HUDUnitMarker> markers)
+                    return;
+
+                for (int i = 0; i < markers.Count; i++)
+                {
+                    HUDUnitMarker? marker = markers[i];
+                    if (marker?.image == null)
+                        continue;
+
+                    if (HiddenField != null && HiddenField.GetValue(marker) is true)
+                        continue;
+
+                    if (!marker.image.enabled)
+                        marker.image.enabled = true;
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
         internal static void ReprojectIfFullscreen(HUDUnitMarker marker)
         {
             if (!MissileCameraFullscreenController.IsActive)

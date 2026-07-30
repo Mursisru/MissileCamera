@@ -64,12 +64,14 @@ namespace MissileCamera
                 catch { /* ignore */ }
 
                 if (hud != null)
+                {
+                    // Restore prior selections only — do not Deselect units that were never selected.
                     RestoreSnapshot();
-                else
-                    AbandonSession();
+                }
 
                 _sessionActive = false;
                 _lastFilteredKeep = null;
+                SavedTargets.Clear();
             }, "unload");
         }
 
@@ -221,19 +223,40 @@ namespace MissileCamera
                 return;
             }
 
-            ApplyVisualFilter(hud, keep: null);
-
-            for (int i = SavedTargets.Count - 1; i >= 0; i--)
+            // Only undo selections we changed for FS filter. Never blanket-Deselect all markers
+            // (friendly missiles / units call UpdateMaximized → sprite=null when minimized).
+            List<HUDUnitMarker>? markers = GetMarkers(hud);
+            if (markers != null)
             {
-                Unit? unit = SavedTargets[i];
-                if (unit == null || unit.disabled || !hud.MarkerExists(unit))
-                    continue;
+                for (int i = 0; i < markers.Count; i++)
+                {
+                    HUDUnitMarker? marker = markers[i];
+                    if (marker?.unit == null)
+                        continue;
 
-                if (!hud.TryGetMarker(unit, out HUDUnitMarker marker) || marker == null)
-                    continue;
+                    bool shouldSelect = false;
+                    for (int s = 0; s < SavedTargets.Count; s++)
+                    {
+                        if (SavedTargets[s] == marker.unit)
+                        {
+                            shouldSelect = true;
+                            break;
+                        }
+                    }
 
-                if (!marker.selected)
-                    marker.SelectMarker();
+                    if (marker.selected == shouldSelect)
+                        continue;
+
+                    if (shouldSelect)
+                    {
+                        if (hud.MarkerExists(marker.unit))
+                            marker.SelectMarker();
+                    }
+                    else if (marker.selected)
+                    {
+                        marker.DeselectMarker();
+                    }
+                }
             }
 
             SavedTargets.Clear();

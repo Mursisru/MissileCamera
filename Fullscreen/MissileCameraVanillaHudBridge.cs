@@ -106,6 +106,7 @@ namespace MissileCamera
             RestoreHiddenChrome();
             RestoreFlightHudVisuals();
             ForceCombatHudMarkerPass();
+            MissileCameraCombatHudMarkerProjection.RestoreMarkerImages();
 
             _flightHudWasActive = false;
         }
@@ -139,6 +140,7 @@ namespace MissileCamera
                 RestoreHiddenChrome();
                 RestoreFlightHudVisuals();
                 ForceCombatHudMarkerPass();
+                MissileCameraCombatHudMarkerProjection.RestoreMarkerImages();
             }
             catch (Exception ex)
             {
@@ -576,18 +578,42 @@ namespace MissileCamera
 
         private static void RestoreCombatHudCanvas()
         {
-            if (!_canvasElevated || _combatCanvas == null)
+            if (!_canvasElevated)
+                return;
+
+            Canvas? canvas = _combatCanvas;
+            if (canvas == null)
+            {
+                try
+                {
+                    CombatHUD? hud = SceneSingleton<CombatHUD>.i;
+                    canvas = ResolveCombatCanvas(hud);
+                }
+                catch
+                {
+                    canvas = null;
+                }
+            }
+
+            if (canvas == null)
             {
                 _canvasElevated = false;
                 _combatCanvas = null;
                 return;
             }
 
-            _combatCanvas.renderMode = _savedRenderMode;
-            _combatCanvas.sortingOrder = _savedSortingOrder;
-            _combatCanvas.overrideSorting = _savedOverrideSorting;
-            _combatCanvas.worldCamera = _savedWorldCamera;
-            _combatCanvas.pixelPerfect = _savedPixelPerfect;
+            try
+            {
+                canvas.renderMode = _savedRenderMode;
+                canvas.sortingOrder = _savedSortingOrder;
+                canvas.overrideSorting = _savedOverrideSorting;
+                canvas.worldCamera = _savedWorldCamera;
+                canvas.pixelPerfect = _savedPixelPerfect;
+            }
+            catch
+            {
+                // ignore destroyed
+            }
 
             _canvasElevated = false;
             _combatCanvas = null;

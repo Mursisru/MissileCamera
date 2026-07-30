@@ -246,6 +246,13 @@ namespace MissileCamera
             MissileCameraFullscreenController.HealIfOrphaned();
             MissileCameraFullscreenController.TickYieldToVanillaUi();
 
+            // Mid-sortie sticky chrome from FS markers-only — heal while session is alive.
+            if (!MissileCameraFullscreenController.IsActive)
+            {
+                try { MissileCameraVanillaHudBridge.HealStickyIfNeeded(); }
+                catch { /* ignore */ }
+            }
+
             // Fullscreen/MFD NO SIGNAL burst (switch / destroy / exit-no-missile).
             MissileCameraLossInterference.Tick(ResolveFeedImage());
             MissileCameraFullscreenController.TickDeferredExit();
@@ -416,6 +423,21 @@ namespace MissileCamera
             _cachedPanelH = -1f;
             HudOverlay.InvalidateCornerLayout();
             HudOverlay.InvalidateDynamicSchedule();
+
+            // Re-show MFD CornerHud if FS boot previously forced corners off on the wrong panel.
+            if (_panelRt != null && _layoutRoot != null && HudOverlay.Root != null)
+            {
+                try
+                {
+                    HudOverlay.EnsureBuilt(_layoutRoot, MfdLayoutController.GetActiveScreenUi());
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+
+            MissileCameraCombatHudMarkerProjection.RestoreMarkerImages();
         }
 
         internal static Texture? TryGetFeedTexture()

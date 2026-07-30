@@ -25,7 +25,9 @@ namespace MissileCamera
         {
             StopRunning();
             _aborted = true;
-            ApplyFullVisibility();
+            // Only touch the fullscreen panel — never the MFD TacStub (corners live there).
+            if (MissileCameraFullscreenController.IsActive)
+                ApplyFullVisibility();
         }
 
         internal static void StartIfNeeded(RectTransform panelRt)
@@ -110,6 +112,7 @@ namespace MissileCamera
             if (flirNode != null)
                 flirNode.gameObject.SetActive(flirVisible);
 
+            // FS uses FLIR, not CornerHud — keep corners off on the FS panel only.
             Transform? cornersNode = hud.Find("MissileCameraHudCorners");
             if (cornersNode != null)
                 cornersNode.gameObject.SetActive(false);
@@ -117,7 +120,9 @@ namespace MissileCamera
 
         private static void ApplyFullVisibility()
         {
-            RectTransform? panelRt = MissileCameraFeedController.TryGetPanelRt();
+            // NEVER fall back to MFD TryGetPanelRt — Abort/Exit runs after IsActive is false
+            // and would SetActive(false) MissileCameraHudCorners on the live TacStub.
+            RectTransform? panelRt = MissileCameraFullscreenFeedHost.PanelRt;
             if (panelRt == null)
                 return;
 
