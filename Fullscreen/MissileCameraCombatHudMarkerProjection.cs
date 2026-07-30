@@ -18,6 +18,12 @@ namespace MissileCamera
         private static int _feedCameraFrame = -1;
         private static Camera? _feedCameraCached;
 
+        internal static void ResetCache()
+        {
+            _feedCameraFrame = -1;
+            _feedCameraCached = null;
+        }
+
         internal static void ReprojectIfFullscreen(HUDUnitMarker marker)
         {
             if (!MissileCameraFullscreenController.IsActive)

@@ -58,7 +58,14 @@ namespace MissileCamera
 
         internal static void OnSetupCamera(TargetScreenUI screenUi, TargetCam targetCam)
         {
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
             Bootstrap();
+
+            if (_layoutActive && _activeTargetCam != null && _activeTargetCam != targetCam)
+                HardResetForAircraftChange();
+
             _activeScreenUi = screenUi;
             _activeTargetCam = targetCam;
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
@@ -70,6 +77,9 @@ namespace MissileCamera
 
         internal static void OnTacCamToggle(TargetCam targetCam)
         {
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
             Bootstrap();
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
                 return;
@@ -80,6 +90,9 @@ namespace MissileCamera
 
         internal static void OnTacScreenReady(TacScreen tacScreen, TargetCam targetCam)
         {
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
             Bootstrap();
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
                 return;
@@ -119,13 +132,72 @@ namespace MissileCamera
             ClearLayout("missile_feed_ended");
         }
 
-        internal static void ResetForMissionUnload()
+        internal static void ResetForMissionUnload() => HardResetForMissionUnload();
+
+        internal static void HardResetForMissionUnload()
         {
-            ClearLayout("mission_unload");
+            try { MfdLayoutRetryHost.Cancel(); }
+            catch { /* ignore */ }
+
+            _cleanupBusy = false;
+
+            try { DestroyTacOverlay(); }
+            catch { /* ignore */ }
+
+            try { ClearLayout("mission_hard_reset"); }
+            catch
+            {
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
+            }
+
+            // Force dead session flags even if ClearLayout threw.
+            _layoutActive = false;
+            _activeTargetCam = null;
+            _activeScreenUi = null;
+            _activeTacScreen = null;
+            _appliedConfigRevision = -1;
+            _cachedOverlayZone = null;
+            _cachedOverlayRevision = -1;
+            _cleanupBusy = false;
+            _layoutGeneration++;
+        }
+
+        /// <summary>Same-mission aircraft swap: restore hide + drop TacStub without killing Host session.</summary>
+        internal static void HardResetForAircraftChange()
+        {
+            try { MfdLayoutRetryHost.Cancel(); }
+            catch { /* ignore */ }
+
+            _cleanupBusy = false;
+
+            try { DestroyTacOverlay(); }
+            catch { /* ignore */ }
+
+            try { ClearLayout("aircraft_changed"); }
+            catch
+            {
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
+            }
+
+            _layoutActive = false;
+            _activeTargetCam = null;
+            _activeScreenUi = null;
+            _activeTacScreen = null;
+            _appliedConfigRevision = -1;
+            _cachedOverlayZone = null;
+            _cachedOverlayRevision = -1;
+            _cleanupBusy = false;
+            _layoutGeneration++;
+            MfdLog.Info("layout hard reset reason=aircraft_changed");
         }
 
         internal static void EnsureLayoutForMissileFeed()
         {
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
             if (!MfdLayoutConfig.Enabled)
                 return;
 
@@ -211,6 +283,9 @@ namespace MissileCamera
 
         private static void TryApplyLayout(TargetCam targetCam, TargetScreenUI? screenUi)
         {
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
                 return;
 
@@ -1044,8 +1119,17 @@ namespace MissileCamera
 
         private static void ClearLayout(string reason)
         {
+            // Hard reset must never no-op Restore because same-frame cleanup lock was set.
+            if (string.Equals(reason, "mission_hard_reset", System.StringComparison.Ordinal))
+                _cleanupBusy = false;
+
             if (!TryBeginCleanup())
+            {
+                // Still attempt weapons unhide even if layout cleanup is busy.
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
                 return;
+            }
 
             try
             {
@@ -1084,12 +1168,28 @@ namespace MissileCamera
 
         private static void DestroyTacOverlay()
         {
-            if (_tacOverlayRoot != null)
+            GameObject? go = null;
+            try
             {
-                MissileCameraFeedController.NotifyOverlayGone();
-                Object.Destroy(_tacOverlayRoot);
-                _tacOverlayRoot = null;
-                _stubLabel = null;
+                if (_tacOverlayRoot != null)
+                    go = _tacOverlayRoot.gameObject;
+            }
+            catch
+            {
+                // destroyed RectTransform
+            }
+
+            // Drop refs first so a throw in NotifyOverlayGone cannot leave sticky overlay pointers.
+            _tacOverlayRoot = null;
+            _stubLabel = null;
+
+            try { MissileCameraFeedController.NotifyOverlayGone(); }
+            catch { /* ignore */ }
+
+            if (go != null)
+            {
+                try { Object.Destroy(go); }
+                catch { /* ignore */ }
             }
         }
 

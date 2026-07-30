@@ -61,7 +61,20 @@ namespace MissileCamera
 
         internal static void OnFullscreenEntered()
         {
-            _hiddenChrome.Clear();
+            // Never drop a prior hide list without unhide (re-enter / failed exit leak).
+            try
+            {
+                RestoreObjectiveManager();
+                RestoreDesignatorVisual();
+                RestoreCombatHudCanvas();
+                RestoreHiddenChrome();
+                RestoreFlightHudVisuals();
+            }
+            catch
+            {
+                // ignore
+            }
+
             _objectiveMgrWasEnabled = false;
             _designatorWasEnabled = false;
 
@@ -97,30 +110,38 @@ namespace MissileCamera
             _flightHudWasActive = false;
         }
 
+        internal static bool HasStickyHiddenChrome =>
+            _hiddenChrome.Count > 0 || _canvasElevated || _objectiveMgrWasEnabled;
+
+        /// <summary>
+        /// Off-session / orphan FS: if hide list still holds live refs, unhide immediately.
+        /// </summary>
+        internal static void HealStickyIfNeeded()
+        {
+            if (!HasStickyHiddenChrome)
+                return;
+
+            if (MissileCameraFullscreenController.IsActive)
+                return;
+
+            MfdLog.Info("vanilla hud sticky heal hidden=" + _hiddenChrome.Count);
+            ResetForMissionUnload();
+        }
+
         internal static void ResetForMissionUnload()
         {
-            // Prefer live restore so HideGo / elevated canvas never stick across sorties.
-            CombatHUD? hud = null;
+            // Always attempt live unhide first — never abandon SetActive(false) chrome.
             try
             {
-                hud = SceneSingleton<CombatHUD>.i;
+                RestoreObjectiveManager();
+                RestoreDesignatorVisual();
+                RestoreCombatHudCanvas();
+                RestoreHiddenChrome();
+                RestoreFlightHudVisuals();
             }
-            catch
+            catch (Exception ex)
             {
-                // ignore
-            }
-
-            if (hud != null && (_hiddenChrome.Count > 0 || _canvasElevated))
-            {
-                try
-                {
-                    OnFullscreenExited();
-                    return;
-                }
-                catch (Exception ex)
-                {
-                    MfdLog.Info("fullscreen unload restore failed: " + ex.Message);
-                }
+                MfdLog.Info("fullscreen unload chrome restore failed: " + ex.Message);
             }
 
             MissileCameraFullscreenTargetLock.AbandonSession();
@@ -628,9 +649,16 @@ namespace MissileCamera
         {
             for (int i = 0; i < _hiddenChrome.Count; i++)
             {
-                (GameObject go, bool wasActive) = _hiddenChrome[i];
-                if (go != null)
-                    go.SetActive(wasActive);
+                try
+                {
+                    (GameObject go, bool wasActive) = _hiddenChrome[i];
+                    if (go != null)
+                        go.SetActive(wasActive);
+                }
+                catch
+                {
+                    // ignore destroyed
+                }
             }
 
             _hiddenChrome.Clear();

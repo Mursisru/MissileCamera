@@ -133,6 +133,10 @@ namespace MissileCamera
             return HasBomberBayMarkers(mfdRoot) && CanResolveDarkreachLeftColumn(mfdRoot, canvas);
         }
 
+        /// <summary>Read-only Darkreach tac probe (jsonKey-gated callers only). No SetActive.</summary>
+        internal static bool HasDarkreachTacWeaponUi(GameObject mfdRoot) =>
+            FindWeaponPanel(mfdRoot) != null || FindBomberProfileInMfd(mfdRoot) != null;
+
         internal static bool IsBomberBayMarkerText(string? raw) => IsBomberBayMarker(raw ?? string.Empty);
 
         internal static bool HasMedusaWeaponsMarkers(GameObject mfdRoot)
@@ -248,26 +252,31 @@ namespace MissileCamera
 
         internal static void Restore()
         {
-            if (!IsRestoreContextValid())
-            {
-                HiddenStripNodes.Clear();
-                _hiddenWeaponsPanel = null;
-                _overlayOnlyReplacement = false;
-                _hiddenRootInstanceId = 0;
-                _hiddenRootPath = string.Empty;
-                return;
-            }
-
+            // ALWAYS attempt unhide first. Fingerprint mismatch must never abandon live SetActive(false).
             foreach ((RectTransform node, bool wasActive) in HiddenStripNodes)
             {
-                if (node)
-                    node.gameObject.SetActive(wasActive);
+                try
+                {
+                    if (node != null)
+                        node.gameObject.SetActive(wasActive);
+                }
+                catch
+                {
+                    // ignore destroyed
+                }
             }
 
             HiddenStripNodes.Clear();
 
-            if (_hiddenWeaponsPanel is { } livePanel && livePanel)
-                livePanel.gameObject.SetActive(_weaponsWasActive);
+            try
+            {
+                if (_hiddenWeaponsPanel != null)
+                    _hiddenWeaponsPanel.gameObject.SetActive(_weaponsWasActive);
+            }
+            catch
+            {
+                // ignore destroyed
+            }
 
             _hiddenWeaponsPanel = null;
             _overlayOnlyReplacement = false;
@@ -278,8 +287,12 @@ namespace MissileCamera
         internal static bool IsReplacementActive() =>
             _hiddenWeaponsPanel != null || HiddenStripNodes.Count > 0 || _overlayOnlyReplacement;
 
-        internal static void ResetForMissionUnload()
+        internal static void ResetForMissionUnload() => HardResetForMissionUnload();
+
+        internal static void HardResetForMissionUnload()
         {
+            Restore();
+            // Second pass: covers re-entrancy if Restore was interrupted mid-list.
             Restore();
             _debugDumpDone = false;
             _failureDiagDone = false;
@@ -291,6 +304,22 @@ namespace MissileCamera
             _tarantulaDiagDone = false;
             _chicaneDiagDone = false;
             _cricketDiagDone = false;
+            _ibisDiagDone = false;
+        }
+
+        /// <summary>
+        /// Off-session watchdog: unhide if hide list still holds live cockpit nodes.
+        /// </summary>
+        internal static void HealStickyIfNeeded()
+        {
+            if (!IsReplacementActive())
+                return;
+
+            if (MissileCameraHost.IsSessionActive && MfdLayoutController.IsLayoutActive)
+                return;
+
+            MfdLog.Info("weapons sticky heal nodes=" + HiddenStripNodes.Count);
+            Restore();
         }
 
         private static bool IsRestoreContextValid()
@@ -351,6 +380,9 @@ namespace MissileCamera
             if (IsDarkreachAircraft(aircraftJsonKey))
             {
                 if (TryResolveDarkreachWeaponArmedPanel(mfdRoot, canvas, out resolved))
+                    return true;
+
+                if (TryResolveDarkreachTacRightWeaponPanel(mfdRoot, canvas, out resolved))
                     return true;
 
                 MaybeLogDarkreachDiscoveryFailure(mfdRoot, null, canvas, primaryHits);
@@ -545,6 +577,114 @@ namespace MissileCamera
 
         private static bool IsDarkreachAircraft(string? jsonKey) =>
             string.Equals(jsonKey, "Darkreach", System.StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// SFB-81 target tac MFD: right-column weapon strip (weaponPanel/rearProfile, x≥0.40).
+        /// Hide targets are scoped to that strip only — no shared-canvas root rewrite.
+        /// </summary>
+        private static bool TryResolveDarkreachTacRightWeaponPanel(
+            GameObject mfdRoot,
+            Canvas canvas,
+            out ResolvedPanel resolved)
+        {
+            resolved = default;
+
+            RectTransform? profile = FindBomberProfileInMfd(mfdRoot);
+            RectTransform? weaponPanel = profile?.parent != null
+                ? profile.parent.GetComponent<RectTransform>()
+                : FindWeaponPanel(mfdRoot);
+            if (weaponPanel == null)
+                return false;
+
+            if (PanelContainsEngineGauges(weaponPanel))
+                return false;
+
+            Canvas overlayCanvas = TacScreenAccess.GetOverlayCanvas(weaponPanel) ?? canvas;
+            PanelRectState weaponZone = PanelRectNormalizer.CaptureOnCanvas(weaponPanel, overlayCanvas);
+            if (weaponZone.AnchorMin.x < 0.40f)
+                return false;
+
+            RectTransform? columnRoot = SelectDarkreachTacRightColumnRoot(weaponPanel, overlayCanvas);
+            PanelRectState zone = columnRoot != null
+                ? PanelRectNormalizer.CaptureOnCanvas(columnRoot, overlayCanvas)
+                : weaponZone;
+
+            if (!IsDarkreachTacRightColumnZone(zone))
+                zone = ExpandDarkreachTacRightZone(weaponPanel, overlayCanvas);
+
+            if (!IsDarkreachTacRightColumnZone(zone))
+                return false;
+
+            List<RectTransform> hideTargets = CollectDarkreachVisualHideTargets(weaponPanel);
+            if (hideTargets.Count == 0)
+                hideTargets = new List<RectTransform> { weaponPanel };
+
+            float contentRotZ = SampleDarkreachBayLabelRotation(weaponPanel);
+            float fontRef = Mathf.Max(Mathf.Min(weaponPanel.rect.width, weaponPanel.rect.height), 1f);
+
+            MfdLog.Info(
+                $"darkreach tacRight hideRoot={weaponPanel.name} column={(columnRoot != null ? columnRoot.name : "none")} " +
+                $"zone={FormatAnchors(zone)} hideChildren={hideTargets.Count}");
+
+            resolved = new ResolvedPanel(
+                weaponPanel,
+                overlayCanvas,
+                zone,
+                hideTargets,
+                isDarkreachSection: true,
+                stubContentRotationZ: contentRotZ,
+                stubFontRef: fontRef);
+            return true;
+        }
+
+        private static bool IsDarkreachTacRightColumnZone(PanelRectState rect)
+        {
+            float w = rect.AnchorMax.x - rect.AnchorMin.x;
+            float h = rect.AnchorMax.y - rect.AnchorMin.y;
+            return rect.AnchorMin.x >= 0.40f
+                && rect.AnchorMax.x <= 1.01f
+                && w >= 0.04f
+                && h >= 0.35f;
+        }
+
+        private static RectTransform? SelectDarkreachTacRightColumnRoot(RectTransform start, Canvas canvas)
+        {
+            RectTransform? best = null;
+            float bestArea = float.MaxValue;
+            RectTransform? current = start;
+
+            for (int depth = 0; depth < 12 && current != null; depth++)
+            {
+                PanelRectState zone = PanelRectNormalizer.CaptureOnCanvas(current, canvas);
+                if (IsDarkreachTacRightColumnZone(zone))
+                {
+                    float area = (zone.AnchorMax.x - zone.AnchorMin.x) * (zone.AnchorMax.y - zone.AnchorMin.y);
+                    if (area < bestArea)
+                    {
+                        bestArea = area;
+                        best = current;
+                    }
+                }
+
+                current = current.parent != null ? current.parent.GetComponent<RectTransform>() : null;
+            }
+
+            return best;
+        }
+
+        private static PanelRectState ExpandDarkreachTacRightZone(RectTransform weaponPanel, Canvas canvas)
+        {
+            PanelRectState z = PanelRectNormalizer.CaptureOnCanvas(weaponPanel, canvas);
+            float minX = Mathf.Clamp(z.AnchorMin.x - 0.04f, 0.45f, 0.95f);
+            float maxX = Mathf.Clamp(z.AnchorMax.x + 0.02f, minX + 0.04f, 0.99f);
+            float minY = Mathf.Clamp(z.AnchorMin.y - 0.02f, 0.02f, 0.95f);
+            float maxY = Mathf.Clamp(z.AnchorMax.y + 0.02f, minY + 0.10f, 0.99f);
+            return new PanelRectState(
+                new Vector2(minX, minY),
+                new Vector2(maxX, maxY),
+                Vector2.zero,
+                Vector2.zero);
+        }
 
         private static bool IsCricketAircraft(string? jsonKey) =>
             TacScreenAccess.IsCricketAircraft(jsonKey);
@@ -4890,7 +5030,15 @@ namespace MissileCamera
 
         private static WeaponsReplacementResult ApplyHidden(ResolvedPanel resolved, string layout)
         {
-            HiddenStripNodes.Clear();
+            if (!MissileCameraHost.IsSessionActive)
+                return new WeaponsReplacementResult(MissileCameraZone.Invalid, null);
+
+            if (resolved.Panel == null && !resolved.OverlayOnly)
+                return new WeaponsReplacementResult(MissileCameraZone.Invalid, null);
+
+            // Never replace a hide list without unhiding the previous one first.
+            Restore();
+
             _overlayOnlyReplacement = false;
 
             _hiddenWeaponsPanel = null;
@@ -4903,12 +5051,18 @@ namespace MissileCamera
                 {
                     foreach (RectTransform node in resolved.HideTargets)
                     {
+                        if (node == null)
+                            continue;
+
                         HiddenStripNodes.Add((node, node.gameObject.activeSelf));
                         node.gameObject.SetActive(false);
                     }
                 }
                 else
                 {
+                    if (resolved.Panel == null)
+                        return new WeaponsReplacementResult(MissileCameraZone.Invalid, null);
+
                     _hiddenWeaponsPanel = resolved.Panel;
                     _weaponsWasActive = resolved.Panel.gameObject.activeSelf;
                     resolved.Panel.gameObject.SetActive(false);
@@ -4919,28 +5073,29 @@ namespace MissileCamera
                 _overlayOnlyReplacement = true;
             }
 
+            string panelName = resolved.Panel != null ? resolved.Panel.name : "overlay-only";
             var zone = new MissileCameraZone(resolved.Zone);
             string label = resolved.IsAlkyonFullPanel
-                ? $"alkyon├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                ? $"alkyon├Ч{resolved.HideTargets.Count} ({panelName})"
                 : resolved.IsDarkreachSection
-                    ? $"darkreach├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                    ? $"darkreach├Ч{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsMedusaSection
-                    ? $"medusa├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                    ? $"medusa├Ч{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsCricketEngineSection
-                        ? $"cricket-engine├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"cricket-engine├Ч{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsChicaneEngineSection
-                        ? $"chicane-engine├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"chicane-engine├Ч{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsIbisSection
-                        ? $"ibis├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"ibis├Ч{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsTarantulaSection
-                        ? $"tarantula├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"tarantula├Ч{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsVagrantNozzleEngineSection
-                        ? $"vagrant-nozzle-engine├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"vagrant-nozzle-engine├Ч{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsCompassEngineSection
-                        ? $"engine├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
+                        ? $"engine├Ч{resolved.HideTargets.Count} ({panelName})"
                     : resolved.IsIfritStrip
-                        ? $"ifrit-strip├Ч{resolved.HideTargets.Count} ({resolved.Panel.name})"
-                        : resolved.Panel.name;
+                        ? $"ifrit-strip├Ч{resolved.HideTargets.Count} ({panelName})"
+                        : panelName;
             string statusDiag = resolved.IsIfritStrip || resolved.IsMedusaSection || resolved.IsTarantulaSection
                 || resolved.IsIbisSection
                 ? $" stripBottom={resolved.StripBottomY:F2} statusTop={resolved.StatusTopY:F2} statusFrame={resolved.StatusFrameName}"
@@ -4968,14 +5123,9 @@ namespace MissileCamera
         }
 
         private static MissileCameraTelemetryLayout ResolveTelemetryLayout(ResolvedPanel resolved) =>
-            resolved.IsAlkyonFullPanel
-                || resolved.IsCricketEngineSection
-                || resolved.IsChicaneEngineSection
-                || resolved.IsIbisSection
-                || resolved.IsVagrantNozzleEngineSection
-                || resolved.IsCompassEngineSection
-                ? MissileCameraTelemetryLayout.RightColumn
-                : MissileCameraTelemetryLayout.BottomRow;
+            resolved.IsIfritStrip
+                ? MissileCameraTelemetryLayout.BottomRow
+                : MissileCameraTelemetryLayout.RightColumn;
 
         private readonly struct ResolvedPanel
         {

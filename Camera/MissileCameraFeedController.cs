@@ -61,25 +61,71 @@ namespace MissileCamera
         /// Drop DDOL feed/layout session without EnableCanvas / chrome restore.
         /// Call after FullscreenController.ResetForMissionUnload.
         /// </summary>
-        internal static void ResetForMissionUnload()
+        internal static void ResetForMissionUnload() => HardResetForMissionUnload();
+
+        internal static void HardResetForMissionUnload()
         {
-            NotifyOverlayGone();
-            TryUnbindAircraft();
+            try { NotifyOverlayGone(); }
+            catch { /* ignore */ }
+
+            try { TryUnbindAircraft(); }
+            catch { /* ignore */ }
+
             OwnedActive.Clear();
-            MissileCameraSalvoTracker.Reset();
-            MissileCameraPostFxStack.Release();
+
+            try { MissileCameraSalvoTracker.Reset(); }
+            catch { /* ignore */ }
+
+            try { MissileCameraPostFxStack.Release(); }
+            catch { /* ignore */ }
+
             _postLossSequenceActive = false;
             _manualFollowActive = false;
             _followedMissile = null;
             _zoomOffset = 0f;
             _fullscreenMagnification = 1f;
             _restoreAfterLossAtUnscaled = -1f;
+            _nextRenderTimeUnscaled = 0f;
+            _nextReconcileTimeUnscaled = 0f;
+            _nextHudSnapshotTime = 0f;
+            _nextHudVisualTime = 0f;
+            _nextCornerHudTime = 0f;
+            _nextConfigRefreshTime = 0f;
+            _nextReconcileBackoff = 2f;
+            _loggedBind = false;
+            _cachedSnapshot = MissileCameraHudSnapshot.Empty;
+            _panelRt = null;
+            _feedImage = null;
+            _layoutRoot = null;
+            _telemetryText = null;
+            _colorLabel = null;
+            _cachedLayoutRoot = null;
+            _rig = null;
             UseIdleDriverWait = true;
-            MissileCameraVisionModeController.Reset();
-            MissileCameraInfraredPolicy.Reset();
-            MissileCameraHudSnapshot.ResetSmoothing();
-            MissileCameraRenderPrep.ResetAll();
-            DetachRig();
+
+            try { MissileCameraVisionModeController.Reset(); }
+            catch { /* ignore */ }
+
+            try { MissileCameraInfraredPolicy.Reset(); }
+            catch { /* ignore */ }
+
+            try { MissileCameraHudSnapshot.ResetSmoothing(); }
+            catch { /* ignore */ }
+
+            try { MissileCameraRenderPrep.ResetAll(); }
+            catch { /* ignore */ }
+        }
+
+        /// <summary>
+        /// Off-session: if weapons/FS chrome hide lists still hold live objects, unhide.
+        /// </summary>
+        private static void HealStickyVanillaHides()
+        {
+            try { MfdWeaponsZoneAccess.HealStickyIfNeeded(); }
+            catch { /* ignore */ }
+
+            try { MissileCameraVanillaHudBridge.HealStickyIfNeeded(); }
+            catch { /* ignore */ }
         }
 
         internal static void SelectNextMissile()
@@ -187,6 +233,15 @@ namespace MissileCamera
 
         internal static void Tick()
         {
+            // DDOL driver keeps ticking across scenes — never EnsureLayout/ApplyHidden off-session.
+            if (!MissileCameraHost.IsSessionActive)
+            {
+                UseIdleDriverWait = true;
+                MissileCameraFullscreenController.HealIfOrphaned();
+                HealStickyVanillaHides();
+                return;
+            }
+
             RefreshConfigsIfDue();
             MissileCameraFullscreenController.HealIfOrphaned();
             MissileCameraFullscreenController.TickYieldToVanillaUi();
@@ -464,6 +519,9 @@ namespace MissileCamera
 
         internal static void NotifyOverlayReady(RectTransform panelRt)
         {
+            if (!MissileCameraHost.IsSessionActive || panelRt == null)
+                return;
+
             _overlayActive = true;
             _loggedBind = false;
             BindPanel(panelRt);
@@ -472,9 +530,16 @@ namespace MissileCamera
         internal static void NotifyOverlayGone()
         {
             _overlayActive = false;
-            CancelPostLossSequence();
-            MissileCameraInfraredEffect.Clear(_feedImage, _rig);
-            MissileCameraPostFxStack.Release();
+
+            try { CancelPostLossSequence(); }
+            catch { /* ignore */ }
+
+            try { MissileCameraInfraredEffect.Clear(_feedImage, _rig); }
+            catch { /* ignore */ }
+
+            try { MissileCameraPostFxStack.Release(); }
+            catch { /* ignore */ }
+
             _feedImage = null;
             _telemetryText = null;
             _colorLabel = null;
@@ -484,12 +549,18 @@ namespace MissileCamera
             _cachedLayoutRotationZ = float.NaN;
             _cachedPanelW = -1f;
             _cachedPanelH = -1f;
-            HudOverlay.Destroy();
+
+            try { HudOverlay.Destroy(); }
+            catch { /* ignore */ }
+
             _manualFollowActive = false;
             _zoomOffset = 0f;
-            DetachRig();
-            MissileCameraTelemetry.ResetThrottle();
-            // FS IsActive self-heals when scene-local overlay dies — do not Exit/restore here.
+
+            try { DetachRig(); }
+            catch { /* ignore */ }
+
+            try { MissileCameraTelemetry.ResetThrottle(); }
+            catch { /* ignore */ }
         }
 
         private static void BindPanel(RectTransform panelRt)
@@ -889,14 +960,20 @@ namespace MissileCamera
         private static void DetachRig()
         {
             _followedMissile = null;
-            MissileCameraRenderPrep.ForceRestoreWorldState();
-            if (_rig == null)
+
+            try { MissileCameraRenderPrep.ForceRestoreWorldState(); }
+            catch { /* ignore */ }
+
+            MissileCameraRig? rig = _rig;
+            _rig = null;
+            if (rig == null)
                 return;
 
-            _rig.SetPipelineDriven(false);
-            _rig.Detach();
-            if (!_rig.IsRootAlive)
-                _rig = null;
+            try { rig.SetPipelineDriven(false); }
+            catch { /* ignore */ }
+
+            try { rig.Detach(); }
+            catch { /* ignore */ }
         }
 
         internal static bool HasTrackableOwnedMissile()
@@ -1016,6 +1093,7 @@ namespace MissileCamera
                 {
                     TryUnbindAircraft();
                     OwnedActive.Clear();
+                    MfdLayoutController.HardResetForAircraftChange();
                 }
 
                 return;
@@ -1025,6 +1103,10 @@ namespace MissileCamera
                 return;
 
             TryUnbindAircraft();
+            OwnedActive.Clear();
+            _followedMissile = null;
+            MfdLayoutController.HardResetForAircraftChange();
+
             _subscribedAircraft = aircraft;
             _subscribedAircraft.onRegisterMissile += OnRegisterMissile;
             _subscribedAircraft.onDeregisterMissile += OnDeregisterMissile;
@@ -1052,7 +1134,9 @@ namespace MissileCamera
 
             _nextReconcileBackoff = 2f;
             MissileCameraSalvoTracker.OnRegister(missile);
-            MfdLayoutController.EnsureLayoutForMissileFeed();
+
+            if (MissileCameraHost.IsSessionActive)
+                MfdLayoutController.EnsureLayoutForMissileFeed();
         }
 
         private static void OnDeregisterMissile(Missile missile)

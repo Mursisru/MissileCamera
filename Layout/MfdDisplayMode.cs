@@ -47,6 +47,18 @@ namespace MissileCamera
                 return MfdLayoutProfile.DedicatedSplit;
             }
 
+            // Darkreach-only: right tac weapon strip can exist without bay markers on tacScreen.
+            if (string.Equals(jsonKey, "Darkreach", System.StringComparison.OrdinalIgnoreCase)
+                && MfdWeaponsZoneAccess.HasDarkreachTacWeaponUi(tacScreen.gameObject))
+            {
+                return MfdLayoutProfile.DedicatedSplit;
+            }
+
+            // SAH-46 Chicane: small tac radar would size-Skip; MC replaces TURBINE column on engine MFD.
+            // jsonKey-gated only — no early Tac trigger (avoids ApplyHidden race).
+            if (TacScreenAccess.IsChicaneAircraft(jsonKey))
+                return MfdLayoutProfile.DedicatedSplit;
+
             // EW-25 Medusa: RADOME/LASER armed strip on right tac MFD.
             if (MfdWeaponsZoneAccess.HasMedusaWeaponsMarkers(tacScreen.gameObject))
             {

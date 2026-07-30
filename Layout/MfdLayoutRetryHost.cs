@@ -12,18 +12,58 @@ namespace MissileCamera
 
         internal static void Schedule(TargetCam targetCam, int generation)
         {
+            EnsureBehaviour();
             if (_behaviour == null)
-            {
-                var go = new GameObject("MissileCamera.Retry");
-                _behaviour = go.AddComponent<MfdLayoutRetryBehaviour>();
-            }
+                return;
 
             _behaviour.Begin(targetCam, generation, IntervalSeconds, MaxAttempts);
         }
 
         internal static void Cancel()
         {
-            _behaviour?.StopRetry();
+            try
+            {
+                if (_behaviour != null)
+                    _behaviour.StopRetry();
+            }
+            catch
+            {
+                // destroyed MonoBehaviour during scene unload
+            }
+
+            if (_behaviour == null)
+                _behaviour = null;
+        }
+
+        /// <summary>Cancel + drop destroyed scene-local host. Safe during GameWorld unload.</summary>
+        internal static void HardReset()
+        {
+            Cancel();
+
+            try
+            {
+                if (_behaviour != null)
+                {
+                    Object.Destroy(_behaviour.gameObject);
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+
+            _behaviour = null;
+        }
+
+        private static void EnsureBehaviour()
+        {
+            if (_behaviour != null)
+                return;
+
+            var go = new GameObject("MissileCamera.Retry");
+            Object.DontDestroyOnLoad(go);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            _behaviour = go.AddComponent<MfdLayoutRetryBehaviour>();
         }
     }
 
@@ -50,12 +90,17 @@ namespace MissileCamera
 
         internal void StopRetry()
         {
-            if (_retryCoroutine != null)
+            try
             {
-                StopCoroutine(_retryCoroutine);
-                _retryCoroutine = null;
+                if (_retryCoroutine != null && this != null)
+                    StopCoroutine(_retryCoroutine);
+            }
+            catch
+            {
+                // ignore destroyed
             }
 
+            _retryCoroutine = null;
             _targetCam = null;
         }
 

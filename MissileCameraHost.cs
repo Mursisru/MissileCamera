@@ -20,8 +20,24 @@ namespace MissileCamera
         private bool _startupScheduled;
         private bool _teardownInProgress;
         private int _teardownEpoch;
+        private int _startupEpoch;
+        private bool _pendingHardReset;
+        private string _pendingHardResetReason = string.Empty;
+        private bool _pendingShutdownDriver;
+        private bool _pendingUnpatchHarmony;
 
         internal static bool IsMissionReady => _instance != null && _instance._missionReady;
+
+        /// <summary>True only while a mission session may apply layout/hide. Gates DDOL Tick + Harmony apply.</summary>
+        internal static bool IsSessionActive =>
+            _instance != null
+            && _instance._missionReady
+            && !_instance._teardownInProgress;
+
+        internal static bool IsTeardownInProgress =>
+            _instance != null && _instance._teardownInProgress;
+
+        internal static int TeardownEpoch => _instance != null ? _instance._teardownEpoch : 0;
 
         internal static void Ensure(string pluginDir, ManualLogSource logger)
         {
@@ -43,20 +59,23 @@ namespace MissileCamera
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
-            SafeMissionTeardown("host_destroy", shutdownDriver: true, unpatchHarmony: true);
+            _pendingHardReset = false;
+            HardResetAll("host_destroy", shutdownDriver: true, unpatchHarmony: true);
             _instance = null;
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (IsMenuOrSystemScene(scene.path))
-            {
-                if (_missionReady)
-                    SafeMissionTeardown("menu_scene_loaded");
-                return;
-            }
+            string label = string.IsNullOrEmpty(scene.path) ? scene.name : scene.path;
 
-            if (_missionReady)
+            // Invalidate any in-flight DeferredMissionStartup from a prior load.
+            _startupEpoch++;
+            _startupScheduled = false;
+
+            // ALWAYS wipe on every scene load — menu, mission, additive, re-entry.
+            HardResetAll("scene_loaded:" + label);
+
+            if (IsMenuOrSystemScene(scene.path))
                 return;
 
             ScheduleMissionStartup(scene.path);
@@ -68,40 +87,72 @@ namespace MissileCamera
                 && !string.Equals(scene.name, "GameWorld", StringComparison.OrdinalIgnoreCase))
                 return;
 
-            SafeMissionTeardown("scene_unloaded_gameworld");
+            HardResetAll("scene_unloaded_gameworld");
         }
 
-        private void SafeMissionTeardown(string reason, bool shutdownDriver = false, bool unpatchHarmony = false)
+        /// <summary>
+        /// Full session wipe. Safe to call repeatedly. Never EnableCanvas / TargetListChanged.
+        /// If already wiping, queues a follow-up pass (never silent-drop a restore request).
+        /// </summary>
+        private void HardResetAll(string reason, bool shutdownDriver = false, bool unpatchHarmony = false)
         {
             if (_teardownInProgress)
+            {
+                _pendingHardReset = true;
+                _pendingHardResetReason = reason;
+                _pendingShutdownDriver |= shutdownDriver;
+                _pendingUnpatchHarmony |= unpatchHarmony;
+                MfdLog.Info("HARD RESET queued reason=" + reason);
                 return;
+            }
 
             _teardownInProgress = true;
             _teardownEpoch++;
+            // Drop mission gate first so DDOL Tick cannot ApplyHidden during this method.
+            _missionReady = false;
+            _startupScheduled = false;
+
             try
             {
-                MfdLog.Info($"mission teardown epoch={_teardownEpoch} reason={reason}");
+                MfdLog.Info($"HARD RESET epoch={_teardownEpoch} reason={reason}");
 
                 try { MissileCameraFullscreenController.ResetForMissionUnload(); }
-                catch (Exception ex) { MfdLog.Info("teardown FS failed: " + ex.Message); }
+                catch (Exception ex) { LogHardResetFail("FS", ex); }
 
-                try { MfdLayoutRetryHost.Cancel(); }
-                catch (Exception ex) { MfdLog.Info("teardown retry failed: " + ex.Message); }
+                try { MissileCameraVanillaHudBridge.ResetForMissionUnload(); }
+                catch (Exception ex) { LogHardResetFail("vanilla hud", ex); }
 
-                try { MfdLayoutController.ResetForMissionUnload(); }
-                catch (Exception ex) { MfdLog.Info("teardown layout failed: " + ex.Message); }
+                try { MissileCameraFullscreenTargetLock.ResetForMissionUnload(); }
+                catch (Exception ex) { LogHardResetFail("targetlock", ex); }
 
-                try { MfdWeaponsZoneAccess.ResetForMissionUnload(); }
-                catch (Exception ex) { MfdLog.Info("teardown weapons failed: " + ex.Message); }
+                try { MfdLayoutRetryHost.HardReset(); }
+                catch (Exception ex) { LogHardResetFail("retry", ex); }
 
-                try { MissileCameraFeedController.ResetForMissionUnload(); }
-                catch (Exception ex) { MfdLog.Info("teardown feed failed: " + ex.Message); }
+                try { MfdLayoutController.HardResetForMissionUnload(); }
+                catch (Exception ex) { LogHardResetFail("layout", ex); }
+
+                try { MfdWeaponsZoneAccess.HardResetForMissionUnload(); }
+                catch (Exception ex) { LogHardResetFail("weapons", ex); }
+
+                try { MissileCameraFeedController.HardResetForMissionUnload(); }
+                catch (Exception ex) { LogHardResetFail("feed", ex); }
 
                 try { MissileCameraRenderPrep.ResetAll(); }
-                catch (Exception ex) { MfdLog.Info("teardown render failed: " + ex.Message); }
+                catch (Exception ex) { LogHardResetFail("render", ex); }
+
+                try { TacScreenAccess.ClearCache(); }
+                catch (Exception ex) { LogHardResetFail("tac cache", ex); }
+
+                try { MissileCameraVanillaHudBridge.ResetForMissionUnload(); }
+                catch (Exception ex) { LogHardResetFail("vanilla hud pass2", ex); }
+
+                try { MfdWeaponsZoneAccess.HardResetForMissionUnload(); }
+                catch (Exception ex) { LogHardResetFail("weapons pass2", ex); }
 
                 try
                 {
+                    MissileCameraControlSlot.Active = null;
+                    MissileCameraCombatHudMarkerProjection.ResetCache();
                     MissileCameraHudSnapshot.ResetSmoothing();
                     MissileCameraStockPitchLadder.ResetSourceCache();
                     MissileCameraInfraredPolicy.Reset();
@@ -109,16 +160,19 @@ namespace MissileCamera
                     MissileCameraInfraredExposure.Reset();
                     MissileCameraEffectsAvailability.Reset();
                     MissileCameraSalvoTracker.Reset();
+                    MissileCameraLossInterference.Shutdown();
+                    MissileCameraAircraftCamController.Shutdown();
+                    MissileCameraCockpitPipController.Shutdown();
                 }
                 catch (Exception ex)
                 {
-                    MfdLog.Info("teardown statics failed: " + ex.Message);
+                    LogHardResetFail("statics", ex);
                 }
 
                 if (shutdownDriver)
                 {
                     try { MissileCameraFeedDriverHost.Shutdown(); }
-                    catch (Exception ex) { MfdLog.Info("teardown driver failed: " + ex.Message); }
+                    catch (Exception ex) { LogHardResetFail("driver", ex); }
                 }
 
                 if (unpatchHarmony)
@@ -126,19 +180,45 @@ namespace MissileCamera
                     _harmony?.UnpatchSelf();
                     _harmony = null;
                 }
-
-                _missionReady = false;
-                _startupScheduled = false;
             }
             finally
             {
                 _teardownInProgress = false;
+                if (_pendingHardReset && _instance != null)
+                {
+                    string pendingReason = _pendingHardResetReason;
+                    bool pendingShutdown = _pendingShutdownDriver;
+                    bool pendingUnpatch = _pendingUnpatchHarmony;
+                    _pendingHardReset = false;
+                    _pendingHardResetReason = string.Empty;
+                    _pendingShutdownDriver = false;
+                    _pendingUnpatchHarmony = false;
+                    StartCoroutine(DeferredHardReset(pendingReason, pendingShutdown, pendingUnpatch));
+                }
             }
+        }
+
+        private static void LogHardResetFail(string step, Exception ex)
+        {
+            string msg = string.IsNullOrEmpty(ex.Message) ? "(no message)" : ex.Message;
+            MfdLog.Info("hardreset " + step + " failed: " + ex.GetType().Name + ": " + msg);
+        }
+
+        private IEnumerator DeferredHardReset(string reason, bool shutdownDriver, bool unpatchHarmony)
+        {
+            yield return null;
+            if (_instance == null)
+                yield break;
+
+            HardResetAll(reason, shutdownDriver, unpatchHarmony);
         }
 
         private void TryBootstrapCurrentScene()
         {
             Scene scene = SceneManager.GetActiveScene();
+            _startupEpoch++;
+            _startupScheduled = false;
+            HardResetAll("bootstrap_current:" + (string.IsNullOrEmpty(scene.path) ? scene.name : scene.path));
             if (!IsMenuOrSystemScene(scene.path))
                 ScheduleMissionStartup(scene.path);
         }
@@ -149,16 +229,37 @@ namespace MissileCamera
                 return;
 
             _startupScheduled = true;
-            StartCoroutine(DeferredMissionStartup(scenePath));
+            int epoch = _startupEpoch;
+            StartCoroutine(DeferredMissionStartup(scenePath, epoch));
         }
 
-        private IEnumerator DeferredMissionStartup(string scenePath)
+        private IEnumerator DeferredMissionStartup(string scenePath, int epoch)
         {
             yield return null;
-            if (_missionReady)
+            if (epoch != _startupEpoch || _missionReady)
                 yield break;
 
+            if (IsMenuOrSystemScene(SceneManager.GetActiveScene().path))
+            {
+                _startupScheduled = false;
+                yield break;
+            }
+
+            // Always wipe again immediately before enabling the session.
+            HardResetAll("pre_mission_startup");
+            yield return null;
+
+            if (epoch != _startupEpoch || _missionReady)
+                yield break;
+
+            if (IsMenuOrSystemScene(SceneManager.GetActiveScene().path))
+            {
+                _startupScheduled = false;
+                yield break;
+            }
+
             _missionReady = true;
+            _startupScheduled = false;
             StartupMission(_pluginDir, _logger!, scenePath);
         }
 
@@ -223,7 +324,8 @@ namespace MissileCamera
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
-            SafeMissionTeardown("application_quit", shutdownDriver: true, unpatchHarmony: true);
+            _pendingHardReset = false;
+            HardResetAll("application_quit", shutdownDriver: true, unpatchHarmony: true);
             _instance = null;
         }
     }

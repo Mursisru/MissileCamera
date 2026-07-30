@@ -11,10 +11,15 @@ namespace MissileCamera
 
         internal static void Register(Component aircraft, TacScreen tacScreen)
         {
-            if (aircraft == null)
+            if (aircraft == null || tacScreen == null)
                 return;
 
             CachedByAircraftId[aircraft.GetInstanceID()] = tacScreen;
+        }
+
+        internal static void ClearCache()
+        {
+            CachedByAircraftId.Clear();
         }
 
         internal static TacScreen? Resolve(Component? aircraft)
