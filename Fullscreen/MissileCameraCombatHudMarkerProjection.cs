@@ -8,6 +8,7 @@ namespace MissileCamera
     /// CombatHUD markers use mainCamera.WorldToScreenPoint (dump HUDUnitMarker.UpdatePosition).
     /// Fullscreen video is the seeker RT → Overlay RawImage, so those positions stick near cockpit center.
     /// Reproject via feed camera viewport → Screen (RT WorldToScreen is RT pixels — wrong for Overlay).
+    /// Missile units: hide image in FS only (cockpit ghosts) — never DeselectMarker.
     /// Never moves CameraStateManager (CAMERA_SAFETY.md).
     /// </summary>
     internal static class MissileCameraCombatHudMarkerProjection
@@ -68,48 +69,64 @@ namespace MissileCamera
             if (marker == null || marker.image == null || marker.unit == null)
                 return;
 
-            // Own missiles / friendly tracks: leave vanilla UpdatePosition alone.
-            // Reproject is for world units in seeker space; disabling image.z<=0 hid own missiles on glass.
             try
             {
+                // FS overlay elevates CombatHUD: vanilla missile markers stay on cockpit mainCamera
+                // and look like ghost dots on seeker video. Hide image only — never DeselectMarker
+                // (friendly missiles → sprite=null). Glass outside FS is untouched (IsActive gate).
                 if (marker.unit is Missile)
+                {
+                    HideMarkerImage(marker);
                     return;
+                }
+
+                if (HiddenField != null && HiddenField.GetValue(marker) is true)
+                    return;
+
+                Camera? feed = ResolveFeedCamera();
+                if (feed == null)
+                {
+                    // No seeker cam: do not leave cockpit-projected ghosts on FS.
+                    HideMarkerImage(marker);
+                    return;
+                }
+
+                if (!TryResolveWorld(marker, out Vector3 world))
+                {
+                    HideMarkerImage(marker);
+                    return;
+                }
+
+                if (marker.selected)
+                {
+                    ReprojectSelected(marker, feed, world);
+                    return;
+                }
+
+                Vector3 screen = FeedWorldToOverlayScreen(feed, world);
+                if (screen.z <= 0f)
+                {
+                    // Off-seeker: hide only while FS is the owner.
+                    // RestoreMarkerImages + IsActive gate handle cleanup on exit.
+                    HideMarkerImage(marker);
+                    return;
+                }
+
+                if (!marker.image.enabled)
+                    marker.image.enabled = true;
+
+                marker.image.transform.position = new Vector3(screen.x, screen.y, 0f);
             }
             catch
             {
-                // ignore
+                // Marker failures must never block FS / UpdatePosition.
             }
+        }
 
-            if (HiddenField != null && HiddenField.GetValue(marker) is true)
-                return;
-
-            Camera? feed = ResolveFeedCamera();
-            if (feed == null)
-                return;
-
-            if (!TryResolveWorld(marker, out Vector3 world))
-                return;
-
-            if (marker.selected)
-            {
-                ReprojectSelected(marker, feed, world);
-                return;
-            }
-
-            Vector3 screen = FeedWorldToOverlayScreen(feed, world);
-            if (screen.z <= 0f)
-            {
-                // Off-seeker: hide only while FS is the owner. Do not leave enabled=false after exit
-                // (RestoreMarkerImages + IsActive gate handle cleanup).
-                if (marker.image.enabled)
-                    marker.image.enabled = false;
-                return;
-            }
-
-            if (!marker.image.enabled)
-                marker.image.enabled = true;
-
-            marker.image.transform.position = new Vector3(screen.x, screen.y, 0f);
+        private static void HideMarkerImage(HUDUnitMarker marker)
+        {
+            if (marker?.image != null && marker.image.enabled)
+                marker.image.enabled = false;
         }
 
         private static Camera? ResolveFeedCamera()
