@@ -38,6 +38,12 @@ namespace MissileCamera
             AccessToolsField(typeof(FlightHud), "canvas");
         private static readonly FieldInfo? FlightHudCenterField =
             AccessToolsField(typeof(FlightHud), "HUDCenter");
+        private static readonly FieldInfo? FlightHudCompassField =
+            AccessToolsField(typeof(FlightHud), "compass");
+        private static readonly FieldInfo? FlightHudPitchCompassField =
+            AccessToolsField(typeof(FlightHud), "pitchCompass");
+        private static readonly FieldInfo? FlightHudPitchCompassCenterField =
+            AccessToolsField(typeof(FlightHud), "pitchCompassCenter");
         private static readonly FieldInfo? ObjectiveOverlaysField =
             AccessToolsField(typeof(ObjectiveOverlayManager), "overlays");
         private static readonly MethodInfo? ObjectiveHideOverlayMethod =
@@ -45,8 +51,12 @@ namespace MissileCamera
         private static readonly MethodInfo? UpdateMarkersMethod =
             HarmonyLib.AccessTools.Method(typeof(CombatHUD), "UpdateMarkers");
 
+        private const float MarkerPassInterval = 1f / 10f;
+        private static float _nextMarkerPassUnscaled;
         private static bool _flightHudWasActive;
         private static bool _objectiveMgrWasEnabled;
+        /// <summary>True only while FS actually disabled ObjectiveOverlayManager — never force-disable on unload.</summary>
+        private static bool _objectivesSuppressedByUs;
         private static bool _designatorWasEnabled;
         private static readonly List<(GameObject go, bool wasActive)> _hiddenChrome =
             new List<(GameObject, bool)>(64);
@@ -76,6 +86,7 @@ namespace MissileCamera
             }
 
             _objectiveMgrWasEnabled = false;
+            _objectivesSuppressedByUs = false;
             _designatorWasEnabled = false;
 
             try
@@ -112,7 +123,7 @@ namespace MissileCamera
         }
 
         internal static bool HasStickyHiddenChrome =>
-            _hiddenChrome.Count > 0 || _canvasElevated || _objectiveMgrWasEnabled;
+            _hiddenChrome.Count > 0 || _canvasElevated || _objectivesSuppressedByUs;
 
         /// <summary>
         /// Off-session / orphan FS: if hide list still holds live refs, unhide immediately.
@@ -131,6 +142,7 @@ namespace MissileCamera
 
         internal static void ResetForMissionUnload()
         {
+            _nextMarkerPassUnscaled = 0f;
             // Always attempt live unhide first — never abandon SetActive(false) chrome.
             try
             {
@@ -154,6 +166,7 @@ namespace MissileCamera
             _canvasElevated = false;
             _flightHudWasActive = false;
             _objectiveMgrWasEnabled = false;
+            _objectivesSuppressedByUs = false;
             _designatorWasEnabled = false;
         }
 
@@ -172,7 +185,15 @@ namespace MissileCamera
 
             // FlightHud / ObjectiveOverlay re-enable themselves in Update — suppress every LateUpdate.
             SuppressIlsAndObjectives();
-            ForceCombatHudMarkerPass();
+
+            // Full UpdateMarkers every LateUpdate doubles vanilla cost — soft rate is enough for FS.
+            float now = Time.unscaledTime;
+            if (now >= _nextMarkerPassUnscaled)
+            {
+                _nextMarkerPassUnscaled = now + MarkerPassInterval;
+                ForceCombatHudMarkerPass();
+            }
+
             MissileCameraFullscreenTargetLock.Maintain();
         }
 
@@ -279,7 +300,13 @@ namespace MissileCamera
             if (ObjectiveOverlayField?.GetValue(hud) is not ObjectiveOverlayManager mgr || mgr == null)
                 return;
 
-            _objectiveMgrWasEnabled = mgr.enabled;
+            // Snapshot once per FS session — do not overwrite with false on repeated LateUpdate suppress.
+            if (!_objectivesSuppressedByUs)
+            {
+                _objectiveMgrWasEnabled = mgr.enabled;
+                _objectivesSuppressedByUs = true;
+            }
+
             mgr.enabled = false;
             HideObjectiveOverlays(mgr);
         }
@@ -289,17 +316,29 @@ namespace MissileCamera
             try
             {
                 CombatHUD? hud = SceneSingleton<CombatHUD>.i;
-                if (hud == null)
-                    return;
-
-                if (ObjectiveOverlayField?.GetValue(hud) is ObjectiveOverlayManager mgr && mgr != null)
-                    mgr.enabled = _objectiveMgrWasEnabled;
+                if (hud != null
+                    && ObjectiveOverlayField?.GetValue(hud) is ObjectiveOverlayManager mgr
+                    && mgr != null)
+                {
+                    if (_objectivesSuppressedByUs)
+                    {
+                        // We hid WayPoint / MissionTarget for FS — put manager back.
+                        mgr.enabled = _objectiveMgrWasEnabled;
+                    }
+                    else if (!mgr.enabled)
+                    {
+                        // Heal: HardReset/unload used to assign enabled=false even when FS never ran,
+                        // which permanently killed ObjectiveOverlay (Waypoint / MissionTarget).
+                        mgr.enabled = true;
+                    }
+                }
             }
             catch
             {
                 // ignore
             }
 
+            _objectivesSuppressedByUs = false;
             _objectiveMgrWasEnabled = false;
         }
 
@@ -336,14 +375,14 @@ namespace MissileCamera
 
                 try
                 {
+                    // HideOverlay only — never SetActive(false) on overlay GO.
+                    // Pointer/info are reparented under iconLayer; killing the root sticky-breaks restore.
                     ObjectiveHideOverlayMethod?.Invoke(overlay, null);
                 }
                 catch
                 {
                     // ignore
                 }
-
-                HideGo(overlay.gameObject);
             }
         }
 
@@ -363,9 +402,9 @@ namespace MissileCamera
                     HideGo(flightHud.virtualJoystickPos != null ? flightHud.virtualJoystickPos.gameObject : null);
                     if (FlightHudCenterField?.GetValue(flightHud) is Transform hudCenter)
                         HideGo(hudCenter.gameObject);
-                    HideComponent(AccessToolsField(typeof(FlightHud), "compass")?.GetValue(flightHud) as Component);
-                    HideComponent(AccessToolsField(typeof(FlightHud), "pitchCompass")?.GetValue(flightHud) as Component);
-                    object? pitchCenter = AccessToolsField(typeof(FlightHud), "pitchCompassCenter")?.GetValue(flightHud);
+                    HideComponent(FlightHudCompassField?.GetValue(flightHud) as Component);
+                    HideComponent(FlightHudPitchCompassField?.GetValue(flightHud) as Component);
+                    object? pitchCenter = FlightHudPitchCompassCenterField?.GetValue(flightHud);
                     if (pitchCenter is GameObject pitchGo)
                         HideGo(pitchGo);
                     else if (pitchCenter is Component pitchComp)
@@ -400,13 +439,19 @@ namespace MissileCamera
 
             if (ObjectiveOverlayField?.GetValue(hud) is ObjectiveOverlayManager mgr && mgr != null)
             {
+                if (!_objectivesSuppressedByUs)
+                {
+                    _objectiveMgrWasEnabled = mgr.enabled;
+                    _objectivesSuppressedByUs = true;
+                }
+
                 if (mgr.enabled)
                     mgr.enabled = false;
                 HideObjectiveOverlays(mgr);
             }
 
             // Do not deactivate iconLayer children — that permanently broke mission/ILS icons on exit.
-            // Objectives are suppressed via ObjectiveOverlayManager + HideOverlay above.
+            // Objectives: disable manager + HideOverlay only (no SetActive on overlay roots).
         }
 
         private static void RestoreFlightHudVisuals()

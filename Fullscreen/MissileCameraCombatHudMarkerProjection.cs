@@ -15,6 +15,8 @@ namespace MissileCamera
     {
         private static readonly FieldInfo? HiddenField =
             AccessTools.Field(typeof(HUDUnitMarker), "hidden");
+        private static readonly FieldInfo? MarkersField =
+            AccessTools.Field(typeof(CombatHUD), "markers");
 
         private static int _feedCameraFrame = -1;
         private static Camera? _feedCameraCached;
@@ -34,11 +36,10 @@ namespace MissileCamera
             try
             {
                 CombatHUD? hud = SceneSingleton<CombatHUD>.i;
-                if (hud == null)
+                if (hud == null || MarkersField == null)
                     return;
 
-                FieldInfo? markersField = AccessTools.Field(typeof(CombatHUD), "markers");
-                if (markersField?.GetValue(hud) is not System.Collections.Generic.List<HUDUnitMarker> markers)
+                if (MarkersField.GetValue(hud) is not System.Collections.Generic.List<HUDUnitMarker> markers)
                     return;
 
                 for (int i = 0; i < markers.Count; i++)

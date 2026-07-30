@@ -38,6 +38,7 @@ namespace MissileCamera
         private static float _nextHudVisualTime;
         private static float _nextCornerHudTime;
         private static float _nextConfigRefreshTime;
+        private static int _inputPolledFrame = -1;
         private const float HudSnapshotInterval = 1f / 10f;
         private const float FullscreenHudSnapshotInterval = 1f / 10f;
         private const float CornerHudInterval = 1f / 10f;
@@ -94,6 +95,7 @@ namespace MissileCamera
             _nextHudVisualTime = 0f;
             _nextCornerHudTime = 0f;
             _nextConfigRefreshTime = 0f;
+            _inputPolledFrame = -1;
             _nextReconcileBackoff = 2f;
             _loggedBind = false;
             _cachedSnapshot = MissileCameraHudSnapshot.Empty;
@@ -235,6 +237,31 @@ namespace MissileCamera
             NotifyFullscreenChanged();
         }
 
+        /// <summary>
+        /// Poll mod keybinds in MonoBehaviour.Update (not EOF Tick / 0.2s idle).
+        /// Same-frame dedupe so Tick fallback does not double-Process.
+        /// </summary>
+        internal static void PollInputEarly()
+        {
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
+            int frame = Time.frameCount;
+            if (_inputPolledFrame == frame)
+                return;
+            _inputPolledFrame = frame;
+
+            try
+            {
+                // Keep keybinds fresh for GetKeyDown — do not remove FeedInput Refresh.
+                MissileCameraFeedInput.Process();
+            }
+            catch
+            {
+                // Input must never abort feed Tick.
+            }
+        }
+
         internal static void Tick()
         {
             // DDOL driver keeps ticking across scenes — never EnsureLayout/ApplyHidden off-session.
@@ -298,7 +325,8 @@ namespace MissileCamera
 
             // Poll FS toggle BEFORE the MFD/FS pipeline gate — K must work without MFD overlay.
             // Enter() in the same frame makes IsDisplayPipelineActive true so feed continues below.
-            MissileCameraFeedInput.Process();
+            // Prefer Update PollInputEarly; this is a same-frame fallback if Update missed.
+            PollInputEarly();
 
             if (!IsDisplayPipelineActive())
             {

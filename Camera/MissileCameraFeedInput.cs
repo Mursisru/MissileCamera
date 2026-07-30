@@ -11,7 +11,7 @@ namespace MissileCamera
             if (!MissileCameraFullscreenConfig.Enabled)
                 return;
 
-            MissileCameraKeybindConfig.Refresh();
+            // Keybinds already refreshed in Process() — avoid double Refresh on the same poll.
             if (IsShortcutDown(MissileCameraKeybindConfig.FullscreenToggle))
                 MissileCameraFullscreenController.Toggle();
         }

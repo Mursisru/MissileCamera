@@ -8,6 +8,14 @@ namespace MissileCamera
     {
         private Coroutine? _loop;
 
+        private void Update()
+        {
+            // Mod keys must poll in Update — Tick runs WaitForEndOfFrame (or 0.2s idle),
+            // which felt like input lag vs vanilla Rewired.
+            try { MissileCameraFeedController.PollInputEarly(); }
+            catch { /* never kill driver */ }
+        }
+
         private void OnEnable()
         {
             if (_loop == null)

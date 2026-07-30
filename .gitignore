@@ -19,3 +19,4 @@ local_build_scripts/
 *.tmp
 Thumbs.db
 Desktop.ini
+_unity_shader_build_vision/

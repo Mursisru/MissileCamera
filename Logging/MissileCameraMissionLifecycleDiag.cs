@@ -14,8 +14,8 @@ namespace MissileCamera
     /// </summary>
     internal static class MissileCameraMissionLifecycleDiag
     {
-        // TEMP — turn off once multi-sortie MFD + missile markers are verified stable.
-        internal const bool Enabled = true;
+        // Off after multi-sortie stabilize — File.AppendAllText hitch on lifecycle events.
+        internal const bool Enabled = false;
 
         private static readonly object Gate = new object();
         private static readonly Dictionary<string, float> ThrottleUntil = new Dictionary<string, float>(16);
