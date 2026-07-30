@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 
@@ -30,7 +31,19 @@ namespace MissileCamera
             var idleWait = new WaitForSeconds(0.2f);
             while (true)
             {
-                MissileCameraFeedController.Tick();
+                // One Tick exception must NEVER kill the DDOL feed loop for the whole mission.
+                try
+                {
+                    MissileCameraFeedController.Tick();
+                }
+                catch (Exception ex)
+                {
+                    MissileCameraMissionLifecycleDiag.Warn(
+                        "FeedDriver Tick exception: " + ex.GetType().Name + ": " + ex.Message);
+                    try { MissileCameraFeedController.HealAfterTickFailure(); }
+                    catch { /* ignore */ }
+                }
+
                 if (MissileCameraFeedController.UseIdleDriverWait)
                     yield return idleWait;
                 else
@@ -49,7 +62,7 @@ namespace MissileCamera
                 return;
 
             var go = new GameObject("MissileCamera.Feed");
-            Object.DontDestroyOnLoad(go);
+            UnityEngine.Object.DontDestroyOnLoad(go);
             _driver = go.AddComponent<MissileCameraFeedDriver>();
         }
 
@@ -74,7 +87,7 @@ namespace MissileCamera
             if (_driver == null)
                 return;
 
-            Object.Destroy(_driver.gameObject);
+            UnityEngine.Object.Destroy(_driver.gameObject);
             _driver = null;
         }
     }

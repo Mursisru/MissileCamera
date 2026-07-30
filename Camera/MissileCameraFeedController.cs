@@ -45,6 +45,9 @@ namespace MissileCamera
 
         internal static bool UseIdleDriverWait { get; private set; }
 
+        /// <summary>TEMP diag only — do not use for gameplay gating.</summary>
+        internal static bool IsOverlayActiveForDiag => _overlayActive;
+
         internal static void Shutdown()
         {
             ResetForMissionUnload();
@@ -275,8 +278,22 @@ namespace MissileCamera
             if (_overlayActive && (_panelRt == null || !_panelRt))
                 NotifyOverlayGone();
 
-            if (HasTrackableOwnedMissile() && !_overlayActive)
+            // Half-state from failed BindPanel: overlay flag set but layout never committed.
+            // Without this, Tick skips EnsureLayout forever while Harmony re-hides weapons.
+            if (_overlayActive && !MfdLayoutController.IsLayoutActive)
+            {
+                MissileCameraMissionLifecycleDiag.WarnThrottled(
+                    "half_state",
+                    "half-state overlay without layout — reset overlay");
+                NotifyOverlayGone();
+            }
+
+            if (HasTrackableOwnedMissile()
+                && (!_overlayActive || !MfdLayoutController.IsLayoutActive))
                 MfdLayoutController.EnsureLayoutForMissileFeed();
+
+            if (HasTrackableOwnedMissile())
+                MaybeDiagMissileMarkers();
 
             if (!IsDisplayPipelineActive())
             {
@@ -551,15 +568,72 @@ namespace MissileCamera
         internal static void NotifyOverlayReady(RectTransform panelRt)
         {
             if (!MissileCameraHost.IsSessionActive || panelRt == null)
+            {
+                MissileCameraMissionLifecycleDiag.WarnThrottled(
+                    "overlay_ready_gated",
+                    "NotifyOverlayReady gated session=" + MissileCameraHost.IsSessionActive
+                    + " panelNull=" + (panelRt == null));
+                return;
+            }
+
+            // Feed RawImage bind must succeed for MFD camera. HUD chrome is best-effort —
+            // EnsureBuilt NRE must NEVER abort overlay (that left weapons restored + no cam).
+            try
+            {
+                _loggedBind = false;
+                BindPanel(panelRt);
+            }
+            catch (System.Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "NotifyOverlayReady BindPanel failed: " + ex.GetType().Name + ": " + ex.Message
+                    + " | " + ex.StackTrace);
+                // If feed fields were set before the throw, still claim overlay.
+                if (_feedImage == null || _panelRt == null)
+                {
+                    try { NotifyOverlayGone(); }
+                    catch { /* ignore */ }
+                    return;
+                }
+            }
+
+            bool wasOff = !_overlayActive;
+            _overlayActive = true;
+            if (wasOff)
+                MissileCameraMissionLifecycleDiag.Info("NotifyOverlayReady ok");
+        }
+
+        /// <summary>After Tick exception: drop half-state so next frame can EnsureLayout again.</summary>
+        internal static void HealAfterTickFailure()
+        {
+            try
+            {
+                if (_overlayActive && !MfdLayoutController.IsLayoutActive)
+                    NotifyOverlayGone();
+            }
+            catch { /* ignore */ }
+
+            try { MfdWeaponsZoneAccess.Restore(); }
+            catch { /* ignore */ }
+        }
+
+        private static float _nextMarkerDiagTime;
+
+        private static void MaybeDiagMissileMarkers()
+        {
+            float now = Time.unscaledTime;
+            if (now < _nextMarkerDiagTime)
                 return;
 
-            _overlayActive = true;
-            _loggedBind = false;
-            BindPanel(panelRt);
+            _nextMarkerDiagTime = now + 2f;
+            MissileCameraVanillaHudBridge.DiagLogMissileMarkers("owned");
         }
 
         internal static void NotifyOverlayGone()
         {
+            if (_overlayActive)
+                MissileCameraMissionLifecycleDiag.Info("NotifyOverlayGone");
+
             _overlayActive = false;
 
             try { CancelPostLossSequence(); }
@@ -614,8 +688,19 @@ namespace MissileCamera
             if (_colorLabel != null)
                 _colorLabel.text = "COLOR";
 
-            HudOverlay.EnsureBuilt(layoutRt, MfdLayoutController.GetActiveScreenUi());
-            HudOverlay.InvalidateDynamicSchedule();
+            try
+            {
+                HudOverlay.EnsureBuilt(layoutRt, MfdLayoutController.GetActiveScreenUi());
+                HudOverlay.InvalidateDynamicSchedule();
+            }
+            catch (System.Exception ex)
+            {
+                // Camera feed is already bound above — HUD failure must not block MFD video.
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "BindPanel EnsureBuilt failed: " + ex.GetType().Name + ": " + ex.Message
+                    + " | " + ex.StackTrace);
+            }
+
             if (MissileCameraHudConfig.Enabled)
                 MissileCameraHudOverlay.ApplyLegacyStubVisibility(panelRt, hide: true);
             if (panelRt.TryGetComponent(out Image panelImage))
@@ -625,6 +710,7 @@ namespace MissileCamera
             {
                 _loggedBind = true;
                 MfdLog.Info($"missileCam feed bind portrait={portrait}");
+                MissileCameraMissionLifecycleDiag.Info("feed bind portrait=" + portrait);
             }
         }
 

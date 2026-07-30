@@ -159,16 +159,31 @@ namespace MissileCamera
 
         internal void Hide()
         {
-            _feed.enabled = false;
-            _feed.texture = null;
-            _rig?.Detach();
+            // Scene may have already destroyed RawImage — never touch enabled on a dead Behaviour.
+            try
+            {
+                if (_feed != null)
+                {
+                    _feed.enabled = false;
+                    _feed.texture = null;
+                }
+            }
+            catch
+            {
+                // ignore destroyed Unity objects
+            }
+
+            try { _rig?.Detach(); }
+            catch { /* ignore */ }
+
             _nextRenderUnscaled = 0f;
         }
 
         internal void Shutdown()
         {
             Hide();
-            _rig?.Destroy();
+            try { _rig?.Destroy(); }
+            catch { /* ignore */ }
             _rig = null;
             _layoutW = -1f;
             _layoutH = -1f;

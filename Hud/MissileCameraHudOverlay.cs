@@ -44,28 +44,40 @@ namespace MissileCamera
 
             Destroy();
 
-            var rootGo = new GameObject(RootName, typeof(RectTransform));
-            rootGo.transform.SetParent(viewRt, false);
-            _root = rootGo.GetComponent<RectTransform>();
-            Stretch(_root);
+            try
+            {
+                var rootGo = new GameObject(RootName, typeof(RectTransform));
+                rootGo.transform.SetParent(viewRt, false);
+                _root = rootGo.GetComponent<RectTransform>();
+                Stretch(_root);
 
-            _corners = MissileCameraCornerHud.Create(_root, screenUi);
-            _flir = MissileCameraFlirHud.Create(_root);
-            _flirRootStatic = _flir.Root;
-            _attitude = MissileCameraAttitudeWidget.Create(_root);
-            _zoomIndicator = MissileCameraZoomIndicator.Create(_root, screenUi);
+                _corners = MissileCameraCornerHud.Create(_root, screenUi);
+                _flir = MissileCameraFlirHud.Create(_root);
+                _flirRootStatic = _flir.Root;
+                _attitude = MissileCameraAttitudeWidget.Create(_root);
+                _zoomIndicator = MissileCameraZoomIndicator.Create(_root, screenUi);
 
-            var interceptGo = new GameObject("MissileCameraHudIntercept", typeof(RectTransform), typeof(HudRingGraphic));
-            interceptGo.transform.SetParent(_root, false);
-            _interceptRoot = interceptGo.GetComponent<RectTransform>();
-            _interceptRoot.anchorMin = new Vector2(0.5f, 0.5f);
-            _interceptRoot.anchorMax = new Vector2(0.5f, 0.5f);
-            _interceptRoot.pivot = new Vector2(0.5f, 0.5f);
-            _interceptRoot.anchoredPosition = Vector2.zero;
-            _interceptRoot.sizeDelta = Vector2.zero;
-            _interceptRing = interceptGo.GetComponent<HudRingGraphic>();
+                var interceptGo = new GameObject("MissileCameraHudIntercept", typeof(RectTransform), typeof(HudRingGraphic));
+                interceptGo.transform.SetParent(_root, false);
+                _interceptRoot = interceptGo.GetComponent<RectTransform>();
+                _interceptRoot.anchorMin = new Vector2(0.5f, 0.5f);
+                _interceptRoot.anchorMax = new Vector2(0.5f, 0.5f);
+                _interceptRoot.pivot = new Vector2(0.5f, 0.5f);
+                _interceptRoot.anchoredPosition = Vector2.zero;
+                _interceptRoot.sizeDelta = Vector2.zero;
+                _interceptRing = interceptGo.GetComponent<HudRingGraphic>();
 
-            ApplyLegacyStubVisibility(FindMissileCameraPanel(layoutRt) ?? layoutRt, hide: MissileCameraHudConfig.Enabled);
+                ApplyLegacyStubVisibility(FindMissileCameraPanel(layoutRt) ?? layoutRt, hide: MissileCameraHudConfig.Enabled);
+                MissileCameraMissionLifecycleDiag.Info("HudOverlay.EnsureBuilt ok");
+            }
+            catch (System.Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "HudOverlay.EnsureBuilt failed: " + ex.GetType().Name + ": " + ex.Message
+                    + " | " + ex.StackTrace);
+                // Clear half-built chrome; feed RawImage must still work without HUD.
+                Destroy();
+            }
         }
 
         internal void Update(
@@ -184,11 +196,19 @@ namespace MissileCamera
 
         internal void Destroy()
         {
-            MissileCameraCockpitPipController.Shutdown();
-            _flir?.Shutdown();
+            // Always drop C# refs even if Unity objects were already scene-destroyed.
+            try { MissileCameraCockpitPipController.Shutdown(); }
+            catch { /* ignore */ }
 
-            if (_root != null)
-                Object.Destroy(_root.gameObject);
+            try { _flir?.Shutdown(); }
+            catch { /* ignore */ }
+
+            try
+            {
+                if (_root != null)
+                    Object.Destroy(_root.gameObject);
+            }
+            catch { /* ignore */ }
 
             _root = null;
             _corners = null;

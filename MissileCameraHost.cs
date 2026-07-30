@@ -50,6 +50,7 @@ namespace MissileCamera
             _instance = go.AddComponent<MissileCameraHost>();
             _instance._pluginDir = pluginDir;
             _instance._logger = logger;
+            MissileCameraMissionLifecycleDiag.Init(pluginDir);
             SceneManager.sceneLoaded += _instance.OnSceneLoaded;
             SceneManager.sceneUnloaded += _instance.OnSceneUnloaded;
             _instance.TryBootstrapCurrentScene();
@@ -67,24 +68,31 @@ namespace MissileCamera
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             string label = string.IsNullOrEmpty(scene.path) ? scene.name : scene.path;
+            MissileCameraMissionLifecycleDiag.Info(
+                "sceneLoaded mode=" + mode + " path=" + label);
 
             if (IsMenuOrSystemScene(scene.path))
             {
                 _startupEpoch++;
                 _startupScheduled = false;
                 HardResetAll("scene_loaded:" + label);
+                MissileCameraMissionLifecycleDiag.Snapshot("after_menu_reset");
                 return;
             }
 
             // Only GameWorld counts as a mission load. Ignore additive/UI scenes mid-sortie
             // (those were wiping MC overlay + marker lock while the player was still flying).
             if (!IsGameWorldScene(scene))
+            {
+                MissileCameraMissionLifecycleDiag.Info("sceneLoaded ignored (not GameWorld) path=" + label);
                 return;
+            }
 
             _startupEpoch++;
             _startupScheduled = false;
             HardResetAll("scene_loaded:" + label);
             ScheduleMissionStartup(scene.path);
+            MissileCameraMissionLifecycleDiag.Snapshot("after_gameworld_load");
         }
 
         private void OnSceneUnloaded(Scene scene)
@@ -92,7 +100,9 @@ namespace MissileCamera
             if (!IsGameWorldScene(scene))
                 return;
 
+            MissileCameraMissionLifecycleDiag.Info("sceneUnloaded GameWorld");
             HardResetAll("scene_unloaded_gameworld");
+            MissileCameraMissionLifecycleDiag.Snapshot("after_gameworld_unload");
         }
 
         /// <summary>
@@ -108,6 +118,10 @@ namespace MissileCamera
                 _pendingShutdownDriver |= shutdownDriver;
                 _pendingUnpatchHarmony |= unpatchHarmony;
                 MfdLog.Info("HARD RESET queued reason=" + reason);
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "HARD RESET queued reason=" + reason
+                    + " pendingShutdown=" + _pendingShutdownDriver
+                    + " pendingUnpatch=" + _pendingUnpatchHarmony);
                 return;
             }
 
@@ -120,6 +134,10 @@ namespace MissileCamera
             try
             {
                 MfdLog.Info($"HARD RESET epoch={_teardownEpoch} reason={reason}");
+                MissileCameraMissionLifecycleDiag.Info(
+                    "HARD RESET begin epoch=" + _teardownEpoch
+                    + " reason=" + reason
+                    + " shutdownDriver=" + shutdownDriver);
 
                 try { MissileCameraFullscreenController.ResetForMissionUnload(); }
                 catch (Exception ex) { LogHardResetFail("FS", ex); }
@@ -168,6 +186,8 @@ namespace MissileCamera
                     MissileCameraLossInterference.Shutdown();
                     MissileCameraAircraftCamController.Shutdown();
                     MissileCameraCockpitPipController.Shutdown();
+                    HudFontHelper.Reset();
+                    HudBackdropHelper.Reset();
                 }
                 catch (Exception ex)
                 {
@@ -198,15 +218,65 @@ namespace MissileCamera
                     _pendingHardResetReason = string.Empty;
                     _pendingShutdownDriver = false;
                     _pendingUnpatchHarmony = false;
+                    MissileCameraMissionLifecycleDiag.Warn(
+                        "HARD RESET defer follow-up reason=" + pendingReason);
                     StartCoroutine(DeferredHardReset(pendingReason, pendingShutdown, pendingUnpatch));
                 }
+                else
+                {
+                    // Pending wipe after startup can leave _missionReady=false with no ScheduleMissionStartup.
+                    TryRescheduleMissionStartupAfterWipe(reason, shutdownDriver);
+                }
+
+                MissileCameraMissionLifecycleDiag.Snapshot("hardreset_end:" + reason);
             }
+        }
+
+        /// <summary>
+        /// If a follow-up HardReset killed the session while GameWorld is still loaded,
+        /// schedule startup again so EnsureLayout/NotifyOverlayReady are not permanently gated off.
+        /// </summary>
+        private void TryRescheduleMissionStartupAfterWipe(string reason, bool shutdownDriver)
+        {
+            if (shutdownDriver || _instance == null)
+                return;
+
+            if (_missionReady || _startupScheduled || _pendingHardReset || _teardownInProgress)
+                return;
+
+            // Caller (DeferredMissionStartup) continues and will set _missionReady itself.
+            if (string.Equals(reason, "pre_mission_startup", StringComparison.Ordinal))
+                return;
+
+            // Leaving the mission — menu load will schedule properly. Do not resurrect on a dying GameWorld.
+            if (string.Equals(reason, "scene_unloaded_gameworld", StringComparison.Ordinal)
+                || string.Equals(reason, "application_quit", StringComparison.Ordinal)
+                || string.Equals(reason, "host_destroy", StringComparison.Ordinal))
+                return;
+
+            Scene scene = SceneManager.GetActiveScene();
+            string scenePath = scene.path;
+            if (IsMenuOrSystemScene(scenePath) || !IsGameWorldScene(scene))
+            {
+                MissileCameraMissionLifecycleDiag.Info(
+                    "TryReschedule skip (not live GameWorld) reason=" + reason
+                    + " scene=" + (string.IsNullOrEmpty(scenePath) ? scene.name : scenePath));
+                return;
+            }
+
+            MissileCameraMissionLifecycleDiag.Warn(
+                "TryReschedule MissionStartup after wipe reason=" + reason
+                + " startupEpoch=" + _startupEpoch);
+            ScheduleMissionStartup(string.IsNullOrEmpty(scenePath) ? scene.name : scenePath);
         }
 
         private static void LogHardResetFail(string step, Exception ex)
         {
             string msg = string.IsNullOrEmpty(ex.Message) ? "(no message)" : ex.Message;
             MfdLog.Info("hardreset " + step + " failed: " + ex.GetType().Name + ": " + msg);
+            MissileCameraMissionLifecycleDiag.Warn(
+                "hardreset step failed step=" + step
+                + " ex=" + ex.GetType().Name + ": " + msg);
         }
 
         private IEnumerator DeferredHardReset(string reason, bool shutdownDriver, bool unpatchHarmony)
@@ -215,6 +285,7 @@ namespace MissileCamera
             if (_instance == null)
                 yield break;
 
+            MissileCameraMissionLifecycleDiag.Info("DeferredHardReset run reason=" + reason);
             HardResetAll(reason, shutdownDriver, unpatchHarmony);
         }
 
@@ -231,10 +302,18 @@ namespace MissileCamera
         private void ScheduleMissionStartup(string scenePath)
         {
             if (_missionReady || _startupScheduled)
+            {
+                MissileCameraMissionLifecycleDiag.Info(
+                    "ScheduleMissionStartup skip ready=" + _missionReady
+                    + " scheduled=" + _startupScheduled
+                    + " scene=" + scenePath);
                 return;
+            }
 
             _startupScheduled = true;
             int epoch = _startupEpoch;
+            MissileCameraMissionLifecycleDiag.Info(
+                "ScheduleMissionStartup epoch=" + epoch + " scene=" + scenePath);
             StartCoroutine(DeferredMissionStartup(scenePath, epoch));
         }
 
@@ -242,11 +321,19 @@ namespace MissileCamera
         {
             yield return null;
             if (epoch != _startupEpoch || _missionReady)
+            {
+                _startupScheduled = false;
+                MissileCameraMissionLifecycleDiag.Info(
+                    "DeferredStartup abort early epoch=" + epoch
+                    + " cur=" + _startupEpoch
+                    + " ready=" + _missionReady);
                 yield break;
+            }
 
             if (IsMenuOrSystemScene(SceneManager.GetActiveScene().path))
             {
                 _startupScheduled = false;
+                MissileCameraMissionLifecycleDiag.Info("DeferredStartup abort menu");
                 yield break;
             }
 
@@ -254,18 +341,35 @@ namespace MissileCamera
             HardResetAll("pre_mission_startup");
             yield return null;
 
-            if (epoch != _startupEpoch || _missionReady)
+            // Absorb follow-up wipe queued during pre_mission_startup (same race that killed session).
+            while (_pendingHardReset || _teardownInProgress)
+                yield return null;
+
+            yield return null;
+
+            if (epoch != _startupEpoch)
+            {
+                _startupScheduled = false;
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "DeferredStartup abort epoch drift epoch=" + epoch + " cur=" + _startupEpoch);
                 yield break;
+            }
 
             if (IsMenuOrSystemScene(SceneManager.GetActiveScene().path))
             {
                 _startupScheduled = false;
+                MissileCameraMissionLifecycleDiag.Info("DeferredStartup abort menu after wipe");
                 yield break;
             }
 
+            // A deferred HardReset may have cleared ready after we planned to enable — re-enable now.
             _missionReady = true;
             _startupScheduled = false;
+            MissileCameraMissionLifecycleDiag.Info(
+                "DeferredStartup ENABLE missionReady scene=" + scenePath
+                + " epoch=" + epoch);
             StartupMission(_pluginDir, _logger!, scenePath);
+            MissileCameraMissionLifecycleDiag.Snapshot("host_ready");
         }
 
         private void StartupMission(string pluginDir, ManualLogSource logger, string scenePath)
@@ -286,6 +390,17 @@ namespace MissileCamera
 
             ApplyHarmonyPatches(logger);
             MissileCameraFeedDriverHost.Ensure();
+
+            try
+            {
+                MissileCameraCombatHudMarkerProjection.RestoreMarkerImages();
+                MissileCameraVanillaHudBridge.ForceCombatHudMarkerPass();
+                MissileCameraVanillaHudBridge.DiagLogMissileMarkers("host_ready");
+            }
+            catch (Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn("host_ready marker heal failed: " + ex.Message);
+            }
 
             logger.LogInfo("MissileCamera host ready (mission).");
             MfdLog.Info("host ready v" + AppVersion.DisplayVersion + " scene=" + scenePath);

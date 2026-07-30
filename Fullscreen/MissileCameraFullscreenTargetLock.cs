@@ -10,6 +10,7 @@ namespace MissileCamera
     /// Fullscreen: keep only the followed missile's target unit locked on CombatHUD markers.
     /// Snapshots locks on enter, restores on exit. Re-filters on missile switch.
     /// Never calls WeaponManager.TargetListChanged during active filtering (avoids layout teardown).
+    /// Never DeselectMarker on Missile units — vanilla friendly missiles use sprite=null when minimized.
     /// </summary>
     internal static class MissileCameraFullscreenTargetLock
     {
@@ -28,6 +29,8 @@ namespace MissileCamera
                 {
                     CaptureSnapshot();
                     _sessionActive = true;
+                    MissileCameraMissionLifecycleDiag.Info(
+                        "targetlock enter snapshotCount=" + SavedTargets.Count);
                 }
 
                 ApplyFilter();
@@ -44,35 +47,47 @@ namespace MissileCamera
                 RestoreSnapshot();
                 _sessionActive = false;
                 _lastFilteredKeep = null;
+                MissileCameraMissionLifecycleDiag.Info("targetlock exit restored");
             }, "exit");
         }
 
         internal static void ResetForMissionUnload()
         {
             // Prefer restore while CombatHUD is still alive — Abandon alone leaves deselected markers.
-            SafeRun(() =>
+            // try/finally always clears session so a throw cannot sticky-skip the next CaptureSnapshot.
+            try
             {
-                if (!_sessionActive)
+                SafeRun(() =>
                 {
-                    SavedTargets.Clear();
-                    _lastFilteredKeep = null;
-                    return;
-                }
+                    if (!_sessionActive)
+                    {
+                        SavedTargets.Clear();
+                        _lastFilteredKeep = null;
+                        return;
+                    }
 
-                CombatHUD? hud = null;
-                try { hud = SceneSingleton<CombatHUD>.i; }
-                catch { /* ignore */ }
+                    CombatHUD? hud = null;
+                    try { hud = SceneSingleton<CombatHUD>.i; }
+                    catch { /* ignore */ }
 
-                if (hud != null)
-                {
-                    // Restore prior selections only — do not Deselect units that were never selected.
-                    RestoreSnapshot();
-                }
-
+                    if (hud != null)
+                    {
+                        // Restore prior selections only — do not Deselect units that were never selected.
+                        RestoreSnapshot();
+                        MissileCameraMissionLifecycleDiag.Info("targetlock unload restore ok");
+                    }
+                    else
+                    {
+                        MissileCameraMissionLifecycleDiag.Warn("targetlock unload no CombatHUD");
+                    }
+                }, "unload");
+            }
+            finally
+            {
                 _sessionActive = false;
                 _lastFilteredKeep = null;
                 SavedTargets.Clear();
-            }, "unload");
+            }
         }
 
         /// <summary>Clear lock session without restoring targets / TargetListChanged.</summary>
@@ -81,6 +96,7 @@ namespace MissileCamera
             _sessionActive = false;
             _lastFilteredKeep = null;
             SavedTargets.Clear();
+            MissileCameraMissionLifecycleDiag.Warn("targetlock AbandonSession");
         }
 
         internal static void OnFollowedMissileChanged()
@@ -119,6 +135,8 @@ namespace MissileCamera
             catch (Exception ex)
             {
                 MfdLog.Info($"target lock {phase} failed: {ex.Message}");
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "targetlock " + phase + " failed: " + ex.Message);
             }
         }
 
@@ -187,6 +205,10 @@ namespace MissileCamera
                     if (marker?.unit == null)
                         continue;
 
+                    // Own/inbound missiles: never Select/Deselect — DeselectMarker → sprite=null for friendly non-Aircraft.
+                    if (marker.unit is Missile)
+                        continue;
+
                     bool shouldSelect = keep != null && marker.unit == keep;
                     if (marker.selected == shouldSelect)
                         continue;
@@ -232,6 +254,9 @@ namespace MissileCamera
                 {
                     HUDUnitMarker? marker = markers[i];
                     if (marker?.unit == null)
+                        continue;
+
+                    if (marker.unit is Missile)
                         continue;
 
                     bool shouldSelect = false;
@@ -297,6 +322,9 @@ namespace MissileCamera
             {
                 HUDUnitMarker? marker = markers[i];
                 if (marker == null || !marker.selected || marker.unit == null)
+                    continue;
+
+                if (marker.unit is Missile)
                     continue;
 
                 if (keep == null || marker.unit != keep)

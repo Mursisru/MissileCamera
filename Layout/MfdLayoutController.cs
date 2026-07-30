@@ -200,7 +200,12 @@ namespace MissileCamera
         internal static void EnsureLayoutForMissileFeed()
         {
             if (!MissileCameraHost.IsSessionActive)
+            {
+                MissileCameraMissionLifecycleDiag.WarnThrottled(
+                    "ensure_gated",
+                    "EnsureLayout gated off (session inactive)");
                 return;
+            }
 
             if (!MfdLayoutConfig.Enabled)
                 return;
@@ -383,21 +388,51 @@ namespace MissileCamera
 
             MissileCameraZone zone = replacement.Zone;
             Canvas overlayCanvas = replacement.OverlayCanvas!;
-            bool stubCreated = EnsureTacOverlay(
-                overlayCanvas,
-                replacement.OverlayParent,
-                screenUi,
-                zone,
-                replacement.SuppressBottomDivider,
-                replacement.ShowPanelBorder,
-                replacement.SuppressBottomBorder,
-                replacement.OverlayRotationZ,
-                replacement.StubContentRotationZ,
-                replacement.StubFontRef,
-                replacement.StubContentBand,
-                replacement.StubForcePortraitLayout,
-                replacement.HudLeftInsetExtra,
-                replacement.TelemetryLayout);
+            bool stubCreated;
+            try
+            {
+                MissileCameraMissionLifecycleDiag.Info("TryApplyLayout stage=hide_ok jsonKey=" + (jsonKey ?? "?"));
+                stubCreated = EnsureTacOverlay(
+                    overlayCanvas,
+                    replacement.OverlayParent,
+                    screenUi,
+                    zone,
+                    replacement.SuppressBottomDivider,
+                    replacement.ShowPanelBorder,
+                    replacement.SuppressBottomBorder,
+                    replacement.OverlayRotationZ,
+                    replacement.StubContentRotationZ,
+                    replacement.StubFontRef,
+                    replacement.StubContentBand,
+                    replacement.StubForcePortraitLayout,
+                    replacement.HudLeftInsetExtra,
+                    replacement.TelemetryLayout);
+
+                // Feed must be live — HUD chrome is optional (EnsureBuilt may soft-fail).
+                if (!MissileCameraFeedController.IsOverlayActiveForDiag)
+                {
+                    MissileCameraMissionLifecycleDiag.Warn(
+                        "TryApplyLayout stage=bind_missing — Restore weapons + destroy stub");
+                    try { DestroyTacOverlay(); }
+                    catch { /* ignore */ }
+                    try { MfdWeaponsZoneAccess.Restore(); }
+                    catch { /* ignore */ }
+                    return;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "TryApplyLayout failed: " + ex.GetType().Name + ": " + ex.Message);
+                try { DestroyTacOverlay(); }
+                catch { /* ignore */ }
+                try { MissileCameraFeedController.NotifyOverlayGone(); }
+                catch { /* ignore */ }
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
+                _layoutActive = false;
+                return;
+            }
 
             _activeTargetCam = targetCam;
             _activeScreenUi = screenUi;
@@ -409,6 +444,9 @@ namespace MissileCamera
             MfdLog.Info(
                 $"weaponsтЖТmissilecam profile={profile} jsonKey={MfdDisplayMode.GetAircraftJsonKey(targetCam)} " +
                 $"stub={stubCreated} zone={zone.MinX:F2}-{zone.MaxX:F2} y={zone.MinY:F2}-{zone.MaxY:F2}");
+            MissileCameraMissionLifecycleDiag.Info(
+                "TryApplyLayout stage=commit_ok stub=" + stubCreated
+                + " zone=" + zone.MinX.ToString("F2") + "-" + zone.MaxX.ToString("F2"));
         }
 
         private static void TryApplyCricketEngineLayout(
@@ -438,21 +476,48 @@ namespace MissileCamera
 
             MissileCameraZone zone = replacement.Zone;
             Canvas overlayCanvas = replacement.OverlayCanvas!;
-            bool stubCreated = EnsureTacOverlay(
-                overlayCanvas,
-                replacement.OverlayParent,
-                screenUi,
-                zone,
-                replacement.SuppressBottomDivider,
-                replacement.ShowPanelBorder,
-                replacement.SuppressBottomBorder,
-                replacement.OverlayRotationZ,
-                replacement.StubContentRotationZ,
-                replacement.StubFontRef,
-                replacement.StubContentBand,
-                replacement.StubForcePortraitLayout,
-                replacement.HudLeftInsetExtra,
-                replacement.TelemetryLayout);
+            bool stubCreated;
+            try
+            {
+                stubCreated = EnsureTacOverlay(
+                    overlayCanvas,
+                    replacement.OverlayParent,
+                    screenUi,
+                    zone,
+                    replacement.SuppressBottomDivider,
+                    replacement.ShowPanelBorder,
+                    replacement.SuppressBottomBorder,
+                    replacement.OverlayRotationZ,
+                    replacement.StubContentRotationZ,
+                    replacement.StubFontRef,
+                    replacement.StubContentBand,
+                    replacement.StubForcePortraitLayout,
+                    replacement.HudLeftInsetExtra,
+                    replacement.TelemetryLayout);
+
+                if (!MissileCameraFeedController.IsOverlayActiveForDiag)
+                {
+                    MissileCameraMissionLifecycleDiag.Warn("Cricket apply bind_missing — Restore");
+                    try { DestroyTacOverlay(); }
+                    catch { /* ignore */ }
+                    try { MfdWeaponsZoneAccess.Restore(); }
+                    catch { /* ignore */ }
+                    return;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "Cricket TryApply failed: " + ex.GetType().Name + ": " + ex.Message);
+                try { DestroyTacOverlay(); }
+                catch { /* ignore */ }
+                try { MissileCameraFeedController.NotifyOverlayGone(); }
+                catch { /* ignore */ }
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
+                _layoutActive = false;
+                return;
+            }
 
             _activeTargetCam = targetCam;
             _activeScreenUi = screenUi;
@@ -1147,9 +1212,16 @@ namespace MissileCamera
 
             if (!TryBeginCleanup())
             {
-                // Still attempt weapons unhide even if layout cleanup is busy.
+                // Same-frame cleanup lock: still drop sticky flags so next sortie can EnsureLayout.
                 try { MfdWeaponsZoneAccess.Restore(); }
                 catch { /* ignore */ }
+
+                try { MissileCameraFeedController.NotifyOverlayGone(); }
+                catch { /* ignore */ }
+
+                _layoutActive = false;
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "ClearLayout busy-skip reason=" + reason + " forced layout/overlay down");
                 return;
             }
 
@@ -1180,7 +1252,10 @@ namespace MissileCamera
                 _layoutGeneration++;
 
                 if (wasActive)
+                {
                     MfdLog.Info("layout cleared reason=" + reason);
+                    MissileCameraMissionLifecycleDiag.Info("ClearLayout ok reason=" + reason);
+                }
             }
             finally
             {

@@ -201,7 +201,13 @@ namespace MissileCamera
                 MissileCameraFlirGaugeBars.Create(root),
                 MissileCameraFlirOwnshipPip.Create(root));
 
-            hud._pitchLadder.EnsureBuilt(root);
+            try { hud._pitchLadder.EnsureBuilt(root); }
+            catch (System.Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "FlirHud pitchLadder EnsureBuilt: " + ex.GetType().Name + ": " + ex.Message);
+            }
+
             return hud;
         }
 
@@ -219,17 +225,29 @@ namespace MissileCamera
             if (!visible)
             {
                 _headingReady = false;
-                _ownshipPip.Hide();
-                _pitchLadder.SetVisible(false);
+                try { _ownshipPip.Hide(); }
+                catch { /* ignore */ }
+                try { _pitchLadder.SetVisible(false); }
+                catch { /* ignore */ }
             }
 
-            _root.gameObject.SetActive(visible);
+            try
+            {
+                if (_root != null)
+                    _root.gameObject.SetActive(visible);
+            }
+            catch
+            {
+                // ignore destroyed
+            }
         }
 
         internal void Shutdown()
         {
-            _ownshipPip.Shutdown();
-            _pitchLadder.Shutdown();
+            try { _ownshipPip.Shutdown(); }
+            catch { /* ignore */ }
+            try { _pitchLadder.Shutdown(); }
+            catch { /* ignore */ }
         }
 
         internal void Update(MissileCameraHudSnapshot snapshot, MissileCameraPanelMetrics panel)

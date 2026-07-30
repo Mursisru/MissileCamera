@@ -59,34 +59,52 @@ namespace MissileCamera
                 return;
             }
 
-            _host = new GameObject("MissileCameraStockPitchLadder", typeof(RectTransform));
-            _host.transform.SetParent(parent, false);
-            _host.transform.SetAsFirstSibling();
+            try
+            {
+                _host = new GameObject("MissileCameraStockPitchLadder", typeof(RectTransform));
+                _host.transform.SetParent(parent, false);
+                _host.transform.SetAsFirstSibling();
 
-            RectTransform hostRt = _host.GetComponent<RectTransform>();
-            StretchCenter(hostRt);
+                RectTransform hostRt = _host.GetComponent<RectTransform>();
+                StretchCenter(hostRt);
 
-            var rollGo = new GameObject("PitchLadderRoll", typeof(RectTransform));
-            rollGo.transform.SetParent(hostRt, false);
-            _rollRoot = rollGo.GetComponent<RectTransform>();
-            if (_sourceRollRect != null)
-                CopyRectTransform(_sourceRollRect, _rollRoot);
-            else
-                CenterOnParent(_rollRoot);
+                var rollGo = new GameObject("PitchLadderRoll", typeof(RectTransform));
+                rollGo.transform.SetParent(hostRt, false);
+                _rollRoot = rollGo.GetComponent<RectTransform>();
+                if (_sourceRollRect != null)
+                    CopyRectTransform(_sourceRollRect, _rollRoot);
+                else
+                    CenterOnParent(_rollRoot);
 
-            var pitchGo = new GameObject("PitchCompass", typeof(RectTransform), typeof(RawImage));
-            pitchGo.transform.SetParent(_rollRoot, false);
-            RectTransform pitchRt = pitchGo.GetComponent<RectTransform>();
-            if (_sourcePitchRect != null)
-                CopyRectTransform(_sourcePitchRect, pitchRt);
-            else
-                StretchCenter(pitchRt);
+                var pitchGo = new GameObject("PitchCompass", typeof(RectTransform), typeof(RawImage));
+                pitchGo.transform.SetParent(_rollRoot, false);
+                RectTransform pitchRt = pitchGo.GetComponent<RectTransform>();
+                if (_sourcePitchRect != null)
+                    CopyRectTransform(_sourcePitchRect, pitchRt);
+                else
+                    StretchCenter(pitchRt);
 
-            _pitchImage = pitchGo.GetComponent<RawImage>();
-            SetupPitchVisuals();
-            ApplyTint(force: true);
-            InvalidateMotion();
-            MfdLog.Info("pitch ladder: clean single-layer ready");
+                _pitchImage = pitchGo.GetComponent<RawImage>();
+                SetupPitchVisuals();
+                ApplyTint(force: true);
+                InvalidateMotion();
+                MfdLog.Info("pitch ladder: clean single-layer ready");
+            }
+            catch (System.Exception ex)
+            {
+                _bindFailed = true;
+                if (_host != null)
+                {
+                    try { UnityEngine.Object.Destroy(_host); }
+                    catch { /* ignore */ }
+                    _host = null;
+                }
+
+                _pitchImage = null;
+                _rollRoot = null;
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "pitchLadder EnsureBuilt: " + ex.GetType().Name + ": " + ex.Message);
+            }
         }
 
         internal void Update(Camera? feedCamera, Transform? missileBody, bool visible)
@@ -156,14 +174,17 @@ namespace MissileCamera
 
         internal void Shutdown()
         {
-            DestroyMaterial(ref _pitchMaterial);
+            try { DestroyMaterial(ref _pitchMaterial); }
+            catch { /* ignore */ }
 
-            if (_host != null)
+            try
             {
-                Object.Destroy(_host);
-                _host = null;
+                if (_host != null)
+                    Object.Destroy(_host);
             }
+            catch { /* ignore */ }
 
+            _host = null;
             _rollRoot = null;
             _pitchImage = null;
             _bindFailed = false;
@@ -191,7 +212,8 @@ namespace MissileCamera
 
             DestroyMaterial(ref _pitchMaterial);
             _pitchMaterial = CreateUiMaterial(_sourcePitchImage.texture);
-            _pitchImage.material = _pitchMaterial;
+            if (_pitchMaterial != null)
+                _pitchImage.material = _pitchMaterial;
 
             Outline outline = _pitchImage.GetComponent<Outline>();
             if (outline == null)
@@ -201,10 +223,13 @@ namespace MissileCamera
             outline.useGraphicAlpha = true;
         }
 
-        private static Material CreateUiMaterial(Texture? texture)
+        private static Material? CreateUiMaterial(Texture? texture)
         {
             Shader? shader = Shader.Find("UI/Default") ?? Shader.Find("Sprites/Default");
-            var material = new Material(shader!);
+            if (shader == null)
+                return null;
+
+            var material = new Material(shader);
             if (texture != null)
                 material.mainTexture = texture;
             return material;

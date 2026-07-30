@@ -617,7 +617,8 @@ namespace MissileCamera
             _savedWorldCamera = null;
         }
 
-        private static void ForceCombatHudMarkerPass()
+        /// <summary>Re-enable iconLayer + force vanilla UpdateMarkers (safe mid-sortie / host_ready).</summary>
+        internal static void ForceCombatHudMarkerPass()
         {
             CombatHUD? hud = SceneSingleton<CombatHUD>.i;
             if (hud == null || hud.aircraft == null)
@@ -640,6 +641,59 @@ namespace MissileCamera
             catch
             {
                 // ignore
+            }
+        }
+
+        /// <summary>TEMP diag: count CombatHUD markers that are Missile units + image state.</summary>
+        internal static void DiagLogMissileMarkers(string tag)
+        {
+            try
+            {
+                CombatHUD? hud = SceneSingleton<CombatHUD>.i;
+                if (hud == null)
+                {
+                    MissileCameraMissionLifecycleDiag.Info("markers " + tag + " CombatHUD=null");
+                    return;
+                }
+
+                FieldInfo? markersField = AccessToolsField(typeof(CombatHUD), "markers");
+                if (markersField?.GetValue(hud) is not System.Collections.Generic.List<HUDUnitMarker> markers)
+                {
+                    MissileCameraMissionLifecycleDiag.Info("markers " + tag + " list=null");
+                    return;
+                }
+
+                int missile = 0;
+                int enabled = 0;
+                int hasSprite = 0;
+                int selected = 0;
+                for (int i = 0; i < markers.Count; i++)
+                {
+                    HUDUnitMarker? m = markers[i];
+                    if (m?.unit == null || !(m.unit is Missile))
+                        continue;
+
+                    missile++;
+                    if (m.selected)
+                        selected++;
+                    if (m.image != null && m.image.enabled)
+                        enabled++;
+                    if (m.image != null && m.image.sprite != null)
+                        hasSprite++;
+                }
+
+                MissileCameraMissionLifecycleDiag.Info(
+                    "markers " + tag
+                    + " total=" + markers.Count
+                    + " missile=" + missile
+                    + " selected=" + selected
+                    + " imgOn=" + enabled
+                    + " sprite=" + hasSprite
+                    + " iconLayer=" + (hud.iconLayer != null && hud.iconLayer.gameObject.activeInHierarchy));
+            }
+            catch (Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn("markers diag failed: " + ex.Message);
             }
         }
 
