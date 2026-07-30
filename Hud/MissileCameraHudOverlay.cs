@@ -94,11 +94,11 @@ namespace MissileCamera
             bool bootPlaying = MissileCameraFullscreenController.IsActive
                 && MissileCameraFullscreenBootstrap.IsRunning;
             bool flir = MissileCameraHudConfig.UseFullscreenFlirHud;
-            _corners?.SetVisible(!flir && !bootPlaying);
 
-            // During boot, BootSequence owns FlirHud — hide leftover MFD center chrome.
+            // During FS boot, BootSequence owns FlirHud — hide leftover center chrome on FS panel only.
             if (bootPlaying)
             {
+                _corners?.SetVisible(false);
                 if (flir)
                     _flir?.UpdateGaugeBarsOnly(snapshot, panel);
 
@@ -108,6 +108,22 @@ namespace MissileCamera
                 _zoomIndicator?.UpdateVisibility();
                 MissileCameraCockpitPipController.Tick(null, panel);
                 return;
+            }
+
+            // MFD classic HUD: always force corners on (FS boot must never leave them inactive).
+            if (!flir)
+            {
+                _corners?.SetVisible(true);
+                if (_root != null)
+                {
+                    Transform? cornersNode = _root.Find("MissileCameraHudCorners");
+                    if (cornersNode != null && !cornersNode.gameObject.activeSelf)
+                        cornersNode.gameObject.SetActive(true);
+                }
+            }
+            else
+            {
+                _corners?.SetVisible(false);
             }
 
             _flir?.SetVisible(flir);

@@ -7,7 +7,7 @@
     <AssemblyName>MissileCamera</AssemblyName>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <OutputPath>bin\$(Configuration)\</OutputPath>
-    <DefaultItemExcludes>$(DefaultItemExcludes);_unity_shader_build\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);_unity_shader_build\**;_unity_shader_build_vision\**;Markers\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">

@@ -108,14 +108,11 @@ namespace MissileCamera
             if (hud == null)
                 return;
 
+            // FS uses FLIR — do not touch CornerHud nodes here at all.
+            // (Previously SetActive(false) on corners leaked onto MFD via TryGetPanelRt.)
             Transform? flirNode = hud.Find("MissileCameraFlirHud");
             if (flirNode != null)
                 flirNode.gameObject.SetActive(flirVisible);
-
-            // FS uses FLIR, not CornerHud — keep corners off on the FS panel only.
-            Transform? cornersNode = hud.Find("MissileCameraHudCorners");
-            if (cornersNode != null)
-                cornersNode.gameObject.SetActive(false);
         }
 
         private static void ApplyFullVisibility()

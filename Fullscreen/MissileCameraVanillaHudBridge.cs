@@ -210,14 +210,11 @@ namespace MissileCamera
                     : null;
                 Canvas? combatCanvas = _combatCanvas ?? ResolveCombatCanvas(hud);
 
+                // Never HideGo(entire FlightHud canvas) — that sticky-kills glass chrome/markers
+                // across sorties when restore races. Shared canvas: branch-walk keep iconLayer only.
+                // Separate FlightHud canvas: leave it; SuppressIlsAndObjectives handles ILS each LateUpdate.
                 if (flightCanvas != null && combatCanvas != null && flightCanvas == combatCanvas)
-                {
                     HideBranchesExcept(flightCanvas.transform, keep);
-                }
-                else if (flightCanvas != null)
-                {
-                    HideGo(flightCanvas.gameObject);
-                }
             }
             catch
             {

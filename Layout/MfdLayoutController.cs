@@ -107,6 +107,10 @@ namespace MissileCamera
             if (targetCam != null && _activeTargetCam != null && _activeTargetCam != targetCam)
                 return;
 
+            // Tac cam toggles / FS yield disable TargetCam while missiles still fly — keep MC overlay.
+            if (ShouldRetainLayoutForMissileFeed())
+                return;
+
             ClearLayout("target_cam_disabled");
         }
 
@@ -211,6 +215,11 @@ namespace MissileCamera
                 {
                     if (!_tacOverlayRoot.activeSelf)
                         _tacOverlayRoot.SetActive(true);
+
+                    // Re-bind feed/HUD if FS/disable tore down RawImage/corners while flags stayed active.
+                    Transform? panel = _tacOverlayRoot.transform.Find("MissileCameraPanel");
+                    if (panel != null && panel.TryGetComponent(out RectTransform panelRt))
+                        MissileCameraFeedController.NotifyOverlayReady(panelRt);
                     return;
                 }
             }
@@ -252,8 +261,13 @@ namespace MissileCamera
 
         internal static void OnSetLandingCam(TargetCam targetCam)
         {
-            if (_activeTargetCam == targetCam)
-                ClearLayout("landing_cam");
+            if (_activeTargetCam != targetCam)
+                return;
+
+            if (ShouldRetainLayoutForMissileFeed())
+                return;
+
+            ClearLayout("landing_cam");
         }
 
         internal static void OnCancelTarget(TargetCam targetCam)
@@ -271,6 +285,14 @@ namespace MissileCamera
         {
             if (_activeTargetCam != targetCam && _activeTargetCam != null)
                 return;
+
+            // TargetCam can recycle while missiles still need the feed — keep overlay if alive.
+            if (ShouldRetainLayoutForMissileFeed() && _tacOverlayRoot != null)
+            {
+                _activeTargetCam = null;
+                _activeScreenUi = null;
+                return;
+            }
 
             DestroyTacOverlay();
             ClearLayout("target_cam_destroy");

@@ -423,19 +423,28 @@ namespace MissileCamera
             _cachedPanelH = -1f;
             HudOverlay.InvalidateCornerLayout();
             HudOverlay.InvalidateDynamicSchedule();
+            _nextCornerHudTime = 0f;
+            _nextHudVisualTime = 0f;
 
-            // Re-show MFD CornerHud if FS boot previously forced corners off on the wrong panel.
-            if (_panelRt != null && _layoutRoot != null && HudOverlay.Root != null)
+            // Re-bind MFD HUD after FS; TargetCam may have disabled during FS yield.
+            if (HasTrackableOwnedMissile())
             {
-                try
+                try { MfdLayoutController.EnsureLayoutForMissileFeed(); }
+                catch { /* ignore */ }
+
+                if (_panelRt != null && _layoutRoot != null)
                 {
-                    HudOverlay.EnsureBuilt(_layoutRoot, MfdLayoutController.GetActiveScreenUi());
-                }
-                catch
-                {
-                    // ignore
+                    try
+                    {
+                        HudOverlay.EnsureBuilt(_layoutRoot, MfdLayoutController.GetActiveScreenUi());
+                        MissileCameraHudOverlay.ApplyLegacyStubVisibility(_panelRt, hide: true);
+                    }
+                    catch { /* ignore */ }
                 }
             }
+
+            try { MissileCameraVanillaHudBridge.HealStickyIfNeeded(); }
+            catch { /* ignore */ }
 
             MissileCameraCombatHudMarkerProjection.RestoreMarkerImages();
         }
