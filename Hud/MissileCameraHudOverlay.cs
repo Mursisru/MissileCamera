@@ -83,8 +83,12 @@ namespace MissileCamera
 
             UpdateZoomIndicatorVisibility();
 
+            // Screen-owner rule: keep MC HUD chrome alive whenever this overlay is driven.
+            // Do NOT gate the whole root on snapshot.HasFeed — RawImage can show pixels while
+            // RT/rig briefly reports no Texture, which previously blanked CornerHud entirely.
             bool hudEnabled = MissileCameraHudConfig.Enabled;
-            _root.gameObject.SetActive(hudEnabled && snapshot.HasFeed);
+            if (_root.gameObject.activeSelf != hudEnabled)
+                _root.gameObject.SetActive(hudEnabled);
             if (!_root.gameObject.activeSelf)
             {
                 MissileCameraCockpitPipController.Tick(null, panel);
@@ -110,16 +114,13 @@ namespace MissileCamera
                 return;
             }
 
-            // MFD classic HUD: always force corners on (FS boot must never leave them inactive).
+            // MFD classic HUD: force corners on whenever FLIR is not the owner.
             if (!flir)
             {
                 _corners?.SetVisible(true);
-                if (_root != null)
-                {
-                    Transform? cornersNode = _root.Find("MissileCameraHudCorners");
-                    if (cornersNode != null && !cornersNode.gameObject.activeSelf)
-                        cornersNode.gameObject.SetActive(true);
-                }
+                Transform? cornersNode = _root.Find("MissileCameraHudCorners");
+                if (cornersNode != null && !cornersNode.gameObject.activeSelf)
+                    cornersNode.gameObject.SetActive(true);
             }
             else
             {
@@ -150,13 +151,13 @@ namespace MissileCamera
             if (showCenter)
                 _attitude?.Update(snapshot, panel.MinSide);
 
-            // Intercept ring is independent of classic center cluster / FLIR chrome.
+            // Intercept still needs a live feed camera/texture.
             UpdateIntercept(
                 snapshot,
                 viewRt,
                 feedCamera,
                 panel.MinSide,
-                MissileCameraHudConfig.ShowCenterCluster);
+                MissileCameraHudConfig.ShowCenterCluster && snapshot.HasFeed);
         }
 
         internal void InvalidateDynamicSchedule() => _nextDynamicTime = 0f;

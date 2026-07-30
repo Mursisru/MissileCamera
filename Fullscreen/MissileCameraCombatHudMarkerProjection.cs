@@ -61,11 +61,24 @@ namespace MissileCamera
 
         internal static void ReprojectIfFullscreen(HUDUnitMarker marker)
         {
+            // Screen-owner: never touch vanilla markers unless FS overlay is truly on screen.
             if (!MissileCameraFullscreenController.IsActive)
                 return;
 
             if (marker == null || marker.image == null || marker.unit == null)
                 return;
+
+            // Own missiles / friendly tracks: leave vanilla UpdatePosition alone.
+            // Reproject is for world units in seeker space; disabling image.z<=0 hid own missiles on glass.
+            try
+            {
+                if (marker.unit is Missile)
+                    return;
+            }
+            catch
+            {
+                // ignore
+            }
 
             if (HiddenField != null && HiddenField.GetValue(marker) is true)
                 return;
@@ -86,6 +99,8 @@ namespace MissileCamera
             Vector3 screen = FeedWorldToOverlayScreen(feed, world);
             if (screen.z <= 0f)
             {
+                // Off-seeker: hide only while FS is the owner. Do not leave enabled=false after exit
+                // (RestoreMarkerImages + IsActive gate handle cleanup).
                 if (marker.image.enabled)
                     marker.image.enabled = false;
                 return;

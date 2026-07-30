@@ -753,14 +753,18 @@ namespace MissileCamera
             if (layoutRoot != null && panelRt != null)
             {
                 bool fullscreen = MissileCameraFullscreenController.IsActive;
+                // Screen-owner: while MFD feed owns the display, refresh CornerHud every frame.
+                bool mfdOwnsDisplay = _overlayActive && !fullscreen;
                 bool updateCorners = fullscreen
+                    || mfdOwnsDisplay
                     || missile == null
                     || Time.unscaledTime >= _nextCornerHudTime;
                 bool updateDynamic = fullscreen
+                    || mfdOwnsDisplay
                     || (missile != null && Time.unscaledTime >= _nextHudVisualTime);
-                if (missile == null || updateCorners || updateDynamic)
+                if (mfdOwnsDisplay || missile == null || updateCorners || updateDynamic)
                 {
-                    if (missile != null && !fullscreen)
+                    if (missile != null && !fullscreen && !mfdOwnsDisplay)
                     {
                         if (updateCorners)
                             _nextCornerHudTime = Time.unscaledTime + CornerHudInterval;
@@ -775,14 +779,22 @@ namespace MissileCamera
                     MissileCameraHudSnapshot snapshot = ResolveHudSnapshot(missile);
                     Camera? feedCamera = _rig?.FeedCamera;
                     MissileCameraPanelMetrics panel = GetPanelMetrics(panelRt);
-                    ResolveHudOverlay().Update(
+
+                    // Always drive the MFD HudOverlay while MFD owns display — never the FS host.
+                    MissileCameraHudOverlay hud = mfdOwnsDisplay
+                        ? HudOverlay
+                        : ResolveHudOverlay();
+                    if (mfdOwnsDisplay && (_layoutRoot == null || HudOverlay.Root == null))
+                        HudOverlay.EnsureBuilt(layoutRoot, MfdLayoutController.GetActiveScreenUi());
+
+                    hud.Update(
                         snapshot,
                         layoutRoot,
                         viewRt,
                         feedCamera,
                         panel,
                         panelRt,
-                        updateCorners,
+                        updateCorners: true,
                         updateDynamic);
                 }
             }

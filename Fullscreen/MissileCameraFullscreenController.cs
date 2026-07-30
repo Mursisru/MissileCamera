@@ -20,7 +20,10 @@ namespace MissileCamera
         private static Canvas? _overlayCanvas;
         private static RectTransform? _fullscreenRoot;
 
-        /// <summary>True only if session wanted AND overlay GameObject still alive.</summary>
+        /// <summary>
+        /// True only while fullscreen overlay is wanted, alive, AND actually on screen.
+        /// Screen-owner rule: hidden/disabled FS host must not steal MFD HUD or marker reproject.
+        /// </summary>
         internal static bool IsActive
         {
             get
@@ -28,11 +31,26 @@ namespace MissileCamera
                 if (!_sessionWanted)
                     return false;
 
-                if (IsOverlayAlive())
-                    return true;
+                if (!IsOverlayAlive())
+                {
+                    DropOrphanedSession("IsActive");
+                    return false;
+                }
 
-                DropOrphanedSession("IsActive");
-                return false;
+                // Hidden host must not steal MFD HUD / marker reproject — soft abandon, not mission unload.
+                if (_overlayGo != null && !_overlayGo.activeInHierarchy)
+                {
+                    SoftAbandonVisibleSession("overlay_inactive");
+                    return false;
+                }
+
+                if (_overlayCanvas != null && !_overlayCanvas.enabled)
+                {
+                    SoftAbandonVisibleSession("canvas_disabled");
+                    return false;
+                }
+
+                return true;
             }
         }
 
@@ -268,6 +286,44 @@ namespace MissileCamera
 
         private static bool IsOverlayAlive() =>
             _overlayGo != null && _overlayGo;
+
+        private static void SoftAbandonVisibleSession(string reason)
+        {
+            if (!_sessionWanted && !_deferredExit)
+                return;
+
+            _deferredExit = false;
+            _sessionWanted = false;
+            MissileCameraLossInterference.Stop();
+
+            try { MissileCameraFullscreenFeedHost.Hide(); }
+            catch { /* ignore */ }
+
+            try
+            {
+                if (_overlayGo != null && _overlayGo)
+                    _overlayGo.SetActive(false);
+            }
+            catch { /* ignore */ }
+
+            try
+            {
+                MissileCameraFeedController.NotifyFullscreenExited();
+                if (SceneSingleton<CombatHUD>.i != null)
+                    MissileCameraVanillaHudBridge.OnFullscreenExited();
+                else
+                    MissileCameraVanillaHudBridge.ResetForMissionUnload();
+            }
+            catch { /* ignore */ }
+
+            try { MissileCameraVisionModeController.Reset(); }
+            catch { /* ignore */ }
+
+            try { MissileCameraFeedController.NotifyFullscreenChanged(); }
+            catch { /* ignore */ }
+
+            MfdLog.Info("fullscreen soft-abandon reason=" + reason);
+        }
 
         private static void DropOrphanedSession(string reason)
         {
