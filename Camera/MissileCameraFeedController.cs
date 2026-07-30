@@ -194,7 +194,8 @@ namespace MissileCamera
 
         internal static void MultiplyFullscreenMagnification(float multiplier)
         {
-            if (!_overlayActive || !MissileCameraFullscreenController.IsActive)
+            // FS optics own the dedicated feed host — do not require MFD _overlayActive.
+            if (!MissileCameraFullscreenController.IsActive)
                 return;
 
             if (multiplier <= 0f || float.IsNaN(multiplier) || float.IsInfinity(multiplier))
@@ -214,13 +215,13 @@ namespace MissileCamera
             if (!Mathf.Approximately(_fullscreenMagnification, 1f))
             {
                 _fullscreenMagnification = 1f;
-                if (_overlayActive && MissileCameraFullscreenController.IsActive)
+                if (MissileCameraFullscreenController.IsActive)
                 {
                     ApplyFullscreenOptics();
                     ResolveHudOverlay().NotifyZoomChanged(_fullscreenMagnification);
                 }
             }
-            else if (_overlayActive && MissileCameraFullscreenController.IsActive)
+            else if (MissileCameraFullscreenController.IsActive)
             {
                 ApplyFullscreenOptics();
             }
@@ -295,6 +296,10 @@ namespace MissileCamera
             if (HasTrackableOwnedMissile())
                 MaybeDiagMissileMarkers();
 
+            // Poll FS toggle BEFORE the MFD/FS pipeline gate — K must work without MFD overlay.
+            // Enter() in the same frame makes IsDisplayPipelineActive true so feed continues below.
+            MissileCameraFeedInput.Process();
+
             if (!IsDisplayPipelineActive())
             {
                 UseIdleDriverWait = !HasTrackableOwnedMissile();
@@ -305,8 +310,6 @@ namespace MissileCamera
             }
 
             UseIdleDriverWait = false;
-
-            MissileCameraFeedInput.Process();
 
             bool fullscreen = MissileCameraFullscreenController.IsActive;
 
@@ -1288,7 +1291,8 @@ namespace MissileCamera
             if (_followedMissile == missile)
                 _followedMissile = null;
 
-            if (_overlayActive && !HasTrackableOwnedMissile() && !_postLossSequenceActive)
+            // FS-only (no MFD) still needs NO SIGNAL / deferred exit when last missile dies.
+            if (IsDisplayPipelineActive() && !HasTrackableOwnedMissile() && !_postLossSequenceActive)
                 BeginPostLossSequence();
         }
 
