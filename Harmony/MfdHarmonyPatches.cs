@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -108,5 +107,51 @@ namespace MissileCamera.Patches
         [HarmonyPostfix]
         internal static void Postfix(WeaponManager __instance) =>
             MfdHarmonyHooks.TargetListChangedPostfix(__instance);
+    }
+
+    /// <summary>
+    /// After vanilla LateUpdate: markers HUD suppress only.
+    /// Never write CameraStateManager camera pose (CAMERA_SAFETY.md).
+    /// </summary>
+    [HarmonyPatch]
+    internal static class CameraStateManager_LateUpdate_Patch
+    {
+        internal static MethodBase TargetMethod() =>
+            AccessTools.Method(GameAssembly.RequireType("CameraStateManager"), "LateUpdate")
+            ?? throw new InvalidOperationException("CameraStateManager.LateUpdate not found.");
+
+        [HarmonyPostfix]
+        internal static void Postfix()
+        {
+            try
+            {
+                // Markers-only HUD suppress. Never call camera pose writers here (CAMERA_SAFETY.md).
+                MissileCameraFullscreenController.HealIfOrphaned();
+                MissileCameraVanillaHudBridge.LateTickMarkers();
+            }
+            catch (Exception ex)
+            {
+                MfdLog.Info("LateTickMarkers failed: " + ex.Message);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fullscreen: vanilla UpdatePosition projects via cockpit mainCamera (center-stuck).
+    /// Reproject onto seeker feed viewport → Overlay screen. CSM untouched.
+    /// </summary>
+    [HarmonyPatch]
+    internal static class HUDUnitMarker_UpdatePosition_Patch
+    {
+        internal static MethodBase TargetMethod() =>
+            AccessTools.Method(GameAssembly.RequireType("HUDUnitMarker"), "UpdatePosition")
+            ?? throw new InvalidOperationException("HUDUnitMarker.UpdatePosition not found.");
+
+        [HarmonyPostfix]
+        internal static void Postfix(object __instance)
+        {
+            if (__instance is HUDUnitMarker marker)
+                MissileCameraCombatHudMarkerProjection.ReprojectIfFullscreen(marker);
+        }
     }
 }

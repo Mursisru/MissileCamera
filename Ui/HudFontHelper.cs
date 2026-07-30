@@ -21,5 +21,7 @@ namespace MissileCamera
             _font = Resources.GetBuiltinResource<Font>("Arial.ttf");
             return _font;
         }
+
+        internal static void Reset() => _font = null;
     }
 }

@@ -1,4 +1,3 @@
-using System;
 using MissileCamera.Config;
 using UnityEngine;
 
@@ -6,19 +5,17 @@ namespace MissileCamera
 {
     internal static class MissileCameraControlsConfig
     {
+        private const float MfdMinFov = 10f;
+        private const float MfdMaxFov = 120f;
+
+        // Hardcoded MFD zoom feel (not player-facing — change keybinds instead).
+        internal const float ZoomStep = 0.5f;
+        internal const float ZoomMin = -4f;
+        internal const float ZoomMax = 4f;
+        internal const float ZoomFovDegreesPerUnit = 5f;
+        internal const float IndicatorSeconds = 0.5f;
+
         internal static bool Enabled = true;
-        internal static KeyCode ModifierKey = KeyCode.RightAlt;
-        internal static KeyCode NextMissileKey = KeyCode.Slash;
-        internal static KeyCode PreviousMissileKey = KeyCode.Comma;
-        internal static KeyCode ZoomInKey = KeyCode.Semicolon;
-        internal static KeyCode ZoomOutKey = KeyCode.Period;
-        internal static KeyCode ResetZoomModifierKey = KeyCode.RightShift;
-        internal static KeyCode ResetZoomKey = KeyCode.Period;
-        internal static float ZoomStep = 0.5f;
-        internal static float ZoomMin = -4f;
-        internal static float ZoomMax = 4f;
-        internal static float ZoomFovDegreesPerUnit = 5f;
-        internal static float IndicatorSeconds = 0.5f;
         internal static int Revision;
 
         internal static void Refresh(bool force = false)
@@ -27,48 +24,10 @@ namespace MissileCamera
                 return;
 
             bool enabled = MissileCameraBepInConfig.ControlsEnabled.Value;
-            KeyCode modifierKey = ParseKey(MissileCameraBepInConfig.ModifierKey.Value, KeyCode.RightAlt);
-            KeyCode nextMissileKey = ParseKey(MissileCameraBepInConfig.NextMissileKey.Value, KeyCode.Slash);
-            KeyCode previousMissileKey = ParseKey(MissileCameraBepInConfig.PreviousMissileKey.Value, KeyCode.Comma);
-            KeyCode zoomInKey = ParseKey(MissileCameraBepInConfig.ZoomInKey.Value, KeyCode.Semicolon);
-            KeyCode zoomOutKey = ParseKey(MissileCameraBepInConfig.ZoomOutKey.Value, KeyCode.Period);
-            KeyCode resetZoomModifierKey = ParseKey(MissileCameraBepInConfig.ResetZoomModifierKey.Value, KeyCode.RightShift);
-            KeyCode resetZoomKey = ParseKey(MissileCameraBepInConfig.ResetZoomKey.Value, KeyCode.Period);
-            float zoomStep = MissileCameraBepInConfig.ZoomStep.Value;
-            float zoomMin = MissileCameraBepInConfig.ZoomMin.Value;
-            float zoomMax = MissileCameraBepInConfig.ZoomMax.Value;
-            float zoomFovDegreesPerUnit = MissileCameraBepInConfig.ZoomFovDegreesPerUnit.Value;
-            float indicatorSeconds = MissileCameraBepInConfig.IndicatorSeconds.Value;
-
-            if (!force
-                && enabled == Enabled
-                && modifierKey == ModifierKey
-                && nextMissileKey == NextMissileKey
-                && previousMissileKey == PreviousMissileKey
-                && zoomInKey == ZoomInKey
-                && zoomOutKey == ZoomOutKey
-                && resetZoomModifierKey == ResetZoomModifierKey
-                && resetZoomKey == ResetZoomKey
-                && zoomStep == ZoomStep
-                && zoomMin == ZoomMin
-                && zoomMax == ZoomMax
-                && zoomFovDegreesPerUnit == ZoomFovDegreesPerUnit
-                && indicatorSeconds == IndicatorSeconds)
+            if (!force && enabled == Enabled)
                 return;
 
             Enabled = enabled;
-            ModifierKey = modifierKey;
-            NextMissileKey = nextMissileKey;
-            PreviousMissileKey = previousMissileKey;
-            ZoomInKey = zoomInKey;
-            ZoomOutKey = zoomOutKey;
-            ResetZoomModifierKey = resetZoomModifierKey;
-            ResetZoomKey = resetZoomKey;
-            ZoomStep = zoomStep;
-            ZoomMin = zoomMin;
-            ZoomMax = zoomMax;
-            ZoomFovDegreesPerUnit = zoomFovDegreesPerUnit;
-            IndicatorSeconds = indicatorSeconds;
             Revision++;
         }
 
@@ -78,23 +37,25 @@ namespace MissileCamera
         internal static float ComputeEffectiveFov(float baseFov, float zoomOffset)
         {
             float fov = baseFov - zoomOffset * ZoomFovDegreesPerUnit;
-            return fov < 10f ? 10f : fov > 120f ? 120f : fov;
+            return fov < MfdMinFov ? MfdMinFov : fov > MfdMaxFov ? MfdMaxFov : fov;
         }
 
-        internal static KeyCode ParseKey(string? value, KeyCode fallback)
+        /// <summary>Fullscreen optical zoom: fov = baseFov / mag, mag in [1, ZoomMax].</summary>
+        internal static float ComputeFullscreenFov(float baseFov, float magnification)
         {
-            if (string.IsNullOrWhiteSpace(value))
-                return fallback;
+            float maxMag = Mathf.Max(MissileCameraFullscreenConfig.ZoomMax, 1f);
+            float mag = Mathf.Clamp(magnification, 1f, maxMag);
+            float safeBase = Mathf.Max(baseFov, 1f);
+            float minFov = safeBase / maxMag;
+            float maxFov = Mathf.Min(MfdMaxFov, safeBase);
+            float fov = safeBase / mag;
+            return Mathf.Clamp(fov, minFov, maxFov);
+        }
 
-            string trimmed = value.Trim();
-            if (string.Equals(trimmed, "None", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(trimmed, "Off", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(trimmed, "Disabled", StringComparison.OrdinalIgnoreCase))
-                return KeyCode.None;
-
-            return Enum.TryParse(trimmed, ignoreCase: true, out KeyCode parsed)
-                ? parsed
-                : fallback;
+        internal static float ClampFullscreenMagnification(float magnification)
+        {
+            float maxMag = Mathf.Max(MissileCameraFullscreenConfig.ZoomMax, 1f);
+            return Mathf.Clamp(magnification, 1f, maxMag);
         }
     }
 }

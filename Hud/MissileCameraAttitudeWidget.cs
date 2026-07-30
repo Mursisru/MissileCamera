@@ -9,6 +9,8 @@ namespace MissileCamera
         private readonly HudLineGraphic _horizonLineRight;
         private readonly HudRingGraphic _reticleRing;
         private readonly HudLineGraphic[] _reticleTicks;
+        private readonly HudLineGraphic _crosshairH;
+        private readonly HudLineGraphic _crosshairV;
         private float _lastRollDeg = float.NaN;
         private float _lastWidgetSize = -1f;
 
@@ -17,13 +19,17 @@ namespace MissileCamera
             HudLineGraphic horizonLineLeft,
             HudLineGraphic horizonLineRight,
             HudRingGraphic reticleRing,
-            HudLineGraphic[] reticleTicks)
+            HudLineGraphic[] reticleTicks,
+            HudLineGraphic crosshairH,
+            HudLineGraphic crosshairV)
         {
             _root = root;
             _horizonLineLeft = horizonLineLeft;
             _horizonLineRight = horizonLineRight;
             _reticleRing = reticleRing;
             _reticleTicks = reticleTicks;
+            _crosshairH = crosshairH;
+            _crosshairV = crosshairV;
         }
 
         internal static MissileCameraAttitudeWidget Create(RectTransform parent)
@@ -40,12 +46,15 @@ namespace MissileCamera
             HudLineGraphic horizonLineLeft = CreateLine(root, "HorizonLineLeft");
             HudLineGraphic horizonLineRight = CreateLine(root, "HorizonLineRight");
             HudRingGraphic reticleRing = CreateRing(root, "ReticleRing");
+            HudLineGraphic crosshairH = CreateLine(root, "CrosshairH");
+            HudLineGraphic crosshairV = CreateLine(root, "CrosshairV");
 
             var ticks = new HudLineGraphic[4];
             for (int i = 0; i < ticks.Length; i++)
                 ticks[i] = CreateLine(root, $"ReticleTick{i}");
 
-            return new MissileCameraAttitudeWidget(root, horizonLineLeft, horizonLineRight, reticleRing, ticks);
+            return new MissileCameraAttitudeWidget(
+                root, horizonLineLeft, horizonLineRight, reticleRing, ticks, crosshairH, crosshairV);
         }
 
         internal void Update(MissileCameraHudSnapshot snapshot, float panelMinSide)
@@ -72,7 +81,7 @@ namespace MissileCamera
             float cos = Mathf.Cos(bankRad);
             float sin = Mathf.Sin(bankRad);
 
-            float reticleRadius = widgetSize * 0.11f;
+            float reticleRadius = widgetSize * 0.18f;
             float lineGapHalf = (reticleRadius + widgetSize * 0.1f) * 2f;
 
             Vector2 leftFar = RotatePoint(new Vector2(-(lineGapHalf + wingLength), 0f), cos, sin);
@@ -98,6 +107,12 @@ namespace MissileCamera
                 Vector2 end = dir * (tickDist + tickLen);
                 _reticleTicks[i].SetLine(start, end, reticleThickness, MissileCameraHudConfig.ReticleColor);
             }
+
+            float crossHalf = reticleRadius * 0.55f;
+            float crossThickness = Mathf.Max(1.6f, reticleThickness * 0.7f);
+            Color crossColor = MissileCameraHudConfig.ReticleColor;
+            _crosshairH.SetLine(new Vector2(-crossHalf, 0f), new Vector2(crossHalf, 0f), crossThickness, crossColor);
+            _crosshairV.SetLine(new Vector2(0f, -crossHalf), new Vector2(0f, crossHalf), crossThickness, crossColor);
         }
 
         internal void SetVisible(bool visible)

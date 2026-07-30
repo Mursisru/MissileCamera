@@ -1,4 +1,3 @@
-using System.Globalization;
 using MissileCamera.Config;
 using UnityEngine;
 
@@ -6,20 +5,38 @@ namespace MissileCamera
 {
     internal static class MissileCameraHudConfig
     {
+        // Hardcoded HUD look (not player-facing).
+        internal const float SalvoWindowSeconds = 0.5f;
+        internal const int CockpitPipFps = 10;
+        internal const float LabelBackgroundAlpha = 0.62f;
+
+        // MFD classic center cluster only (FS FLIR uses its own FlirGreen chrome + hollow intercept ring).
+        internal static readonly Color InterceptColor = new Color(0.15f, 0.95f, 0.25f, 1f);
+        /// <summary>FS hollow intercept ring at aimPoint (classic green).</summary>
+        internal static readonly Color FsInterceptRingColor = new Color(0f, 1f, 0f, 1f);
+        internal static readonly Color ReticleColor = new Color(0.08f, 0.18f, 0.55f, 1f);
+        internal static readonly Color HorizonColor = new Color(0.05f, 0.35f, 0.08f, 1f);
+        internal static readonly Color HorizonOutlineColor = new Color(0.2f, 1f, 0.25f, 1f);
+        internal static readonly Color MissileNameColor = new Color(1f, 0f, 1f, 1f);
+        internal static readonly Color OwnshipNameColor = new Color(1f, 0.15f, 0.15f, 1f);
+        internal static readonly Color TargetNameColor = new Color(0.4f, 0.9f, 1f, 1f);
+        /// <summary>MFD locked-target diamond on seeker feed.</summary>
+        internal static readonly Color TargetMarkerColor = new Color(1f, 0.45f, 0.05f, 1f);
+        internal static readonly Color LabelBackgroundColor = new Color(0.18f, 0.18f, 0.18f, 0.62f);
+
+        internal static Color HorizonFillColor = DeriveHorizonFillColor(HorizonOutlineColor);
+
         internal static bool Enabled = true;
-        internal static float SalvoWindowSeconds = 0.5f;
         internal static bool ShowCenterCluster = true;
         internal static bool ShowTargetMarker = true;
-        internal static Color InterceptColor = new Color(0f, 1f, 0f, 1f);
-        internal static Color ReticleColor = new Color(0f, 0.4f, 1f, 1f);
-        internal static Color HorizonColor = new Color(0.05f, 0.35f, 0.08f, 1f);
-        internal static Color HorizonFillColor = DeriveHorizonFillColor(new Color(0.2f, 1f, 0.25f, 1f));
-        internal static Color HorizonOutlineColor = new Color(0.2f, 1f, 0.25f, 1f);
-        internal static Color MissileNameColor = new Color(1f, 0f, 1f, 1f);
-        internal static Color TargetNameColor = new Color(0.4f, 0.9f, 1f, 1f);
-        internal static Color LabelBackgroundColor = new Color(0.18f, 0.18f, 0.18f, 0.62f);
-        internal static float LabelBackgroundAlpha = 0.62f;
+        internal static bool CockpitPipEnabled = true;
         internal static int Revision;
+
+        internal static bool UseTgpStyle => false;
+
+        /// <summary>FLIR HUD only while game-fullscreen feed is active. MFD always uses classic corners.</summary>
+        internal static bool UseFullscreenFlirHud =>
+            Enabled && MissileCameraFullscreenController.IsActive;
 
         internal static void Refresh(bool force = false)
         {
@@ -27,69 +44,24 @@ namespace MissileCamera
                 return;
 
             bool enabled = MissileCameraBepInConfig.HudEnabled.Value;
-            float salvoWindowSeconds = MissileCameraBepInConfig.SalvoWindowSeconds.Value;
             bool showCenterCluster = MissileCameraBepInConfig.ShowCenterCluster.Value;
             bool showTargetMarker = MissileCameraBepInConfig.ShowTargetMarker.Value;
-            Color interceptColor = ParseColor(MissileCameraBepInConfig.InterceptColor.Value, InterceptColor);
-            Color reticleColor = ParseColor(MissileCameraBepInConfig.ReticleColor.Value, ReticleColor);
-            Color horizonColor = ParseColor(MissileCameraBepInConfig.HorizonColor.Value, HorizonColor);
-            Color horizonOutlineColor = ParseColor(MissileCameraBepInConfig.HorizonOutlineColor.Value, HorizonOutlineColor);
-            Color missileNameColor = ParseColor(MissileCameraBepInConfig.MissileNameColor.Value, MissileNameColor);
-            Color targetNameColor = ParseColor(MissileCameraBepInConfig.TargetNameColor.Value, TargetNameColor);
-            Color labelBackgroundColor = ParseColor(MissileCameraBepInConfig.LabelBackgroundColor.Value, LabelBackgroundColor);
-            float labelBackgroundAlpha = MissileCameraBepInConfig.LabelBackgroundAlpha.Value;
+            bool cockpitPipEnabled = MissileCameraBepInConfig.HudCockpitPipEnabled.Value;
 
             if (!force
                 && enabled == Enabled
-                && salvoWindowSeconds == SalvoWindowSeconds
                 && showCenterCluster == ShowCenterCluster
                 && showTargetMarker == ShowTargetMarker
-                && interceptColor == InterceptColor
-                && reticleColor == ReticleColor
-                && horizonColor == HorizonColor
-                && horizonOutlineColor == HorizonOutlineColor
-                && missileNameColor == MissileNameColor
-                && targetNameColor == TargetNameColor
-                && labelBackgroundColor == LabelBackgroundColor
-                && labelBackgroundAlpha == LabelBackgroundAlpha)
+                && cockpitPipEnabled == CockpitPipEnabled)
                 return;
 
             Enabled = enabled;
-            SalvoWindowSeconds = salvoWindowSeconds;
             ShowCenterCluster = showCenterCluster;
             ShowTargetMarker = showTargetMarker;
-            InterceptColor = interceptColor;
-            ReticleColor = reticleColor;
-            HorizonColor = horizonColor;
-            HorizonOutlineColor = horizonOutlineColor;
-            HorizonFillColor = DeriveHorizonFillColor(horizonOutlineColor);
-            MissileNameColor = missileNameColor;
-            TargetNameColor = targetNameColor;
-            LabelBackgroundColor = labelBackgroundColor;
-            LabelBackgroundAlpha = labelBackgroundAlpha;
+            CockpitPipEnabled = cockpitPipEnabled;
+            HorizonFillColor = DeriveHorizonFillColor(HorizonOutlineColor);
             Revision++;
         }
-
-        private static Color ParseColor(string raw, Color fallback)
-        {
-            if (string.IsNullOrWhiteSpace(raw))
-                return fallback;
-
-            string[] parts = raw.Split(',');
-            if (parts.Length < 3)
-                return fallback;
-
-            if (!TryParse(parts[0], out float r)
-                || !TryParse(parts[1], out float g)
-                || !TryParse(parts[2], out float b))
-                return fallback;
-
-            float a = parts.Length > 3 && TryParse(parts[3], out float parsedA) ? parsedA : 1f;
-            return new Color(r, g, b, a);
-        }
-
-        private static bool TryParse(string raw, out float value) =>
-            float.TryParse(raw.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
 
         internal static Color DeriveHorizonFillColor(Color outline)
         {

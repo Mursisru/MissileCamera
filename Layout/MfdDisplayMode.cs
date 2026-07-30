@@ -4,8 +4,8 @@ namespace MissileCamera
 {
     /// <summary>
     /// Aircraft MFD layouts differ (see reference screenshots):
-    /// - Dedicated split: wide target display — apply mod.
-    /// - Tac overlay: small radar widget on corner — skip mod (size-based only).
+    /// - Dedicated split: wide target display тАФ apply mod.
+    /// - Tac overlay: small radar widget on corner тАФ skip mod (size-based only).
     /// </summary>
     internal enum MfdLayoutProfile
     {
@@ -47,13 +47,25 @@ namespace MissileCamera
                 return MfdLayoutProfile.DedicatedSplit;
             }
 
+            // Darkreach-only: right tac weapon strip can exist without bay markers on tacScreen.
+            if (string.Equals(jsonKey, "Darkreach", System.StringComparison.OrdinalIgnoreCase)
+                && MfdWeaponsZoneAccess.HasDarkreachTacWeaponUi(tacScreen.gameObject))
+            {
+                return MfdLayoutProfile.DedicatedSplit;
+            }
+
+            // SAH-46 Chicane: small tac radar would size-Skip; MC replaces TURBINE column on engine MFD.
+            // jsonKey-gated only — no early Tac trigger (avoids ApplyHidden race).
+            if (TacScreenAccess.IsChicaneAircraft(jsonKey))
+                return MfdLayoutProfile.DedicatedSplit;
+
             // EW-25 Medusa: RADOME/LASER armed strip on right tac MFD.
             if (MfdWeaponsZoneAccess.HasMedusaWeaponsMarkers(tacScreen.gameObject))
             {
                 return MfdLayoutProfile.DedicatedSplit;
             }
 
-            // Corner radar widget only — not a half-screen target feed (even if roughly square).
+            // Corner radar widget only тАФ not a half-screen target feed (even if roughly square).
             if (width < 0.32f && height < 0.42f)
                 return MfdLayoutProfile.Skip;
 

@@ -7,6 +7,7 @@
     <AssemblyName>MissileCamera</AssemblyName>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <OutputPath>bin\$(Configuration)\</OutputPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);_unity_shader_build\**;_unity_shader_build_vision\**;Markers\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="0Harmony">
@@ -37,6 +38,10 @@
       <HintPath>$(NuclearOptionRoot)\NuclearOption_Data\Managed\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>$(NuclearOptionRoot)\NuclearOption_Data\Managed\UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(NuclearOptionRoot)\NuclearOption_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
@@ -61,5 +66,18 @@
       <HintPath>$(NuclearOptionRoot)\NuclearOption_Data\Managed\UnityEngine.UIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Unity.TextMeshPro">
+      <HintPath>$(NuclearOptionRoot)\NuclearOption_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Rewired_Core">
+      <HintPath>$(NuclearOptionRoot)\NuclearOption_Data\Managed\Rewired_Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition="Exists('Assets\missilecamera_shaders.bundle')">
+    <EmbeddedResource Include="Assets\missilecamera_shaders.bundle">
+      <LogicalName>MissileCamera.Shaders.missilecamera_shaders.bundle</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 </Project>

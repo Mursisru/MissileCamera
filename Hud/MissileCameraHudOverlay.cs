@@ -9,25 +9,33 @@ namespace MissileCamera
 
         private RectTransform? _root;
         private MissileCameraCornerHud? _corners;
+        private MissileCameraFlirHud? _flir;
         private MissileCameraAttitudeWidget? _attitude;
-        private MissileCameraTargetMarker? _targetMarker;
         private MissileCameraZoomIndicator? _zoomIndicator;
+        private MissileCameraTargetMarker? _targetMarker;
         private HudRingGraphic? _interceptRing;
         private RectTransform? _interceptRoot;
         private TargetScreenUI? _screenUi;
         private float _nextDynamicTime;
-        private const float DynamicInterval = 1f / 15f;
+        private const float DynamicInterval = 1f / 10f;
 
-        internal void EnsureBuilt(RectTransform layoutRt, TargetScreenUI? screenUi)
+        internal RectTransform? Root => _root;
+
+        internal static RectTransform? TryGetFlirRoot() => _flirRootStatic;
+
+        private static RectTransform? _flirRootStatic;
+
+        internal void EnsureBuilt(RectTransform layoutRt, TargetScreenUI? screenUi, float? contentRotationZOverride = null)
         {
             MissileCameraHudConfig.Refresh();
             _screenUi = screenUi;
 
-            float contentRotationZ = MfdLayoutController.ActiveStubContentRotationZ;
+            float contentRotationZ = contentRotationZOverride ?? MfdLayoutController.ActiveStubContentRotationZ;
             RectTransform viewRt = MissileCameraFeedLayout.EnsureRotatedView(layoutRt, contentRotationZ);
 
             if (_root != null && _root.parent == viewRt)
             {
+                MissileCameraFeedLayout.ApplyContentRotation(layoutRt, contentRotationZ);
                 _corners?.BindScreenUi(screenUi);
                 _zoomIndicator?.BindScreenUi(screenUi);
                 RectTransform? panelRt = FindMissileCameraPanel(layoutRt);
@@ -37,27 +45,41 @@ namespace MissileCamera
 
             Destroy();
 
-            var rootGo = new GameObject(RootName, typeof(RectTransform));
-            rootGo.transform.SetParent(viewRt, false);
-            _root = rootGo.GetComponent<RectTransform>();
-            Stretch(_root);
+            try
+            {
+                var rootGo = new GameObject(RootName, typeof(RectTransform));
+                rootGo.transform.SetParent(viewRt, false);
+                _root = rootGo.GetComponent<RectTransform>();
+                Stretch(_root);
 
-            _corners = MissileCameraCornerHud.Create(_root, screenUi);
-            _attitude = MissileCameraAttitudeWidget.Create(_root);
-            _targetMarker = MissileCameraTargetMarker.Create(_root);
-            _zoomIndicator = MissileCameraZoomIndicator.Create(_root, screenUi);
+                _corners = MissileCameraCornerHud.Create(_root, screenUi);
+                _flir = MissileCameraFlirHud.Create(_root);
+                _flirRootStatic = _flir.Root;
+                _attitude = MissileCameraAttitudeWidget.Create(_root);
+                _zoomIndicator = MissileCameraZoomIndicator.Create(_root, screenUi);
+                _targetMarker = MissileCameraTargetMarker.Create(_root);
 
-            var interceptGo = new GameObject("MissileCameraHudIntercept", typeof(RectTransform), typeof(HudRingGraphic));
-            interceptGo.transform.SetParent(_root, false);
-            _interceptRoot = interceptGo.GetComponent<RectTransform>();
-            _interceptRoot.anchorMin = new Vector2(0.5f, 0.5f);
-            _interceptRoot.anchorMax = new Vector2(0.5f, 0.5f);
-            _interceptRoot.pivot = new Vector2(0.5f, 0.5f);
-            _interceptRoot.anchoredPosition = Vector2.zero;
-            _interceptRoot.sizeDelta = Vector2.zero;
-            _interceptRing = interceptGo.GetComponent<HudRingGraphic>();
+                var interceptGo = new GameObject("MissileCameraHudIntercept", typeof(RectTransform), typeof(HudRingGraphic));
+                interceptGo.transform.SetParent(_root, false);
+                _interceptRoot = interceptGo.GetComponent<RectTransform>();
+                _interceptRoot.anchorMin = new Vector2(0.5f, 0.5f);
+                _interceptRoot.anchorMax = new Vector2(0.5f, 0.5f);
+                _interceptRoot.pivot = new Vector2(0.5f, 0.5f);
+                _interceptRoot.anchoredPosition = Vector2.zero;
+                _interceptRoot.sizeDelta = Vector2.zero;
+                _interceptRing = interceptGo.GetComponent<HudRingGraphic>();
 
-            ApplyLegacyStubVisibility(FindMissileCameraPanel(layoutRt) ?? layoutRt, hide: MissileCameraHudConfig.Enabled);
+                ApplyLegacyStubVisibility(FindMissileCameraPanel(layoutRt) ?? layoutRt, hide: MissileCameraHudConfig.Enabled);
+                MissileCameraMissionLifecycleDiag.Info("HudOverlay.EnsureBuilt ok");
+            }
+            catch (System.Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "HudOverlay.EnsureBuilt failed: " + ex.GetType().Name + ": " + ex.Message
+                    + " | " + ex.StackTrace);
+                // Clear half-built chrome; feed RawImage must still work without HUD.
+                Destroy();
+            }
         }
 
         internal void Update(
@@ -75,51 +97,162 @@ namespace MissileCamera
 
             UpdateZoomIndicatorVisibility();
 
+            // Screen-owner rule: keep MC HUD chrome alive whenever this overlay is driven.
+            // Do NOT gate the whole root on snapshot.HasFeed — RawImage can show pixels while
+            // RT/rig briefly reports no Texture, which previously blanked CornerHud entirely.
             bool hudEnabled = MissileCameraHudConfig.Enabled;
-            _root.gameObject.SetActive(hudEnabled && snapshot.HasFeed);
+            if (_root.gameObject.activeSelf != hudEnabled)
+                _root.gameObject.SetActive(hudEnabled);
             if (!_root.gameObject.activeSelf)
+            {
+                MissileCameraCockpitPipController.Tick(null, panel);
                 return;
+            }
 
-            if (updateCorners)
+            bool bootPlaying = MissileCameraFullscreenController.IsActive
+                && MissileCameraFullscreenBootstrap.IsRunning;
+            bool flir = MissileCameraHudConfig.UseFullscreenFlirHud;
+
+            // During FS boot, BootSequence owns FlirHud — hide leftover center chrome on FS panel only.
+            if (bootPlaying)
+            {
+                _corners?.SetVisible(false);
+                if (flir)
+                    _flir?.UpdateGaugeBarsOnly(snapshot, panel);
+
+                _attitude?.SetVisible(false);
+                _targetMarker?.SetVisible(false);
+                if (_interceptRoot != null)
+                    _interceptRoot.gameObject.SetActive(false);
+                _zoomIndicator?.UpdateVisibility();
+                MissileCameraCockpitPipController.Tick(null, panel);
+                return;
+            }
+
+            // MFD classic HUD: force corners on whenever FLIR is not the owner.
+            if (!flir)
+            {
+                _corners?.SetVisible(true);
+                Transform? cornersNode = _root.Find("MissileCameraHudCorners");
+                if (cornersNode != null && !cornersNode.gameObject.activeSelf)
+                    cornersNode.gameObject.SetActive(true);
+            }
+            else
+            {
+                _corners?.SetVisible(false);
+            }
+
+            _flir?.SetVisible(flir);
+
+            if (flir)
+            {
+                if (updateCorners || updateDynamic)
+                    _flir?.Update(snapshot, panel);
+            }
+            else if (updateCorners)
+            {
                 _corners?.Update(snapshot, panel);
+            }
+
+            MissileCameraCockpitPipController.Tick(null, panel);
 
             if (!updateDynamic)
                 return;
 
             _nextDynamicTime = Time.unscaledTime + DynamicInterval;
 
-            bool showCenter = MissileCameraHudConfig.ShowCenterCluster;
+            bool showCenter = MissileCameraHudConfig.ShowCenterCluster && !flir;
             _attitude?.SetVisible(showCenter);
             if (showCenter)
                 _attitude?.Update(snapshot, panel.MinSide);
 
-            UpdateIntercept(snapshot, viewRt, feedCamera, panel.MinSide, showCenter);
+            // Intercept aimPoint: MFD = filled green; FS FLIR = hollow green ring only.
+            bool showIntercept = MissileCameraHudConfig.ShowCenterCluster && snapshot.HasFeed;
+            UpdateIntercept(
+                snapshot,
+                viewRt,
+                feedCamera,
+                panel.MinSide,
+                showIntercept,
+                filled: !flir);
 
-            bool showMarker = MissileCameraHudConfig.ShowTargetMarker && snapshot.HasTarget;
-            FeedProjection targetProjection = showMarker && feedCamera != null
-                ? FeedScreenProjector.Project(feedCamera, viewRt, snapshot.TargetPosition)
-                : FeedProjection.Invalid;
-            _targetMarker?.Update(targetProjection, panel.MinSide, showMarker);
+            UpdateTargetMarker(snapshot, viewRt, feedCamera, panel.MinSide, !flir);
+        }
+
+        private void UpdateTargetMarker(
+            MissileCameraHudSnapshot snapshot,
+            RectTransform viewRt,
+            Camera? feedCamera,
+            float minSide,
+            bool mfdClassic)
+        {
+            if (_targetMarker == null)
+                return;
+
+            bool show = mfdClassic
+                && MissileCameraHudConfig.ShowTargetMarker
+                && snapshot.HasFeed
+                && snapshot.HasTarget
+                && feedCamera != null;
+
+            if (!show)
+            {
+                _targetMarker.SetVisible(false);
+                return;
+            }
+
+            FeedProjection projection = FeedScreenProjector.Project(
+                feedCamera!,
+                viewRt,
+                snapshot.TargetPosition);
+            _targetMarker.Update(projection, minSide, visible: true);
         }
 
         internal void InvalidateDynamicSchedule() => _nextDynamicTime = 0f;
 
-        internal void InvalidateCornerLayout() => _corners?.InvalidateLayout();
+        internal void InvalidateCornerLayout()
+        {
+            _corners?.InvalidateLayout();
+            _flir?.InvalidateLayout();
+        }
 
         internal void NotifyZoomChanged(float zoomOffset) => _zoomIndicator?.Show(zoomOffset);
 
         internal void UpdateZoomIndicatorVisibility() => _zoomIndicator?.UpdateVisibility();
 
+        internal void ForceFlirUpdate(MissileCameraHudSnapshot snapshot, MissileCameraPanelMetrics panel)
+        {
+            if (_flir == null)
+                return;
+
+            _flir.SetVisible(true);
+            _flir.Update(snapshot, panel);
+            _flirRootStatic = _flir.Root;
+        }
+
         internal void Destroy()
         {
-            if (_root != null)
-                Object.Destroy(_root.gameObject);
+            // Always drop C# refs even if Unity objects were already scene-destroyed.
+            try { MissileCameraCockpitPipController.Shutdown(); }
+            catch { /* ignore */ }
+
+            try { _flir?.Shutdown(); }
+            catch { /* ignore */ }
+
+            try
+            {
+                if (_root != null)
+                    Object.Destroy(_root.gameObject);
+            }
+            catch { /* ignore */ }
 
             _root = null;
             _corners = null;
+            _flir = null;
+            _flirRootStatic = null;
             _attitude = null;
-            _targetMarker = null;
             _zoomIndicator = null;
+            _targetMarker = null;
             _interceptRing = null;
             _interceptRoot = null;
         }
@@ -140,9 +273,16 @@ namespace MissileCamera
 
         internal static void ApplyLegacyStubVisibility(RectTransform searchRoot, bool hide)
         {
-            SetChildActive(searchRoot, "MissileCameraTitle", !hide);
-            SetChildActive(searchRoot, "MissileCameraColor", !hide);
-            SetChildActive(searchRoot, "MissileTelemetry", !hide);
+            if (searchRoot == null)
+                return;
+
+            // Fullscreen must never show legacy stubs regardless of HudConfig.
+            if (MissileCameraFullscreenController.IsActive)
+                hide = true;
+
+            SetChildActiveDeep(searchRoot, "MissileCameraTitle", !hide);
+            SetChildActiveDeep(searchRoot, "MissileCameraColor", !hide);
+            SetChildActiveDeep(searchRoot, "MissileTelemetry", !hide);
         }
 
         internal static void ApplyPanelBackground(Image? panelImage, TargetScreenUI? screenUi)
@@ -171,12 +311,18 @@ namespace MissileCamera
                 UiImageHelper.ApplySolid(panelImage, TargetScreenUiStyle.GetStubPanelColor(screenUi));
         }
 
-        private void UpdateIntercept(MissileCameraHudSnapshot snapshot, RectTransform viewRt, Camera? feedCamera, float minSide, bool showCenter)
+        private void UpdateIntercept(
+            MissileCameraHudSnapshot snapshot,
+            RectTransform viewRt,
+            Camera? feedCamera,
+            float minSide,
+            bool showIntercept,
+            bool filled)
         {
             if (_interceptRing == null || _interceptRoot == null)
                 return;
 
-            bool show = showCenter && snapshot.HasAimPoint && feedCamera != null;
+            bool show = showIntercept && snapshot.HasAimPoint && feedCamera != null;
             if (!show)
             {
                 _interceptRoot.gameObject.SetActive(false);
@@ -193,16 +339,41 @@ namespace MissileCamera
             _interceptRoot.gameObject.SetActive(true);
             _interceptRoot.anchoredPosition = projection.AnchoredPosition;
 
-            float radius = Mathf.Clamp(minSide * 0.028f, 4f, 12f);
-            float thickness = Mathf.Max(1.2f, radius * 0.35f);
-            _interceptRing.SetRing(radius, thickness, MissileCameraHudConfig.InterceptColor, filled: true);
+            float radius = Mathf.Clamp(minSide * 0.022f, 4f, 10f);
+            float thickness = Mathf.Max(1.2f, radius * 0.18f);
+            Color color = filled
+                ? MissileCameraHudConfig.InterceptColor
+                : MissileCameraHudConfig.FsInterceptRingColor;
+            _interceptRing.SetRing(radius, thickness, color, filled);
         }
 
-        private static void SetChildActive(RectTransform layoutRt, string childName, bool active)
+        private static void SetChildActiveDeep(RectTransform layoutRt, string childName, bool active)
         {
-            Transform? child = layoutRt.Find(childName);
-            if (child != null)
-                child.gameObject.SetActive(active);
+            Transform? child = FindDeep(layoutRt, childName);
+            if (child == null)
+                return;
+
+            child.gameObject.SetActive(active);
+            if (!active && child.TryGetComponent(out Text text))
+            {
+                text.text = string.Empty;
+                text.enabled = false;
+            }
+        }
+
+        private static Transform? FindDeep(Transform root, string name)
+        {
+            if (root.name == name)
+                return root;
+
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform? found = FindDeep(root.GetChild(i), name);
+                if (found != null)
+                    return found;
+            }
+
+            return null;
         }
 
         private static void Stretch(RectTransform rt)

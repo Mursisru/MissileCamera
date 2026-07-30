@@ -11,10 +11,16 @@ namespace MissileCamera
 
         internal static void Register(Component aircraft, TacScreen tacScreen)
         {
-            if (aircraft == null)
+            if (aircraft == null || tacScreen == null)
                 return;
 
             CachedByAircraftId[aircraft.GetInstanceID()] = tacScreen;
+        }
+
+        internal static void ClearCache()
+        {
+            CachedByAircraftId.Clear();
+            ResetChicaneDiag();
         }
 
         internal static TacScreen? Resolve(Component? aircraft)
@@ -103,7 +109,7 @@ namespace MissileCamera
                 }
             }
 
-            if (IsEngineSectionMfdAircraft(aircraftJsonKey))
+            if (IsEngineSectionMfdAircraft(aircraftJsonKey) || IsVagrantAircraft(aircraftJsonKey))
             {
                 Component? aircraft = GetAircraft(tacScreen);
                 if (aircraft != null)
@@ -120,10 +126,15 @@ namespace MissileCamera
             return tacRoot;
         }
 
-        /// <summary>T/A-30 Compass (trainer), A-19 Brawler (CAS1), VL-49 Tarantula (QuadVTOL1).</summary>
+        /// <summary>T/A-30 Compass (trainer), A-19 Brawler (CAS1).</summary>
         internal static bool IsEngineSectionMfdAircraft(string? jsonKey) =>
             string.Equals(jsonKey, "trainer", System.StringComparison.OrdinalIgnoreCase)
             || string.Equals(jsonKey, "CAS1", System.StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>VT-7 Vagrant VTOL trainer (Addressables: VTOLTrainer1).</summary>
+        internal static bool IsVagrantAircraft(string? jsonKey) =>
+            string.Equals(jsonKey, "VTOLTrainer1", System.StringComparison.OrdinalIgnoreCase)
+            || string.Equals(jsonKey, "Vagrant", System.StringComparison.OrdinalIgnoreCase);
 
         internal static bool IsTarantulaAircraft(string? jsonKey) =>
             string.Equals(jsonKey, "QuadVTOL1", System.StringComparison.OrdinalIgnoreCase);
@@ -142,6 +153,7 @@ namespace MissileCamera
 
         internal static bool UsesEarlyTacLayoutTrigger(string? jsonKey) =>
             IsEngineSectionMfdAircraft(jsonKey)
+            || IsVagrantAircraft(jsonKey)
             || IsTarantulaAircraft(jsonKey)
             || IsCricketAircraft(jsonKey)
             || IsIbisAircraft(jsonKey);
@@ -196,12 +208,178 @@ namespace MissileCamera
             return null;
         }
 
+        private static bool _chicaneRootDiagDone;
+
         /// <summary>
-        /// Compass / Brawler: weapon wireframe + ENGINE gauges often live on a cockpit HUD canvas,
+        /// SAH-46 left Turbine MFD: three EngineTelemetry (L/R TURBINE + TAIL DUCT) with TMP titles.
+        /// May share cockpit canvas with TacScreen — do NOT reject tac canvas/root.
+        /// </summary>
+        internal static GameObject? FindChicaneTurbineMfdRoot(TacScreen tacScreen)
+        {
+            var byCanvas = new Dictionary<int, CanvasBucket>();
+            var seenTelemetry = new HashSet<int>();
+
+            void AddTelemetry(EngineTelemetry? telemetry)
+            {
+                if (telemetry == null)
+                    return;
+
+                // Prefab assets from FindObjectsOfTypeAll — skip; keep DDOL / live scene objects.
+                if (!telemetry.gameObject.scene.IsValid())
+                    return;
+
+                int tid = telemetry.GetInstanceID();
+                if (!seenTelemetry.Add(tid))
+                    return;
+
+                // Only the EngineTelemetry's own RectTransform — parent walk grabs TelemetryPanel false friends.
+                RectTransform? rt = telemetry.GetComponent<RectTransform>();
+                if (rt == null)
+                    return;
+
+                Canvas? canvas = GetOverlayCanvas(rt);
+                if (canvas == null)
+                    return;
+
+                int id = canvas.GetInstanceID();
+                if (!byCanvas.TryGetValue(id, out CanvasBucket bucket))
+                {
+                    bucket = new CanvasBucket(canvas);
+                    byCanvas[id] = bucket;
+                }
+
+                bucket.EngineCount++;
+                CountChicaneTmpOn(rt.gameObject, ref bucket.TurbineLabels, ref bucket.TailLabels);
+            }
+
+            // FindObjectsOfType misses some inactive hierarchies; All + scene filter is reliable.
+            foreach (EngineTelemetry telemetry in Resources.FindObjectsOfTypeAll<EngineTelemetry>())
+                AddTelemetry(telemetry);
+
+            MFDAppManager? manager = MFDAppManager.i;
+            if (manager != null)
+            {
+                foreach (EngineTelemetry telemetry in manager.GetComponentsInChildren<EngineTelemetry>(true))
+                    AddTelemetry(telemetry);
+            }
+
+            Component? aircraft = GetAircraft(tacScreen);
+            if (aircraft != null)
+            {
+                foreach (EngineTelemetry telemetry in aircraft.GetComponentsInChildren<EngineTelemetry>(true))
+                    AddTelemetry(telemetry);
+            }
+
+            // Tac / cockpit hierarchy (trainer engPanel lives here — Chicane may too).
+            foreach (EngineTelemetry telemetry in tacScreen.GetComponentsInChildren<EngineTelemetry>(true))
+                AddTelemetry(telemetry);
+
+            CanvasBucket? best = null;
+            int bestScore = -1;
+            foreach (CanvasBucket bucket in byCanvas.Values)
+            {
+                int score = bucket.Score();
+                if (score <= bestScore)
+                    continue;
+
+                bestScore = score;
+                best = bucket;
+            }
+
+            if (!_chicaneRootDiagDone)
+            {
+                _chicaneRootDiagDone = true;
+                MfdLog.Info(
+                    $"chicane turbine diag buckets={byCanvas.Count} seenEt={seenTelemetry.Count} " +
+                    $"best={(best != null ? best.Canvas.name + " score=" + bestScore + " eng=" + best.EngineCount + " tmpT=" + best.TurbineLabels + " tmpTail=" + best.TailLabels : "null")}");
+                int i = 0;
+                foreach (CanvasBucket bucket in byCanvas.Values)
+                {
+                    if (i++ >= 8)
+                        break;
+                    MfdLog.Info(
+                        $"  chicane canvas[{bucket.Canvas.name}] eng={bucket.EngineCount} " +
+                        $"tmpTurbine={bucket.TurbineLabels} tmpTail={bucket.TailLabels} score={bucket.Score()}");
+                }
+            }
+
+            if (best == null || bestScore < 2)
+                return null;
+
+            return best.Canvas.gameObject;
+        }
+
+        internal static void ResetChicaneDiag() => _chicaneRootDiagDone = false;
+
+        private sealed class CanvasBucket
+        {
+            internal CanvasBucket(Canvas canvas)
+            {
+                Canvas = canvas;
+            }
+
+            internal Canvas Canvas { get; }
+            internal int EngineCount;
+            internal int TurbineLabels;
+            internal int TailLabels;
+
+            internal int Score()
+            {
+                int score = 0;
+                if (TurbineLabels >= 2)
+                    score += 3;
+                else if (TurbineLabels >= 1)
+                    score += 1;
+
+                if (TailLabels >= 1)
+                    score += 2;
+
+                if (EngineCount >= 3)
+                    score += 4;
+                else if (EngineCount >= 2)
+                    score += 2;
+
+                return score;
+            }
+        }
+
+        private static void CountChicaneTmpOn(GameObject root, ref int turbineLabels, ref int tailLabels)
+        {
+            foreach (TMPro.TMP_Text label in root.GetComponentsInChildren<TMPro.TMP_Text>(true))
+            {
+                if (label == null || string.IsNullOrEmpty(label.text))
+                    continue;
+
+                string norm = label.text.ToUpperInvariant();
+                if (norm.Contains("TAIL") && norm.Contains("DUCT"))
+                    tailLabels++;
+                else if (norm.Contains("TURBINE"))
+                    turbineLabels++;
+            }
+        }
+
+        private static void CountChicaneTmpLabels(GameObject root, ref int turbineLabels, ref int tailLabels) =>
+            CountChicaneTmpOn(root, ref turbineLabels, ref tailLabels);
+
+        /// <summary>
+        /// Compass / Brawler / Vagrant: ENGINE / NOZZLE gauges often live on a cockpit HUD canvas,
         /// not under tacScreen_* (which only hosts TargetCam UI).
         /// </summary>
         private static GameObject? FindEngineSectionHudRoot(Transform aircraftRoot, GameObject tacRoot, Canvas? tacCanvas)
         {
+            foreach (NozzleGauge nozzle in aircraftRoot.GetComponentsInChildren<NozzleGauge>(true))
+            {
+                if (nozzle == null || !nozzle.TryGetComponent(out RectTransform nozzleRt))
+                    continue;
+
+                if (IsLeftColumnUiNode(nozzleRt, tacCanvas))
+                    continue;
+
+                GameObject? root = GetHudCanvasRoot(nozzleRt);
+                if (root != null)
+                    return root;
+            }
+
             foreach (EngineTelemetry telemetry in aircraftRoot.GetComponentsInChildren<EngineTelemetry>(true))
             {
                 if (telemetry == null || !telemetry.TryGetComponent(out RectTransform telemetryRt))

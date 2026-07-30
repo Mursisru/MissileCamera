@@ -19,6 +19,13 @@ namespace MissileCamera
         internal const float RightCornerStackHeightRatio = 0.22f;
         internal const float RightColumnMaxWidthRatio = 0.52f;
 
+        // Game-fullscreen: fixed compact HUD (panel is entire screen — ratio scaling blows up).
+        private const float FullscreenFontRef = 42f;
+        private const float FullscreenTopBand = 52f;
+        private const float FullscreenNameRow = 26f;
+        private const float FullscreenTelemetryChipH = 22f;
+        private const float FullscreenChipPad = 14f;
+
         internal readonly float Width;
         internal readonly float Height;
         internal readonly float MinSide;
@@ -32,6 +39,8 @@ namespace MissileCamera
             MaxSide = Mathf.Max(Width, Height);
         }
 
+        internal static bool IsGameFullscreen => MissileCameraFullscreenController.IsActive;
+
         internal static MissileCameraPanelMetrics From(RectTransform panelRt, bool forceCanvasUpdate = false)
         {
             if (forceCanvasUpdate)
@@ -42,13 +51,15 @@ namespace MissileCamera
             return new MissileCameraPanelMetrics(w, h);
         }
 
-        internal float HorizontalInset => Width * EdgeInsetRatio;
+        internal float HorizontalInset => IsGameFullscreen ? FullscreenChipPad : Width * EdgeInsetRatio;
 
-        internal float LeftHorizontalInset => Width * (EdgeInsetRatio + MfdLayoutController.HudLeftInsetExtra);
+        internal float LeftHorizontalInset => IsGameFullscreen
+            ? FullscreenChipPad
+            : Width * (EdgeInsetRatio + MfdLayoutController.HudLeftInsetExtra);
 
         internal float RightHorizontalInset => HorizontalInset;
 
-        internal float VerticalInset => Height * EdgeInsetRatio;
+        internal float VerticalInset => IsGameFullscreen ? FullscreenChipPad : Height * EdgeInsetRatio;
 
         internal float ContentWidth => Mathf.Max(Width - HorizontalInset * 2f, 1f);
 
@@ -60,17 +71,20 @@ namespace MissileCamera
 
         internal float TelemetryBlockWidth => ContentWidth / 3f;
 
-        internal float SalvoBlockWidth => Mathf.Max(MinSide * SalvoBlockWidthRatio, 24f);
+        internal float SalvoBlockWidth => IsGameFullscreen
+            ? 64f
+            : Mathf.Max(MinSide * SalvoBlockWidthRatio, 24f);
 
         internal float SalvoBlockMaxWidth => Mathf.Max(ContentWidth * 0.35f, SalvoBlockWidth);
 
         internal float NameTextWidth => Mathf.Max(NameBlockWidth - RowEdgePad * 2f, 8f);
 
-        internal float TelemetryTextWidth => Mathf.Max(ResolveTelemetryBlockWidth() - RowEdgePad * 2f, 8f);
+        internal float TelemetryTextWidth => IsGameFullscreen
+            ? 140f
+            : Mathf.Max(ResolveTelemetryBlockWidth() - RowEdgePad * 2f, 8f);
 
         internal float RightColumnBlockWidth => ContentWidth * RightColumnWidthRatio;
 
-        /// <summary>Push stack outward from safe-area root so text sits ~2% from physical MFD right edge.</summary>
         internal float RightColumnTelemetryRightOffset =>
             Mathf.Max(RightHorizontalInset - Width * RightColumnTelemetryEdgeInsetRatio, RowEdgePad);
 
@@ -83,18 +97,29 @@ namespace MissileCamera
         internal float RightColumnRowHeight => RightCornerStackHeight / 3f;
 
         internal bool UsesRightColumnTelemetry =>
-            MfdLayoutController.ActiveTelemetryLayout == MissileCameraTelemetryLayout.RightColumn;
+            !IsGameFullscreen
+            && MfdLayoutController.ActiveTelemetryLayout == MissileCameraTelemetryLayout.RightColumn;
 
         private float ResolveTelemetryBlockWidth() =>
             UsesRightColumnTelemetry ? RightColumnTelemetryMaxWidth : TelemetryBlockWidth;
 
         internal float SalvoTextWidth => Mathf.Max(SalvoBlockWidth - RowEdgePad * 2f, 8f);
 
-        internal float TopBandHeight => ContentHeight * TopBandHeightRatio;
+        internal float TopBandHeight => IsGameFullscreen
+            ? FullscreenTopBand
+            : ContentHeight * TopBandHeightRatio;
 
-        internal float BottomBandHeight => ContentHeight * BottomBandHeightRatio;
+        internal float BottomBandHeight => IsGameFullscreen
+            ? FullscreenTelemetryChipH * 2f + 8f
+            : ContentHeight * BottomBandHeightRatio;
 
-        internal float RowGap => TargetScreenUiStyle.ScaledRowHeight(MinSide, 0.012f, 1f, 3f);
+        internal float FullscreenNameRowHeight => FullscreenNameRow;
+
+        internal float FullscreenTelemetryChipHeight => FullscreenTelemetryChipH;
+
+        internal float RowGap => IsGameFullscreen
+            ? 4f
+            : TargetScreenUiStyle.ScaledRowHeight(MinSide, 0.012f, 1f, 3f);
 
         internal float SmallPanelScale
         {
@@ -114,6 +139,9 @@ namespace MissileCamera
         {
             get
             {
+                if (IsGameFullscreen)
+                    return FullscreenFontRef;
+
                 bool landscape = Width >= Height * 1.12f;
                 float panelRef = landscape
                     ? MaxSide * LandscapeFontRefRatio
@@ -131,10 +159,22 @@ namespace MissileCamera
         }
 
         internal int GetMinFontSize() =>
-            TargetScreenUiStyle.SnapHudFont(Mathf.RoundToInt(Mathf.Clamp(MinSide * 0.10f, 16f, 28f)));
+            IsGameFullscreen
+                ? 12
+                : TargetScreenUiStyle.SnapHudFont(Mathf.RoundToInt(Mathf.Clamp(MinSide * 0.10f, 16f, 28f)));
 
         internal int GetFontSize(StubTextRole role)
         {
+            if (IsGameFullscreen)
+            {
+                return role switch
+                {
+                    StubTextRole.Header => 16,
+                    StubTextRole.Body => 14,
+                    _ => 13,
+                };
+            }
+
             float scale = FontRefSize / 150f * HudFontScale;
             float roleMul = role switch
             {

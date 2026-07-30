@@ -4,10 +4,13 @@ namespace MissileCamera
 {
     internal static class MfdLog
     {
-        internal static void Info(string message)
-        {
+        internal static void Info(string message) =>
             MissileCameraPlugin.ModLogger?.LogInfo(message);
-            UnityEngine.Debug.Log("[MissileCamera] " + message);
+
+        internal static void Warning(string message)
+        {
+            MissileCameraPlugin.ModLogger?.LogWarning(message);
+            UnityEngine.Debug.LogWarning("[MissileCamera] " + message);
         }
 
         internal static void Error(string message) =>

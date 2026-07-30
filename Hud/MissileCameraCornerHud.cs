@@ -28,6 +28,11 @@ namespace MissileCamera
         private string _lastRange = string.Empty;
         private string _lastAltitude = string.Empty;
         private string _lastSpeed = string.Empty;
+        private string _lastG = string.Empty;
+        private string _lastFuel = string.Empty;
+        private string _lastMach = string.Empty;
+        private string _lastGuidance = string.Empty;
+        private string _lastAngle = string.Empty;
 
         private MissileCameraCornerHud(
             RectTransform root,
@@ -139,6 +144,11 @@ namespace MissileCamera
             _lastRange = string.Empty;
             _lastAltitude = string.Empty;
             _lastSpeed = string.Empty;
+            _lastG = string.Empty;
+            _lastFuel = string.Empty;
+            _lastMach = string.Empty;
+            _lastGuidance = string.Empty;
+            _lastAngle = string.Empty;
             HudBackdropHelper.InvalidateTextWidthCache();
         }
 
@@ -200,7 +210,12 @@ namespace MissileCamera
             || SalvoLabel(snapshot) != _lastSalvo
             || snapshot.RangeText != _lastRange
             || snapshot.AltitudeText != _lastAltitude
-            || snapshot.SpeedText != _lastSpeed;
+            || snapshot.SpeedText != _lastSpeed
+            || snapshot.GText != _lastG
+            || snapshot.FuelText != _lastFuel
+            || snapshot.MachText != _lastMach
+            || snapshot.GuidanceText != _lastGuidance
+            || snapshot.TargetAngleText != _lastAngle;
 
         private static string SalvoLabel(MissileCameraHudSnapshot snapshot) =>
             $"{snapshot.SalvoIndex}/{snapshot.SalvoTotal}";
@@ -213,6 +228,11 @@ namespace MissileCamera
             _lastRange = snapshot.RangeText;
             _lastAltitude = snapshot.AltitudeText;
             _lastSpeed = snapshot.SpeedText;
+            _lastG = snapshot.GText;
+            _lastFuel = snapshot.FuelText;
+            _lastMach = snapshot.MachText;
+            _lastGuidance = snapshot.GuidanceText;
+            _lastAngle = snapshot.TargetAngleText;
         }
 
         internal void SetVisible(bool visible) => _root.gameObject.SetActive(visible);
@@ -294,6 +314,10 @@ namespace MissileCamera
             {
                 ApplyRightCornerTelemetry(fit, panel);
             }
+            else if (MissileCameraPanelMetrics.IsGameFullscreen)
+            {
+                ApplyFullscreenCornerTelemetry(fit, panel);
+            }
             else
             {
                 ApplyBottomRowTelemetry(fit);
@@ -321,6 +345,69 @@ namespace MissileCamera
             PlaceBottomBlock(_spd, 2f / 3f, 1f, fit.TelemetryRowHeight);
             SetTelemetryAlignment(TextAnchor.MiddleCenter);
             SetTelemetryBackdropMode(perRow: true);
+        }
+
+        /// <summary>
+        /// Game fullscreen: small corner chips — R+A bottom-left stack, S bottom-right. No full-width bar.
+        /// </summary>
+        private void ApplyFullscreenCornerTelemetry(MissileCameraHudFit fit, MissileCameraPanelMetrics panel)
+        {
+            _telemetryStackBackdrop.gameObject.SetActive(false);
+            _telemetryStackBackdrop.enabled = false;
+            _bottomBand.gameObject.SetActive(false);
+
+            ReparentTelemetryToRoot();
+            SetTelemetryAlignment(TextAnchor.MiddleLeft);
+            SetTelemetryBackdropMode(perRow: true);
+
+            float chipH = panel.FullscreenTelemetryChipHeight;
+            float pad = panel.HorizontalInset;
+            float chipW = Mathf.Max(panel.TelemetryTextWidth, 96f);
+
+            PlaceFullscreenChip(_rng, left: true, bottomY: pad, width: chipW, height: chipH);
+            PlaceFullscreenChip(_alt, left: true, bottomY: pad + chipH + 4f, width: chipW, height: chipH);
+            PlaceFullscreenChip(_spd, left: false, bottomY: pad, width: chipW, height: chipH);
+
+            _rng.Label.alignment = TextAnchor.MiddleLeft;
+            _alt.Label.alignment = TextAnchor.MiddleLeft;
+            _spd.Label.alignment = TextAnchor.MiddleRight;
+        }
+
+        private void ReparentTelemetryToRoot()
+        {
+            _rng.Root.SetParent(_root, false);
+            _alt.Root.SetParent(_root, false);
+            _spd.Root.SetParent(_root, false);
+        }
+
+        private static void PlaceFullscreenChip(HudBlock block, bool left, float bottomY, float width, float height)
+        {
+            RectTransform rt = block.Root;
+            if (left)
+            {
+                rt.anchorMin = new Vector2(0f, 0f);
+                rt.anchorMax = new Vector2(0f, 0f);
+                rt.pivot = new Vector2(0f, 0f);
+                rt.anchoredPosition = new Vector2(0f, bottomY);
+            }
+            else
+            {
+                rt.anchorMin = new Vector2(1f, 0f);
+                rt.anchorMax = new Vector2(1f, 0f);
+                rt.pivot = new Vector2(1f, 0f);
+                rt.anchoredPosition = new Vector2(0f, bottomY);
+            }
+
+            rt.sizeDelta = new Vector2(width, height);
+            ApplyTextStretch(block.Label);
+            if (block.Label.transform is RectTransform labelRt)
+            {
+                labelRt.offsetMin = new Vector2(6f, 0f);
+                labelRt.offsetMax = new Vector2(-6f, 0f);
+            }
+
+            block.Backdrop.enabled = MissileCameraHudConfig.LabelBackgroundAlpha > 0.001f;
+            HudBackdropHelper.StretchToBlock(block.Backdrop);
         }
 
         private void ApplyRightCornerTelemetry(MissileCameraHudFit fit, MissileCameraPanelMetrics panel)

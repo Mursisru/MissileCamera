@@ -1,162 +1,184 @@
 using BepInEx.Configuration;
-using UnityEngine;
 
 namespace MissileCamera.Config
 {
-    /// <summary>BepInEx Configuration Manager bindings (com.at747.missilecamera.bepinex.cfg).</summary>
+    /// <summary>
+    /// Player-facing BepInEx settings (com.at747.missilecamera.bepinex.cfg).
+    /// Tuning junk lives as hardcoded defaults in *Config classes — not exposed here.
+    /// </summary>
     internal static class MissileCameraBepInConfig
     {
         internal static bool IsBound { get; private set; }
 
-        internal static ConfigEntry<bool> LayoutEnabled { get; private set; }
-        internal static ConfigEntry<string> DisplayMode { get; private set; }
-        internal static ConfigEntry<float> OverlayMaxWidth { get; private set; }
-        internal static ConfigEntry<float> LeftWidth { get; private set; }
-        internal static ConfigEntry<float> MissilePanelBottom { get; private set; }
-        internal static ConfigEntry<float> WeaponsStripHeight { get; private set; }
-        internal static ConfigEntry<bool> ShowDivider { get; private set; }
-        internal static ConfigEntry<bool> DebugStub { get; private set; }
-        internal static ConfigEntry<string> StubLabel { get; private set; }
+        // Layout
+        internal static ConfigEntry<bool> LayoutEnabled { get; private set; } = null!;
+        internal static ConfigEntry<string> DisplayMode { get; private set; } = null!;
 
-        internal static ConfigEntry<bool> FeedEnabled { get; private set; }
-        internal static ConfigEntry<float> NoseSkinInset { get; private set; }
-        internal static ConfigEntry<float> CameraBackOffset { get; private set; }
-        internal static ConfigEntry<float> Fov { get; private set; }
-        internal static ConfigEntry<int> FeedWidth { get; private set; }
-        internal static ConfigEntry<int> FeedHeight { get; private set; }
-        internal static ConfigEntry<bool> HorizonLock { get; private set; }
-        internal static ConfigEntry<float> TurnLookBankScale { get; private set; }
-        internal static ConfigEntry<float> MaxTurnLookDegrees { get; private set; }
-        internal static ConfigEntry<float> DefaultMissileGLimit { get; private set; }
-        internal static ConfigEntry<float> TurnLookGDeadband { get; private set; }
-        internal static ConfigEntry<float> TurnLookGFilterHz { get; private set; }
-        internal static ConfigEntry<float> TurnLookSlewDegPerSec { get; private set; }
-        internal static ConfigEntry<float> TurnLookSmoothTime { get; private set; }
-        internal static ConfigEntry<float> PostExplosionHoldSeconds { get; private set; }
-        internal static ConfigEntry<int> RenderFps { get; private set; }
+        // Feed
+        internal static ConfigEntry<bool> FeedEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> Fov { get; private set; } = null!;
+        internal static ConfigEntry<int> FeedWidth { get; private set; } = null!;
+        internal static ConfigEntry<int> FeedHeight { get; private set; } = null!;
+        internal static ConfigEntry<float> PostLossInterferenceSeconds { get; private set; } = null!;
+        internal static ConfigEntry<int> RenderFps { get; private set; } = null!;
+        internal static ConfigEntry<bool> InfraredAutoEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredDaylightThreshold { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredAmbientThreshold { get; private set; } = null!;
+        internal static ConfigEntry<float> InfraredLightHysteresis { get; private set; } = null!;
 
-        internal static ConfigEntry<bool> HudEnabled { get; private set; }
-        internal static ConfigEntry<float> SalvoWindowSeconds { get; private set; }
-        internal static ConfigEntry<bool> ShowCenterCluster { get; private set; }
-        internal static ConfigEntry<bool> ShowTargetMarker { get; private set; }
-        internal static ConfigEntry<string> InterceptColor { get; private set; }
-        internal static ConfigEntry<string> ReticleColor { get; private set; }
-        internal static ConfigEntry<string> HorizonColor { get; private set; }
-        internal static ConfigEntry<string> HorizonOutlineColor { get; private set; }
-        internal static ConfigEntry<string> MissileNameColor { get; private set; }
-        internal static ConfigEntry<string> TargetNameColor { get; private set; }
-        internal static ConfigEntry<string> LabelBackgroundColor { get; private set; }
-        internal static ConfigEntry<float> LabelBackgroundAlpha { get; private set; }
+        // HUD
+        internal static ConfigEntry<bool> HudEnabled { get; private set; } = null!;
+        internal static ConfigEntry<bool> ShowCenterCluster { get; private set; } = null!;
+        internal static ConfigEntry<bool> ShowTargetMarker { get; private set; } = null!;
+        internal static ConfigEntry<bool> HudCockpitPipEnabled { get; private set; } = null!;
 
-        internal static ConfigEntry<bool> ControlsEnabled { get; private set; }
-        internal static ConfigEntry<string> ModifierKey { get; private set; }
-        internal static ConfigEntry<string> NextMissileKey { get; private set; }
-        internal static ConfigEntry<string> PreviousMissileKey { get; private set; }
-        internal static ConfigEntry<string> ZoomInKey { get; private set; }
-        internal static ConfigEntry<string> ZoomOutKey { get; private set; }
-        internal static ConfigEntry<string> ResetZoomModifierKey { get; private set; }
-        internal static ConfigEntry<string> ResetZoomKey { get; private set; }
-        internal static ConfigEntry<float> ZoomStep { get; private set; }
-        internal static ConfigEntry<float> ZoomMin { get; private set; }
-        internal static ConfigEntry<float> ZoomMax { get; private set; }
-        internal static ConfigEntry<float> ZoomFovDegreesPerUnit { get; private set; }
-        internal static ConfigEntry<float> IndicatorSeconds { get; private set; }
+        // Controls + keybinds
+        internal static ConfigEntry<bool> ControlsEnabled { get; private set; } = null!;
+        internal static ConfigEntry<KeyboardShortcut> ControlsNextMissile { get; private set; } = null!;
+        internal static ConfigEntry<KeyboardShortcut> ControlsPreviousMissile { get; private set; } = null!;
+        internal static ConfigEntry<KeyboardShortcut> ControlsZoomIn { get; private set; } = null!;
+        internal static ConfigEntry<KeyboardShortcut> ControlsZoomOut { get; private set; } = null!;
+        internal static ConfigEntry<KeyboardShortcut> ControlsResetZoom { get; private set; } = null!;
+
+        // Fullscreen
+        internal static ConfigEntry<bool> FullscreenEnabled { get; private set; } = null!;
+        internal static ConfigEntry<KeyboardShortcut> FullscreenToggle { get; private set; } = null!;
+        internal static ConfigEntry<KeyboardShortcut> FullscreenVisionCycle { get; private set; } = null!;
+        internal static ConfigEntry<KeyboardShortcut> FullscreenZoomResetKey { get; private set; } = null!;
+        internal static ConfigEntry<int> FullscreenFeedWidth { get; private set; } = null!;
+        internal static ConfigEntry<int> FullscreenFeedHeight { get; private set; } = null!;
+        internal static ConfigEntry<float> FullscreenZoomMax { get; private set; } = null!;
+        internal static ConfigEntry<bool> FullscreenZoomResetOnExit { get; private set; } = null!;
+        internal static ConfigEntry<bool> FullscreenPitchLadderEnabled { get; private set; } = null!;
+
+        // Post-FX toggles (intensities hardcoded)
+        internal static ConfigEntry<bool> FxScanlinesEnabled { get; private set; } = null!;
+        internal static ConfigEntry<bool> FxMotionBlurEnabled { get; private set; } = null!;
+        internal static ConfigEntry<bool> FxChromaticEnabled { get; private set; } = null!;
+        internal static ConfigEntry<bool> FxBloomEnabled { get; private set; } = null!;
+
+        // Aircraft mini-cam
+        internal static ConfigEntry<bool> AircraftCamEnabled { get; private set; } = null!;
+        internal static ConfigEntry<string> AircraftCamMode { get; private set; } = null!;
+        internal static ConfigEntry<bool> AircraftCamHideInFullscreen { get; private set; } = null!;
+        internal static ConfigEntry<KeyboardShortcut> AircraftCamCycle { get; private set; } = null!;
 
         internal static void Bind(ConfigFile config)
         {
             const string layout = "Layout";
-            LayoutEnabled = config.Bind(layout, "Enabled", true, "Master switch for MFD layout changes.");
+            LayoutEnabled = config.Bind(layout, "Enabled", true,
+                "Turns MFD layout splitting on/off. Off = vanilla MFD never touched.");
             DisplayMode = config.Bind(layout, "DisplayMode", "split",
                 new ConfigDescription(
-                    "auto = per-aircraft detection; skip = never apply; split = always split layout.",
+                    "Which aircraft get the missile panel: auto = per airframe, skip = never, split = always.",
                     new AcceptableValueList<string>("auto", "skip", "split")));
-            OverlayMaxWidth = config.Bind(layout, "OverlayMaxWidth", 0.45f,
-                new ConfigDescription("Max normalized width for tac overlay detection.", new AcceptableValueRange<float>(0.1f, 1f)));
-            LeftWidth = config.Bind(layout, "LeftWidth", 0.58f,
-                new ConfigDescription("Target cam column width (0–1).", new AcceptableValueRange<float>(0.1f, 0.9f)));
-            MissilePanelBottom = config.Bind(layout, "MissilePanelBottom", 0.38f,
-                new ConfigDescription("Bottom edge of missile panel.", new AcceptableValueRange<float>(0.1f, 0.9f)));
-            WeaponsStripHeight = config.Bind(layout, "WeaponsStripHeight", 0.12f,
-                new ConfigDescription("Compressed weapons strip height.", new AcceptableValueRange<float>(0.05f, 0.4f)));
-            ShowDivider = config.Bind(layout, "ShowDivider", true, "Draw zone divider lines.");
-            DebugStub = config.Bind(layout, "DebugStub", false, "Bright magenta test panel.");
-            StubLabel = config.Bind(layout, "StubLabel", "MISSILE CAMERA", "Label on debug stub.");
 
             const string feed = "MissileCameraFeed";
-            FeedEnabled = config.Bind(feed, "Enabled", true, "Live missile camera feed on MFD.");
-            NoseSkinInset = config.Bind(feed, "NoseSkinInset", 0.08f,
-                new ConfigDescription("Keep camera outside nose mesh (meters).", new AcceptableValueRange<float>(0.01f, 2f)));
-            CameraBackOffset = config.Bind(feed, "CameraBackOffset", 0.35f,
-                new ConfigDescription("Pull camera back from nose point (meters).", new AcceptableValueRange<float>(0.01f, 5f)));
+            FeedEnabled = config.Bind(feed, "Enabled", true,
+                "Turns the live missile nose camera on the MFD on/off.");
             Fov = config.Bind(feed, "Fov", 60f,
-                new ConfigDescription("Base field of view (degrees).", new AcceptableValueRange<float>(10f, 120f)));
+                new ConfigDescription("Seeker base FOV in degrees (before MFD zoom offset).", new AcceptableValueRange<float>(10f, 120f)));
             FeedWidth = config.Bind(feed, "FeedWidth", 512,
-                new ConfigDescription("RenderTexture width.", new AcceptableValueRange<int>(128, 2048)));
+                new ConfigDescription("MFD feed render texture width (pixels).", new AcceptableValueRange<int>(128, 2048)));
             FeedHeight = config.Bind(feed, "FeedHeight", 512,
-                new ConfigDescription("RenderTexture height.", new AcceptableValueRange<int>(128, 2048)));
-            HorizonLock = config.Bind(feed, "HorizonLock", true, "World-up roll lock; body-follow pitch/yaw.");
-            TurnLookBankScale = config.Bind(feed, "TurnLookBankScale", 1f,
-                new ConfigDescription("G-load turn look scale.", new AcceptableValueRange<float>(0f, 1.5f)));
-            MaxTurnLookDegrees = config.Bind(feed, "MaxTurnLookDegrees", 90f,
-                new ConfigDescription("Max turn-look offset (degrees).", new AcceptableValueRange<float>(10f, 90f)));
-            DefaultMissileGLimit = config.Bind(feed, "DefaultMissileGLimit", 20f,
-                new ConfigDescription("Fallback G limit.", new AcceptableValueRange<float>(1f, 100f)));
-            TurnLookGDeadband = config.Bind(feed, "TurnLookGDeadband", 0.15f,
-                new ConfigDescription("G deadband.", new AcceptableValueRange<float>(0f, 5f)));
-            TurnLookGFilterHz = config.Bind(feed, "TurnLookGFilterHz", 7f,
-                new ConfigDescription("G filter cutoff (Hz).", new AcceptableValueRange<float>(1f, 30f)));
-            TurnLookSlewDegPerSec = config.Bind(feed, "TurnLookSlewDegPerSec", 120f,
-                new ConfigDescription("Turn-look slew rate (deg/s).", new AcceptableValueRange<float>(10f, 720f)));
-            TurnLookSmoothTime = config.Bind(feed, "TurnLookSmoothTime", 0.18f,
-                new ConfigDescription("Turn-look smoothing time (seconds).", new AcceptableValueRange<float>(0.02f, 1.5f)));
-            PostExplosionHoldSeconds = config.Bind(feed, "PostExplosionHoldSeconds", 0f,
-                new ConfigDescription("Hold last frame after missile loss (0 = off).", new AcceptableValueRange<float>(0f, 10f)));
+                new ConfigDescription("MFD feed render texture height (pixels).", new AcceptableValueRange<int>(128, 2048)));
+            PostLossInterferenceSeconds = config.Bind(feed, "PostLossInterferenceSeconds", 0.5f,
+                new ConfigDescription(
+                    "NO SIGNAL flash length (seconds) on missile switch/destroy/FS exit with no missiles. 0 = off.",
+                    new AcceptableValueRange<float>(0f, 2f)));
             RenderFps = config.Bind(feed, "RenderFps", 30,
-                new ConfigDescription("Feed refresh rate.", new AcceptableValueRange<int>(5, 60)));
+                new ConfigDescription("MFD feed render rate (Hz). Fullscreen video stays every frame.", new AcceptableValueRange<int>(5, 60)));
+            InfraredAutoEnabled = config.Bind(feed, "InfraredAutoEnabled", true,
+                "Auto B/W IR on MFD when lighting at the missile is dark (not a clock).");
+            InfraredDaylightThreshold = config.Bind(feed, "InfraredDaylightThreshold", 0.12f,
+                new ConfigDescription(
+                    "Auto IR ON when daylight factor at missile is below this. Lower = IR less often.",
+                    new AcceptableValueRange<float>(0.01f, 1f)));
+            InfraredAmbientThreshold = config.Bind(feed, "InfraredAmbientThreshold", 0.06f,
+                new ConfigDescription(
+                    "Auto IR ON when ambient light is below this. Lower = IR less often.",
+                    new AcceptableValueRange<float>(0.01f, 1f)));
+            InfraredLightHysteresis = config.Bind(feed, "InfraredLightHysteresis", 0.03f,
+                new ConfigDescription(
+                    "Extra light margin before auto IR turns off (reduces flicker).",
+                    new AcceptableValueRange<float>(0f, 0.2f)));
 
             const string hud = "MissileCameraHud";
-            HudEnabled = config.Bind(hud, "Enabled", true, "HUD overlay on feed.");
-            SalvoWindowSeconds = config.Bind(hud, "SalvoWindowSeconds", 0.5f,
-                new ConfigDescription("Salvo grouping window (seconds).", new AcceptableValueRange<float>(0.05f, 5f)));
-            ShowCenterCluster = config.Bind(hud, "ShowCenterCluster", true, "Center reticle / intercept ring.");
-            ShowTargetMarker = config.Bind(hud, "ShowTargetMarker", true, "Target diamond marker.");
-            InterceptColor = config.Bind(hud, "InterceptColor", "0,1,0,1", "Intercept ring RGBA (0–1), comma-separated.");
-            ReticleColor = config.Bind(hud, "ReticleColor", "0,0.4,1,1", "Reticle RGBA (0–1), comma-separated.");
-            HorizonColor = config.Bind(hud, "HorizonColor", "0.05,0.35,0.08,1", "Horizon fill RGBA.");
-            HorizonOutlineColor = config.Bind(hud, "HorizonOutlineColor", "0.2,1,0.25,1", "Horizon outline RGBA.");
-            MissileNameColor = config.Bind(hud, "MissileNameColor", "1,0,1,1", "Missile name label RGBA.");
-            TargetNameColor = config.Bind(hud, "TargetNameColor", "0.4,0.9,1,1", "Target name label RGBA.");
-            LabelBackgroundColor = config.Bind(hud, "LabelBackgroundColor", "0.18,0.18,0.18,0.62", "Label backdrop RGBA.");
-            LabelBackgroundAlpha = config.Bind(hud, "LabelBackgroundAlpha", 0.62f,
-                new ConfigDescription("Label backdrop alpha override.", new AcceptableValueRange<float>(0f, 1f)));
+            HudEnabled = config.Bind(hud, "Enabled", true,
+                "Turns the MFD HUD overlay (corners / FLIR chrome) on/off.");
+            ShowCenterCluster = config.Bind(hud, "ShowCenterCluster", true,
+                "Shows MFD center reticle and hollow intercept ring at aim point.");
+            ShowTargetMarker = config.Bind(hud, "ShowTargetMarker", true,
+                "Shows MFD target diamond marker.");
+            HudCockpitPipEnabled = config.Bind(hud, "CockpitPipEnabled", true,
+                "Shows MFD bottom-left cockpit picture-in-picture.");
 
             const string controls = "MissileCameraControls";
-            const string keyHint = "Unity KeyCode name (e.g. RightAlt, Slash, None).";
-            ControlsEnabled = config.Bind(controls, "Enabled", true, "Keyboard missile cycling and zoom.");
-            ModifierKey = config.Bind(controls, "ModifierKey", "RightAlt",
-                "Hold this key with cycle/zoom actions. Use None for no modifier.");
-            NextMissileKey = config.Bind(controls, "NextMissileKey", "Slash",
-                "Select next owned in-flight missile (with ModifierKey). " + keyHint);
-            PreviousMissileKey = config.Bind(controls, "PreviousMissileKey", "Comma",
-                "Select previous owned in-flight missile (with ModifierKey). " + keyHint);
-            ZoomInKey = config.Bind(controls, "ZoomInKey", "Semicolon",
-                "Zoom in (with ModifierKey). " + keyHint);
-            ZoomOutKey = config.Bind(controls, "ZoomOutKey", "Period",
-                "Zoom out (with ModifierKey). " + keyHint);
-            ResetZoomModifierKey = config.Bind(controls, "ResetZoomModifierKey", "RightShift",
-                "Hold this with ResetZoomKey. Use None for no modifier.");
-            ResetZoomKey = config.Bind(controls, "ResetZoomKey", "Period",
-                "Reset zoom offset to 0. " + keyHint);
-            ZoomStep = config.Bind(controls, "ZoomStep", 0.5f,
-                new ConfigDescription("Zoom offset change per key press.", new AcceptableValueRange<float>(0.05f, 4f)));
-            ZoomMin = config.Bind(controls, "ZoomMin", -4f,
-                new ConfigDescription("Minimum zoom offset.", new AcceptableValueRange<float>(-20f, 0f)));
-            ZoomMax = config.Bind(controls, "ZoomMax", 4f,
-                new ConfigDescription("Maximum zoom offset.", new AcceptableValueRange<float>(0f, 20f)));
-            ZoomFovDegreesPerUnit = config.Bind(controls, "ZoomFovDegreesPerUnit", 5f,
-                new ConfigDescription("FOV delta (degrees) per zoom offset unit.", new AcceptableValueRange<float>(0.5f, 30f)));
-            IndicatorSeconds = config.Bind(controls, "IndicatorSeconds", 0.5f,
-                new ConfigDescription("Zoom HUD readout duration (seconds).", new AcceptableValueRange<float>(0.1f, 3f)));
+            ControlsEnabled = config.Bind(controls, "Enabled", true,
+                "Turns keyboard missile cycling and MFD zoom on/off.");
+            ControlsNextMissile = config.Bind(controls, "NextMissile",
+                MissileCameraKeybindConfig.DefaultNextMissile,
+                "Keybind: next owned in-flight missile (MFD or fullscreen). Default: RightAlt + /");
+            ControlsPreviousMissile = config.Bind(controls, "PreviousMissile",
+                MissileCameraKeybindConfig.DefaultPreviousMissile,
+                "Keybind: previous owned in-flight missile. Default: RightAlt + ,");
+            ControlsZoomIn = config.Bind(controls, "ZoomIn",
+                MissileCameraKeybindConfig.DefaultMfdZoomIn,
+                "Keybind: MFD seeker zoom in (narrower FOV). Default: RightAlt + ;");
+            ControlsZoomOut = config.Bind(controls, "ZoomOut",
+                MissileCameraKeybindConfig.DefaultMfdZoomOut,
+                "Keybind: MFD seeker zoom out (wider FOV). Default: RightAlt + .");
+            ControlsResetZoom = config.Bind(controls, "ResetZoom",
+                MissileCameraKeybindConfig.DefaultMfdZoomReset,
+                "Keybind: reset MFD zoom offset to 0. Default: RightShift + .");
+
+            const string fullscreen = "MissileCameraFullscreen";
+            FullscreenEnabled = config.Bind(fullscreen, "Enabled", true,
+                "Turns fullscreen missile feed (whole viewport) on/off.");
+            FullscreenToggle = config.Bind(fullscreen, "Toggle",
+                MissileCameraKeybindConfig.DefaultFullscreenToggle,
+                "Keybind: enter/exit fullscreen missile camera. Default: K");
+            FullscreenVisionCycle = config.Bind(fullscreen, "VisionCycle",
+                MissileCameraKeybindConfig.DefaultVisionCycle,
+                "Keybind: cycle Color / NVG / WhiteHot / BlackHot / Contour. Default: J");
+            FullscreenZoomResetKey = config.Bind(fullscreen, "ZoomResetKey",
+                MissileCameraKeybindConfig.DefaultFullscreenZoomReset,
+                "Keybind: reset fullscreen optical zoom to 1x. Default: Middle Mouse");
+            FullscreenFeedWidth = config.Bind(fullscreen, "FeedWidth", 1920,
+                new ConfigDescription(
+                    "Fullscreen feed render texture width (independent of MFD).",
+                    new AcceptableValueRange<int>(640, 3840)));
+            FullscreenFeedHeight = config.Bind(fullscreen, "FeedHeight", 1080,
+                new ConfigDescription(
+                    "Fullscreen feed render texture height (independent of MFD).",
+                    new AcceptableValueRange<int>(360, 2160)));
+            FullscreenZoomMax = config.Bind(fullscreen, "ZoomMax", 50f,
+                new ConfigDescription("Max fullscreen optical magnification (mouse wheel).", new AcceptableValueRange<float>(2f, 50f)));
+            FullscreenZoomResetOnExit = config.Bind(fullscreen, "ZoomResetOnExit", true,
+                "Reset magnification to 1x when leaving fullscreen.");
+            FullscreenPitchLadderEnabled = config.Bind(fullscreen, "PitchLadderEnabled", true,
+                "Shows stock FlightHud pitch ladder on fullscreen FLIR.");
+
+            const string fx = "MissileCameraEffects";
+            FxScanlinesEnabled = config.Bind(fx, "ScanlinesEnabled", false,
+                "MFD post-FX: scanlines (needs shader bundle).");
+            FxMotionBlurEnabled = config.Bind(fx, "MotionBlurEnabled", false,
+                "MFD post-FX: motion blur (needs shader bundle).");
+            FxChromaticEnabled = config.Bind(fx, "ChromaticEnabled", false,
+                "MFD post-FX: chromatic aberration (needs shader bundle).");
+            FxBloomEnabled = config.Bind(fx, "BloomEnabled", false,
+                "MFD post-FX: bloom (needs shader bundle).");
+
+            const string aircraftCam = "MissileCameraAircraftCam";
+            AircraftCamEnabled = config.Bind(aircraftCam, "Enabled", false,
+                "Turns aircraft mini-cam overlay on/off (no-op when DisplayMode=skip).");
+            AircraftCamMode = config.Bind(aircraftCam, "Mode", "Rear",
+                new ConfigDescription("Mini-cam view: Rear / TopDown / Chase.", new AcceptableValueList<string>("Rear", "TopDown", "Chase")));
+            AircraftCamHideInFullscreen = config.Bind(aircraftCam, "HideInFullscreen", false,
+                "Hide mini-cam while fullscreen missile feed is active.");
+            AircraftCamCycle = config.Bind(aircraftCam, "CycleMode",
+                MissileCameraKeybindConfig.DefaultAircraftCamCycle,
+                "Keybind: cycle mini-cam mode. Default: RightAlt + V");
 
             IsBound = true;
         }

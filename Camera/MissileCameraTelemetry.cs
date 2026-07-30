@@ -62,6 +62,45 @@ namespace MissileCamera
             return "---";
         }
 
+        internal static string FormatTgpRng(Missile missile) =>
+            "RNG " + FormatRange(missile);
+
+        internal static string FormatTgpAlt(float altitudeMeters) =>
+            "ALT " + UnitConverter.AltitudeReading(altitudeMeters);
+
+        internal static string FormatTgpSpd(float speedMs) =>
+            "SPD " + UnitConverter.SpeedReading(speedMs);
+
+        internal static string FormatTgpHdg(float headingDeg) =>
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, "HDG {0:F0}°", headingDeg);
+
+        internal static string FormatTgpRel(float relAltMeters) =>
+            "REL " + UnitConverter.AltitudeReading(relAltMeters);
+
+        internal static string FormatTgpClos(float closingMs)
+        {
+            // Guard absurd LOS closing projections (m/s).
+            if (closingMs < 0.5f || closingMs > 2500f || float.IsNaN(closingMs) || float.IsInfinity(closingMs))
+                return "CLOS ---";
+
+            return "CLOS " + UnitConverter.SpeedReading(closingMs);
+        }
+
+        internal static string FormatTgpMag(float magnification) =>
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, "MAG x{0:F1}", magnification);
+
+        internal static string FormatTgpRid(string rid) =>
+            "RID: " + (string.IsNullOrEmpty(rid) ? "---" : rid);
+
+        internal static string FormatTgpMode(bool infraredActive) =>
+            infraredActive ? "MODE: AUTO IR" : "MODE: COLOR";
+
+        internal static string FormatTgpPalette(bool infraredActive) =>
+            infraredActive ? "PALETTE: WhiteHot" : "PALETTE: ---";
+
+        internal static string FormatTgpTti(float ttiSec) =>
+            string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:F1}s to Impact", ttiSec);
+
         private static string FormatLegacyLine(Missile missile) =>
             $"{FormatLabeledRow("A", FormatAltitude(missile))} / {FormatLabeledRow("R", FormatRange(missile))} / {FormatLabeledRow("S", FormatSpeed(missile))}";
     }

@@ -36,6 +36,12 @@ namespace MissileCamera
             return _whiteSprite;
         }
 
+        internal static void Reset()
+        {
+            _whiteSprite = null;
+            TextWidthCache.Clear();
+        }
+
         internal static Image CreateBackdrop(Transform parent, string name)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(Image));

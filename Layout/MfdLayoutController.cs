@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -32,6 +32,11 @@ namespace MissileCamera
         private static float _cachedHudLeftInsetExtra = 0.02f;
         private static MissileCameraTelemetryLayout _cachedTelemetryLayout = MissileCameraTelemetryLayout.BottomRow;
         private static float _lastDarkreachPortraitLogTime = -999f;
+        private static bool _cleanupBusy;
+        private static int _cleanupFrame = -1;
+        private static int _layoutGeneration;
+
+        internal static bool IsLayoutActive => _layoutActive;
 
         internal static float ActiveStubContentRotationZ => _cachedStubContentRotationZ;
 
@@ -53,7 +58,14 @@ namespace MissileCamera
 
         internal static void OnSetupCamera(TargetScreenUI screenUi, TargetCam targetCam)
         {
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
             Bootstrap();
+
+            if (_layoutActive && _activeTargetCam != null && _activeTargetCam != targetCam)
+                HardResetForAircraftChange();
+
             _activeScreenUi = screenUi;
             _activeTargetCam = targetCam;
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
@@ -65,6 +77,9 @@ namespace MissileCamera
 
         internal static void OnTacCamToggle(TargetCam targetCam)
         {
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
             Bootstrap();
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
                 return;
@@ -75,6 +90,9 @@ namespace MissileCamera
 
         internal static void OnTacScreenReady(TacScreen tacScreen, TargetCam targetCam)
         {
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
             Bootstrap();
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
                 return;
@@ -87,6 +105,10 @@ namespace MissileCamera
         internal static void OnTargetCamDisabled(TargetCam? targetCam)
         {
             if (targetCam != null && _activeTargetCam != null && _activeTargetCam != targetCam)
+                return;
+
+            // Tac cam toggles / FS yield disable TargetCam while missiles still fly — keep MC overlay.
+            if (ShouldRetainLayoutForMissileFeed())
                 return;
 
             ClearLayout("target_cam_disabled");
@@ -114,16 +136,97 @@ namespace MissileCamera
             ClearLayout("missile_feed_ended");
         }
 
+        internal static void ResetForMissionUnload() => HardResetForMissionUnload();
+
+        internal static void HardResetForMissionUnload()
+        {
+            try { MfdLayoutRetryHost.Cancel(); }
+            catch { /* ignore */ }
+
+            _cleanupBusy = false;
+
+            try { DestroyTacOverlay(); }
+            catch { /* ignore */ }
+
+            try { ClearLayout("mission_hard_reset"); }
+            catch
+            {
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
+            }
+
+            // Force dead session flags even if ClearLayout threw.
+            _layoutActive = false;
+            _activeTargetCam = null;
+            _activeScreenUi = null;
+            _activeTacScreen = null;
+            _appliedConfigRevision = -1;
+            _cachedOverlayZone = null;
+            _cachedOverlayRevision = -1;
+            _cleanupBusy = false;
+            _layoutGeneration++;
+        }
+
+        /// <summary>Same-mission aircraft swap: restore hide + drop TacStub without killing Host session.</summary>
+        internal static void HardResetForAircraftChange()
+        {
+            try { MfdLayoutRetryHost.Cancel(); }
+            catch { /* ignore */ }
+
+            _cleanupBusy = false;
+
+            try { DestroyTacOverlay(); }
+            catch { /* ignore */ }
+
+            try { ClearLayout("aircraft_changed"); }
+            catch
+            {
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
+            }
+
+            _layoutActive = false;
+            _activeTargetCam = null;
+            _activeScreenUi = null;
+            _activeTacScreen = null;
+            _appliedConfigRevision = -1;
+            _cachedOverlayZone = null;
+            _cachedOverlayRevision = -1;
+            _cleanupBusy = false;
+            _layoutGeneration++;
+            MfdLog.Info("layout hard reset reason=aircraft_changed");
+        }
+
         internal static void EnsureLayoutForMissileFeed()
         {
+            if (!MissileCameraHost.IsSessionActive)
+            {
+                MissileCameraMissionLifecycleDiag.WarnThrottled(
+                    "ensure_gated",
+                    "EnsureLayout gated off (session inactive)");
+                return;
+            }
+
             if (!MfdLayoutConfig.Enabled)
                 return;
 
             if (_layoutActive)
             {
-                if (_tacOverlayRoot != null && !_tacOverlayRoot.activeSelf)
-                    _tacOverlayRoot.SetActive(true);
-                return;
+                if (_tacOverlayRoot == null)
+                {
+                    ClearLayout("overlay_destroyed");
+                }
+                else
+                {
+                    if (!_tacOverlayRoot.activeSelf)
+                        _tacOverlayRoot.SetActive(true);
+
+                    // Re-bind feed/HUD if FS/disable tore down RawImage/corners while flags stayed active.
+                    Transform? panel = _tacOverlayRoot.transform.Find("MissileCameraPanel");
+                    if (panel != null && panel.TryGetComponent(out RectTransform panelRt))
+                        MissileCameraFeedController.NotifyOverlayReady(panelRt);
+                    return;
+                }
             }
 
             if (!GameManager.GetLocalAircraft(out Aircraft aircraft))
@@ -139,10 +242,13 @@ namespace MissileCamera
         }
 
         private static bool ShouldRetainLayoutForMissileFeed() =>
-            MissileCameraFeedController.HasTrackableOwnedMissile();
+            MissileCameraFeedController.ShouldRetainLayoutForMissileFeed();
 
-        internal static void TryApplyLayoutFromRetry(TargetCam targetCam)
+        internal static void TryApplyLayoutFromRetry(TargetCam targetCam, int generation)
         {
+            if (generation != _layoutGeneration)
+                return;
+
             if (_layoutActive)
             {
                 MfdLayoutRetryHost.Cancel();
@@ -160,8 +266,13 @@ namespace MissileCamera
 
         internal static void OnSetLandingCam(TargetCam targetCam)
         {
-            if (_activeTargetCam == targetCam)
-                ClearLayout("landing_cam");
+            if (_activeTargetCam != targetCam)
+                return;
+
+            if (ShouldRetainLayoutForMissileFeed())
+                return;
+
+            ClearLayout("landing_cam");
         }
 
         internal static void OnCancelTarget(TargetCam targetCam)
@@ -180,6 +291,14 @@ namespace MissileCamera
             if (_activeTargetCam != targetCam && _activeTargetCam != null)
                 return;
 
+            // TargetCam can recycle while missiles still need the feed — keep overlay if alive.
+            if (ShouldRetainLayoutForMissileFeed() && _tacOverlayRoot != null)
+            {
+                _activeTargetCam = null;
+                _activeScreenUi = null;
+                return;
+            }
+
             DestroyTacOverlay();
             ClearLayout("target_cam_destroy");
         }
@@ -191,19 +310,30 @@ namespace MissileCamera
 
         private static void TryApplyLayout(TargetCam targetCam, TargetScreenUI? screenUi)
         {
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
                 return;
 
-            if (!MfdLayoutConfig.Enabled || TargetCamAccess.IsLandingMode(targetCam))
+            if (!MfdLayoutConfig.Enabled)
             {
                 if (_activeTargetCam == targetCam)
                     ClearLayout("disabled_or_landing");
                 return;
             }
 
-            screenUi ??= TargetCamAccess.GetTargetScreenUi(targetCam);
-            if (screenUi == null)
+            if (TargetCamAccess.IsLandingMode(targetCam))
+            {
+                if (ShouldRetainLayoutForMissileFeed())
+                    return;
+
+                if (_activeTargetCam == targetCam)
+                    ClearLayout("disabled_or_landing");
                 return;
+            }
+
+            screenUi ??= TargetCamAccess.GetTargetScreenUi(targetCam) ?? _activeScreenUi;
 
             MfdLayoutConfig.Refresh();
             int revision = MfdLayoutConfig.Revision;
@@ -245,34 +375,64 @@ namespace MissileCamera
 
             if (!MfdWeaponsZoneAccess.CanDiscoverWeaponsPanel(tacScreen, jsonKey))
             {
-                LogNoOpThrottled("weapons panel not found — no-op");
+                LogNoOpThrottled("weapons panel not found тАФ no-op");
                 return;
             }
 
             WeaponsReplacementResult replacement = MfdWeaponsZoneAccess.PrepareReplacement(tacScreen, jsonKey);
             if (!replacement.Success)
             {
-                LogNoOpThrottled("weapons panel not found — no-op");
+                LogNoOpThrottled("weapons panel not found тАФ no-op");
                 return;
             }
 
             MissileCameraZone zone = replacement.Zone;
             Canvas overlayCanvas = replacement.OverlayCanvas!;
-            bool stubCreated = EnsureTacOverlay(
-                overlayCanvas,
-                replacement.OverlayParent,
-                screenUi,
-                zone,
-                replacement.SuppressBottomDivider,
-                replacement.ShowPanelBorder,
-                replacement.SuppressBottomBorder,
-                replacement.OverlayRotationZ,
-                replacement.StubContentRotationZ,
-                replacement.StubFontRef,
-                replacement.StubContentBand,
-                replacement.StubForcePortraitLayout,
-                replacement.HudLeftInsetExtra,
-                replacement.TelemetryLayout);
+            bool stubCreated;
+            try
+            {
+                MissileCameraMissionLifecycleDiag.Info("TryApplyLayout stage=hide_ok jsonKey=" + (jsonKey ?? "?"));
+                stubCreated = EnsureTacOverlay(
+                    overlayCanvas,
+                    replacement.OverlayParent,
+                    screenUi,
+                    zone,
+                    replacement.SuppressBottomDivider,
+                    replacement.ShowPanelBorder,
+                    replacement.SuppressBottomBorder,
+                    replacement.OverlayRotationZ,
+                    replacement.StubContentRotationZ,
+                    replacement.StubFontRef,
+                    replacement.StubContentBand,
+                    replacement.StubForcePortraitLayout,
+                    replacement.HudLeftInsetExtra,
+                    replacement.TelemetryLayout);
+
+                // Feed must be live — HUD chrome is optional (EnsureBuilt may soft-fail).
+                if (!MissileCameraFeedController.IsOverlayActiveForDiag)
+                {
+                    MissileCameraMissionLifecycleDiag.Warn(
+                        "TryApplyLayout stage=bind_missing — Restore weapons + destroy stub");
+                    try { DestroyTacOverlay(); }
+                    catch { /* ignore */ }
+                    try { MfdWeaponsZoneAccess.Restore(); }
+                    catch { /* ignore */ }
+                    return;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "TryApplyLayout failed: " + ex.GetType().Name + ": " + ex.Message);
+                try { DestroyTacOverlay(); }
+                catch { /* ignore */ }
+                try { MissileCameraFeedController.NotifyOverlayGone(); }
+                catch { /* ignore */ }
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
+                _layoutActive = false;
+                return;
+            }
 
             _activeTargetCam = targetCam;
             _activeScreenUi = screenUi;
@@ -282,13 +442,16 @@ namespace MissileCamera
             MfdLayoutRetryHost.Cancel();
 
             MfdLog.Info(
-                $"weapons→missilecam profile={profile} jsonKey={MfdDisplayMode.GetAircraftJsonKey(targetCam)} " +
+                $"weaponsтЖТmissilecam profile={profile} jsonKey={MfdDisplayMode.GetAircraftJsonKey(targetCam)} " +
                 $"stub={stubCreated} zone={zone.MinX:F2}-{zone.MaxX:F2} y={zone.MinY:F2}-{zone.MaxY:F2}");
+            MissileCameraMissionLifecycleDiag.Info(
+                "TryApplyLayout stage=commit_ok stub=" + stubCreated
+                + " zone=" + zone.MinX.ToString("F2") + "-" + zone.MaxX.ToString("F2"));
         }
 
         private static void TryApplyCricketEngineLayout(
             TargetCam targetCam,
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             TacScreen tacScreen,
             int revision)
         {
@@ -300,34 +463,61 @@ namespace MissileCamera
             if (!MfdWeaponsZoneAccess.CanDiscoverCricketEnginePanel(tacScreen, jsonKey))
             {
                 MfdWeaponsZoneAccess.LogCricketDiscoveryFailure(tacScreen);
-                LogNoOpThrottled("cricket engine MFD not found — no-op");
+                LogNoOpThrottled("cricket engine MFD not found тАФ no-op");
                 return;
             }
 
             WeaponsReplacementResult replacement = MfdWeaponsZoneAccess.PrepareCricketEngineReplacement(tacScreen, jsonKey);
             if (!replacement.Success)
             {
-                LogNoOpThrottled("cricket engine MFD not found — no-op");
+                LogNoOpThrottled("cricket engine MFD not found тАФ no-op");
                 return;
             }
 
             MissileCameraZone zone = replacement.Zone;
             Canvas overlayCanvas = replacement.OverlayCanvas!;
-            bool stubCreated = EnsureTacOverlay(
-                overlayCanvas,
-                replacement.OverlayParent,
-                screenUi,
-                zone,
-                replacement.SuppressBottomDivider,
-                replacement.ShowPanelBorder,
-                replacement.SuppressBottomBorder,
-                replacement.OverlayRotationZ,
-                replacement.StubContentRotationZ,
-                replacement.StubFontRef,
-                replacement.StubContentBand,
-                replacement.StubForcePortraitLayout,
-                replacement.HudLeftInsetExtra,
-                replacement.TelemetryLayout);
+            bool stubCreated;
+            try
+            {
+                stubCreated = EnsureTacOverlay(
+                    overlayCanvas,
+                    replacement.OverlayParent,
+                    screenUi,
+                    zone,
+                    replacement.SuppressBottomDivider,
+                    replacement.ShowPanelBorder,
+                    replacement.SuppressBottomBorder,
+                    replacement.OverlayRotationZ,
+                    replacement.StubContentRotationZ,
+                    replacement.StubFontRef,
+                    replacement.StubContentBand,
+                    replacement.StubForcePortraitLayout,
+                    replacement.HudLeftInsetExtra,
+                    replacement.TelemetryLayout);
+
+                if (!MissileCameraFeedController.IsOverlayActiveForDiag)
+                {
+                    MissileCameraMissionLifecycleDiag.Warn("Cricket apply bind_missing — Restore");
+                    try { DestroyTacOverlay(); }
+                    catch { /* ignore */ }
+                    try { MfdWeaponsZoneAccess.Restore(); }
+                    catch { /* ignore */ }
+                    return;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "Cricket TryApply failed: " + ex.GetType().Name + ": " + ex.Message);
+                try { DestroyTacOverlay(); }
+                catch { /* ignore */ }
+                try { MissileCameraFeedController.NotifyOverlayGone(); }
+                catch { /* ignore */ }
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
+                _layoutActive = false;
+                return;
+            }
 
             _activeTargetCam = targetCam;
             _activeScreenUi = screenUi;
@@ -337,14 +527,14 @@ namespace MissileCamera
             MfdLayoutRetryHost.Cancel();
 
             MfdLog.Info(
-                $"cricket→missilecam jsonKey={jsonKey} stub={stubCreated} " +
+                $"cricketтЖТmissilecam jsonKey={jsonKey} stub={stubCreated} " +
                 $"zone={zone.MinX:F2}-{zone.MaxX:F2} y={zone.MinY:F2}-{zone.MaxY:F2}");
         }
 
         private static bool EnsureTacOverlay(
             Canvas parentCanvas,
             RectTransform? overlayParent,
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             MissileCameraZone zone,
             bool suppressBottomDivider,
             bool showPanelBorder,
@@ -609,7 +799,7 @@ namespace MissileCamera
 
         private static void ApplyScaledStubLayout(
             RectTransform panelRt,
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             bool forceCanvasUpdate,
             float stubContentRotationZ = 0f,
             float stubFontRef = 0f,
@@ -715,7 +905,7 @@ namespace MissileCamera
             MissileCameraFeedLayout.Apply(layoutRt, usePortraitLayout, stubContentRotationZ);
         }
 
-        private static void ApplyStubText(Text target, TargetScreenUI screenUi, bool header = false)
+        private static void ApplyStubText(Text target, TargetScreenUI? screenUi, bool header = false)
         {
             TargetScreenUiStyle.ApplyLabel(target, screenUi, header);
             target.color = TargetScreenUiStyle.GetStubLabelColor(screenUi);
@@ -725,7 +915,7 @@ namespace MissileCamera
         }
 
         private static void UpdateTacOverlayLayout(
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             MissileCameraZone zone,
             bool suppressBottomDivider,
             bool showPanelBorder,
@@ -859,7 +1049,7 @@ namespace MissileCamera
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
                 return;
 
-            MfdLayoutRetryHost.Schedule(targetCam);
+            MfdLayoutRetryHost.Schedule(targetCam, ++_layoutGeneration);
         }
 
         private static void ApplyZoneRect(RectTransform panelRt, MissileCameraZone zone)
@@ -870,7 +1060,7 @@ namespace MissileCamera
             panelRt.offsetMax = zone.OffsetMax;
         }
 
-        private static void CreateDivider(RectTransform parent, TargetScreenUI screenUi, float y, float xMin, float xMax)
+        private static void CreateDivider(RectTransform parent, TargetScreenUI? screenUi, float y, float xMin, float xMax)
         {
             var go = new GameObject("WeaponsBottomDivider", typeof(RectTransform), typeof(Image));
             go.transform.SetParent(parent, false);
@@ -891,7 +1081,7 @@ namespace MissileCamera
 
         private static void EnsurePanelBorder(
             RectTransform overlayRoot,
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             MissileCameraZone zone,
             bool suppressBottomBorder)
         {
@@ -1016,42 +1206,104 @@ namespace MissileCamera
 
         private static void ClearLayout(string reason)
         {
-            bool wasActive = _layoutActive;
-            MfdLayoutRetryHost.Cancel();
-            MissileCameraFeedController.NotifyOverlayGone();
-            MfdWeaponsZoneAccess.Restore();
+            // Hard reset must never no-op Restore because same-frame cleanup lock was set.
+            if (string.Equals(reason, "mission_hard_reset", System.StringComparison.Ordinal))
+                _cleanupBusy = false;
 
-            if (_tacOverlayRoot != null)
-                _tacOverlayRoot.SetActive(false);
+            if (!TryBeginCleanup())
+            {
+                // Same-frame cleanup lock: still drop sticky flags so next sortie can EnsureLayout.
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
 
-            _layoutActive = false;
-            _activeTargetCam = null;
-            _activeScreenUi = null;
-            _activeTacScreen = null;
-            _appliedConfigRevision = -1;
-            _cachedOverlayZone = null;
-            _cachedOverlayRevision = -1;
-            _cachedSuppressBottomBorder = false;
-            _cachedOverlayRotationZ = 0f;
-            _cachedStubContentRotationZ = 0f;
-            _cachedStubFontRef = 0f;
-            _cachedStubContentBand = Vector2.up;
-            _cachedHudLeftInsetExtra = 0.02f;
-            _cachedTelemetryLayout = MissileCameraTelemetryLayout.BottomRow;
+                try { MissileCameraFeedController.NotifyOverlayGone(); }
+                catch { /* ignore */ }
 
-            if (wasActive)
-                MfdLog.Info("layout cleared reason=" + reason);
+                _layoutActive = false;
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "ClearLayout busy-skip reason=" + reason + " forced layout/overlay down");
+                return;
+            }
+
+            try
+            {
+                bool wasActive = _layoutActive;
+                MfdLayoutRetryHost.Cancel();
+                MissileCameraFeedController.NotifyOverlayGone();
+                MfdWeaponsZoneAccess.Restore();
+
+                if (_tacOverlayRoot != null)
+                    _tacOverlayRoot.SetActive(false);
+
+                _layoutActive = false;
+                _activeTargetCam = null;
+                _activeScreenUi = null;
+                _activeTacScreen = null;
+                _appliedConfigRevision = -1;
+                _cachedOverlayZone = null;
+                _cachedOverlayRevision = -1;
+                _cachedSuppressBottomBorder = false;
+                _cachedOverlayRotationZ = 0f;
+                _cachedStubContentRotationZ = 0f;
+                _cachedStubFontRef = 0f;
+                _cachedStubContentBand = Vector2.up;
+                _cachedHudLeftInsetExtra = 0.02f;
+                _cachedTelemetryLayout = MissileCameraTelemetryLayout.BottomRow;
+                _layoutGeneration++;
+
+                if (wasActive)
+                {
+                    MfdLog.Info("layout cleared reason=" + reason);
+                    MissileCameraMissionLifecycleDiag.Info("ClearLayout ok reason=" + reason);
+                }
+            }
+            finally
+            {
+                EndCleanup();
+            }
         }
 
         private static void DestroyTacOverlay()
         {
-            if (_tacOverlayRoot != null)
+            GameObject? go = null;
+            try
             {
-                MissileCameraFeedController.NotifyOverlayGone();
-                Object.Destroy(_tacOverlayRoot);
-                _tacOverlayRoot = null;
-                _stubLabel = null;
+                if (_tacOverlayRoot != null)
+                    go = _tacOverlayRoot.gameObject;
             }
+            catch
+            {
+                // destroyed RectTransform
+            }
+
+            // Drop refs first so a throw in NotifyOverlayGone cannot leave sticky overlay pointers.
+            _tacOverlayRoot = null;
+            _stubLabel = null;
+
+            try { MissileCameraFeedController.NotifyOverlayGone(); }
+            catch { /* ignore */ }
+
+            if (go != null)
+            {
+                try { Object.Destroy(go); }
+                catch { /* ignore */ }
+            }
+        }
+
+        private static bool TryBeginCleanup()
+        {
+            int frame = Time.frameCount;
+            if (_cleanupBusy && _cleanupFrame == frame)
+                return false;
+
+            _cleanupBusy = true;
+            _cleanupFrame = frame;
+            return true;
+        }
+
+        private static void EndCleanup()
+        {
+            _cleanupBusy = false;
         }
     }
 }

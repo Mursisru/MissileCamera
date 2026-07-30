@@ -7,10 +7,11 @@ namespace MissileCamera
     {
         private const float ReferencePanelHeight = 150f;
 
-        internal static void ApplyLabel(Text target, TargetScreenUI screenUi, bool header = false)
+        internal static void ApplyLabel(Text target, TargetScreenUI? screenUi, bool header = false)
         {
-            Text? reference = TargetScreenUiAccess.GetModeText(screenUi)
-                ?? TargetScreenUiAccess.GetMagText(screenUi);
+            Text? reference = screenUi != null
+                ? TargetScreenUiAccess.GetModeText(screenUi) ?? TargetScreenUiAccess.GetMagText(screenUi)
+                : null;
 
             if (reference != null)
             {
@@ -25,9 +26,9 @@ namespace MissileCamera
             target.color = new Color(0.85f, 0.95f, 0.85f, 1f);
         }
 
-        internal static Color GetDividerColor(TargetScreenUI screenUi)
+        internal static Color GetDividerColor(TargetScreenUI? screenUi)
         {
-            Text? reference = TargetScreenUiAccess.GetModeText(screenUi);
+            Text? reference = screenUi != null ? TargetScreenUiAccess.GetModeText(screenUi) : null;
             if (reference != null)
             {
                 Color c = reference.color;
@@ -38,14 +39,14 @@ namespace MissileCamera
             return new Color(0.45f, 0.75f, 0.45f, 0.55f);
         }
 
-        internal static Color GetPanelBorderColor(TargetScreenUI screenUi)
+        internal static Color GetPanelBorderColor(TargetScreenUI? screenUi)
         {
             Color c = GetDividerColor(screenUi);
             c.a = 1f;
             return c;
         }
 
-        internal static Color GetStubPanelColor(TargetScreenUI screenUi)
+        internal static Color GetStubPanelColor(TargetScreenUI? screenUi)
         {
             if (MfdLayoutConfig.DebugStub)
                 return new Color(1f, 0f, 1f, 0.85f);
@@ -53,9 +54,9 @@ namespace MissileCamera
             return new Color(0.05f, 0.08f, 0.14f, 1f);
         }
 
-        internal static Color GetStubLabelColor(TargetScreenUI screenUi)
+        internal static Color GetStubLabelColor(TargetScreenUI? screenUi)
         {
-            Text? reference = TargetScreenUiAccess.GetModeText(screenUi);
+            Text? reference = screenUi != null ? TargetScreenUiAccess.GetModeText(screenUi) : null;
             if (reference != null)
                 return reference.color;
 
@@ -64,13 +65,14 @@ namespace MissileCamera
 
         internal static void ApplyScaledStubText(
             Text target,
-            TargetScreenUI screenUi,
+            TargetScreenUI? screenUi,
             float panelWidth,
             float panelHeight,
             StubTextRole role)
         {
-            Text? reference = TargetScreenUiAccess.GetModeText(screenUi)
-                ?? TargetScreenUiAccess.GetMagText(screenUi);
+            Text? reference = screenUi != null
+                ? TargetScreenUiAccess.GetModeText(screenUi) ?? TargetScreenUiAccess.GetMagText(screenUi)
+                : null;
 
             target.font = reference?.font ?? HudFontHelper.GetFont();
             target.color = GetStubLabelColor(screenUi);
