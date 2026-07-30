@@ -1093,6 +1093,7 @@ namespace MissileCamera
                 {
                     TryUnbindAircraft();
                     OwnedActive.Clear();
+                    _followedMissile = null;
                     MfdLayoutController.HardResetForAircraftChange();
                 }
 
@@ -1102,16 +1103,25 @@ namespace MissileCamera
             if (_subscribedAircraft == aircraft)
                 return;
 
+            Aircraft? previous = _subscribedAircraft;
             TryUnbindAircraft();
-            OwnedActive.Clear();
-            _followedMissile = null;
-            MfdLayoutController.HardResetForAircraftChange();
+
+            // First bind after mission start is not a swap — do not wipe layout/missiles.
+            if (previous != null)
+            {
+                OwnedActive.Clear();
+                _followedMissile = null;
+                MfdLayoutController.HardResetForAircraftChange();
+            }
 
             _subscribedAircraft = aircraft;
             _subscribedAircraft.onRegisterMissile += OnRegisterMissile;
             _subscribedAircraft.onDeregisterMissile += OnDeregisterMissile;
             _nextReconcileTimeUnscaled = 0f;
             ReconcileOwnedMissiles(aircraft, force: true);
+
+            if (previous != null && HasTrackableOwnedMissile())
+                MfdLayoutController.EnsureLayoutForMissileFeed();
         }
 
         private static void TryUnbindAircraft()

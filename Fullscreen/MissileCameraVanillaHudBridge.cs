@@ -138,13 +138,15 @@ namespace MissileCamera
                 RestoreCombatHudCanvas();
                 RestoreHiddenChrome();
                 RestoreFlightHudVisuals();
+                ForceCombatHudMarkerPass();
             }
             catch (Exception ex)
             {
                 MfdLog.Info("fullscreen unload chrome restore failed: " + ex.Message);
             }
 
-            MissileCameraFullscreenTargetLock.AbandonSession();
+            // Restore marker selections when HUD still exists; never bare-Abandon mid-scene.
+            MissileCameraFullscreenTargetLock.ResetForMissionUnload();
             _hiddenChrome.Clear();
             _combatCanvas = null;
             _canvasElevated = false;

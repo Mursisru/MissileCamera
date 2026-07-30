@@ -68,23 +68,28 @@ namespace MissileCamera
         {
             string label = string.IsNullOrEmpty(scene.path) ? scene.name : scene.path;
 
-            // Invalidate any in-flight DeferredMissionStartup from a prior load.
-            _startupEpoch++;
-            _startupScheduled = false;
-
-            // ALWAYS wipe on every scene load — menu, mission, additive, re-entry.
-            HardResetAll("scene_loaded:" + label);
-
             if (IsMenuOrSystemScene(scene.path))
+            {
+                _startupEpoch++;
+                _startupScheduled = false;
+                HardResetAll("scene_loaded:" + label);
+                return;
+            }
+
+            // Only GameWorld counts as a mission load. Ignore additive/UI scenes mid-sortie
+            // (those were wiping MC overlay + marker lock while the player was still flying).
+            if (!IsGameWorldScene(scene))
                 return;
 
+            _startupEpoch++;
+            _startupScheduled = false;
+            HardResetAll("scene_loaded:" + label);
             ScheduleMissionStartup(scene.path);
         }
 
         private void OnSceneUnloaded(Scene scene)
         {
-            if (scene.path.IndexOf("GameWorld", StringComparison.OrdinalIgnoreCase) < 0
-                && !string.Equals(scene.name, "GameWorld", StringComparison.OrdinalIgnoreCase))
+            if (!IsGameWorldScene(scene))
                 return;
 
             HardResetAll("scene_unloaded_gameworld");
@@ -297,6 +302,14 @@ namespace MissileCamera
                 || path.IndexOf("Encyclopedia", StringComparison.OrdinalIgnoreCase) >= 0
                 || path.IndexOf("MissionEditor", StringComparison.OrdinalIgnoreCase) >= 0
                 || path.IndexOf("empty", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static bool IsGameWorldScene(Scene scene)
+        {
+            if (scene.path.IndexOf("GameWorld", StringComparison.OrdinalIgnoreCase) >= 0)
+                return true;
+
+            return string.Equals(scene.name, "GameWorld", StringComparison.OrdinalIgnoreCase);
         }
 
         private void ApplyHarmonyPatches(ManualLogSource logger)

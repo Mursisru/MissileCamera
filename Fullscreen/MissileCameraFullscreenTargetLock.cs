@@ -49,7 +49,28 @@ namespace MissileCamera
 
         internal static void ResetForMissionUnload()
         {
-            AbandonSession();
+            // Prefer restore while CombatHUD is still alive — Abandon alone leaves deselected markers.
+            SafeRun(() =>
+            {
+                if (!_sessionActive)
+                {
+                    SavedTargets.Clear();
+                    _lastFilteredKeep = null;
+                    return;
+                }
+
+                CombatHUD? hud = null;
+                try { hud = SceneSingleton<CombatHUD>.i; }
+                catch { /* ignore */ }
+
+                if (hud != null)
+                    RestoreSnapshot();
+                else
+                    AbandonSession();
+
+                _sessionActive = false;
+                _lastFilteredKeep = null;
+            }, "unload");
         }
 
         /// <summary>Clear lock session without restoring targets / TargetListChanged.</summary>
