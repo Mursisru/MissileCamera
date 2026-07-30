@@ -77,6 +77,8 @@ namespace MissileCamera
             UseIdleDriverWait = true;
             MissileCameraVisionModeController.Reset();
             MissileCameraInfraredPolicy.Reset();
+            MissileCameraHudSnapshot.ResetSmoothing();
+            MissileCameraRenderPrep.ResetAll();
             DetachRig();
         }
 

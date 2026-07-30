@@ -424,6 +424,20 @@ namespace MissileCamera
                 relativeAltitudeMeters: hasRel ? relAlt : 0f);
         }
 
+        internal static void ResetSmoothing()
+        {
+            _smoothG = 0f;
+            _smoothFuel = 1f;
+            _smoothThrottle = 1f;
+            _smoothMach = 0f;
+            _smoothRange = 0f;
+            _smoothAngle = 0f;
+            _smoothClos = 0f;
+            _smoothRel = 0f;
+            _smoothTti = 0f;
+            _smoothMissileId = int.MinValue;
+        }
+
         private static void Smooth(
             int missileId,
             ref float g,

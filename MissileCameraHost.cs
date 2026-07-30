@@ -18,6 +18,8 @@ namespace MissileCamera
         private ManualLogSource? _logger;
         private bool _missionReady;
         private bool _startupScheduled;
+        private bool _teardownInProgress;
+        private int _teardownEpoch;
 
         internal static bool IsMissionReady => _instance != null && _instance._missionReady;
 
@@ -41,15 +43,20 @@ namespace MissileCamera
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
+            SafeMissionTeardown("host_destroy", shutdownDriver: true, unpatchHarmony: true);
+            _instance = null;
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            // Match working main: no SoftSessionReset. FS overlay is scene-local; IsActive self-heals.
-            if (_missionReady)
-                return;
-
             if (IsMenuOrSystemScene(scene.path))
+            {
+                if (_missionReady)
+                    SafeMissionTeardown("menu_scene_loaded");
+                return;
+            }
+
+            if (_missionReady)
                 return;
 
             ScheduleMissionStartup(scene.path);
@@ -57,60 +64,75 @@ namespace MissileCamera
 
         private void OnSceneUnloaded(Scene scene)
         {
-            if (scene.path.IndexOf("GameWorld", StringComparison.OrdinalIgnoreCase) < 0)
+            if (scene.path.IndexOf("GameWorld", StringComparison.OrdinalIgnoreCase) < 0
+                && !string.Equals(scene.name, "GameWorld", StringComparison.OrdinalIgnoreCase))
                 return;
 
-            // Tear down DDOL session state when GameWorld dies — restore live HUD first if present.
-            SafeMissionTeardown("GameWorld unloaded");
+            SafeMissionTeardown("scene_unloaded_gameworld");
         }
 
-        private static void SafeMissionTeardown(string reason)
+        private void SafeMissionTeardown(string reason, bool shutdownDriver = false, bool unpatchHarmony = false)
         {
-            MfdLog.Info("mission teardown — " + reason);
-            try
-            {
-                MissileCameraFullscreenController.ResetForMissionUnload();
-            }
-            catch (Exception ex)
-            {
-                MfdLog.Info("teardown FS failed: " + ex.Message);
-            }
+            if (_teardownInProgress)
+                return;
 
+            _teardownInProgress = true;
+            _teardownEpoch++;
             try
             {
-                MfdLayoutController.ResetForMissionUnload();
-            }
-            catch (Exception ex)
-            {
-                MfdLog.Info("teardown layout failed: " + ex.Message);
-            }
+                MfdLog.Info($"mission teardown epoch={_teardownEpoch} reason={reason}");
 
-            try
-            {
-                MissileCameraFeedController.ResetForMissionUnload();
-            }
-            catch (Exception ex)
-            {
-                MfdLog.Info("teardown feed failed: " + ex.Message);
-            }
+                try { MissileCameraFullscreenController.ResetForMissionUnload(); }
+                catch (Exception ex) { MfdLog.Info("teardown FS failed: " + ex.Message); }
 
-            try
-            {
-                MissileCameraRenderPrep.ForceRestoreWorldState();
-            }
-            catch
-            {
-                // ignore
-            }
+                try { MfdLayoutRetryHost.Cancel(); }
+                catch (Exception ex) { MfdLog.Info("teardown retry failed: " + ex.Message); }
 
-            try
-            {
-                MissileCameraStockPitchLadder.ResetSourceCache();
-                MissileCameraEffectsAvailability.Reset();
+                try { MfdLayoutController.ResetForMissionUnload(); }
+                catch (Exception ex) { MfdLog.Info("teardown layout failed: " + ex.Message); }
+
+                try { MfdWeaponsZoneAccess.ResetForMissionUnload(); }
+                catch (Exception ex) { MfdLog.Info("teardown weapons failed: " + ex.Message); }
+
+                try { MissileCameraFeedController.ResetForMissionUnload(); }
+                catch (Exception ex) { MfdLog.Info("teardown feed failed: " + ex.Message); }
+
+                try { MissileCameraRenderPrep.ResetAll(); }
+                catch (Exception ex) { MfdLog.Info("teardown render failed: " + ex.Message); }
+
+                try
+                {
+                    MissileCameraHudSnapshot.ResetSmoothing();
+                    MissileCameraStockPitchLadder.ResetSourceCache();
+                    MissileCameraInfraredPolicy.Reset();
+                    MissileCameraInfraredAudit.Reset();
+                    MissileCameraInfraredExposure.Reset();
+                    MissileCameraEffectsAvailability.Reset();
+                    MissileCameraSalvoTracker.Reset();
+                }
+                catch (Exception ex)
+                {
+                    MfdLog.Info("teardown statics failed: " + ex.Message);
+                }
+
+                if (shutdownDriver)
+                {
+                    try { MissileCameraFeedDriverHost.Shutdown(); }
+                    catch (Exception ex) { MfdLog.Info("teardown driver failed: " + ex.Message); }
+                }
+
+                if (unpatchHarmony)
+                {
+                    _harmony?.UnpatchSelf();
+                    _harmony = null;
+                }
+
+                _missionReady = false;
+                _startupScheduled = false;
             }
-            catch
+            finally
             {
-                // ignore
+                _teardownInProgress = false;
             }
         }
 
@@ -201,10 +223,7 @@ namespace MissileCamera
         {
             SceneManager.sceneLoaded -= OnSceneLoaded;
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
-            SafeMissionTeardown("application quit");
-            MissileCameraFeedDriverHost.Shutdown();
-            _harmony?.UnpatchSelf();
-            _harmony = null;
+            SafeMissionTeardown("application_quit", shutdownDriver: true, unpatchHarmony: true);
             _instance = null;
         }
     }

@@ -105,6 +105,8 @@ namespace MissileCamera
         private static bool _tarantulaDiagDone;
         private static bool _chicaneDiagDone;
         private static bool _cricketDiagDone;
+        private static int _hiddenRootInstanceId;
+        private static string _hiddenRootPath = string.Empty;
 
         internal static bool HasBomberBayMarkers(GameObject mfdRoot)
         {
@@ -246,6 +248,16 @@ namespace MissileCamera
 
         internal static void Restore()
         {
+            if (!IsRestoreContextValid())
+            {
+                HiddenStripNodes.Clear();
+                _hiddenWeaponsPanel = null;
+                _overlayOnlyReplacement = false;
+                _hiddenRootInstanceId = 0;
+                _hiddenRootPath = string.Empty;
+                return;
+            }
+
             foreach ((RectTransform node, bool wasActive) in HiddenStripNodes)
             {
                 if (node)
@@ -259,10 +271,59 @@ namespace MissileCamera
 
             _hiddenWeaponsPanel = null;
             _overlayOnlyReplacement = false;
+            _hiddenRootInstanceId = 0;
+            _hiddenRootPath = string.Empty;
         }
 
         internal static bool IsReplacementActive() =>
             _hiddenWeaponsPanel != null || HiddenStripNodes.Count > 0 || _overlayOnlyReplacement;
+
+        internal static void ResetForMissionUnload()
+        {
+            Restore();
+            _debugDumpDone = false;
+            _failureDiagDone = false;
+            _ifritStatusDiagDone = false;
+            _alkyonDiagDone = false;
+            _darkreachDiagDone = false;
+            _darkreachParentDiagDone = false;
+            _compassDiagDone = false;
+            _tarantulaDiagDone = false;
+            _chicaneDiagDone = false;
+            _cricketDiagDone = false;
+        }
+
+        private static bool IsRestoreContextValid()
+        {
+            if (_hiddenRootInstanceId == 0)
+                return true;
+
+            RectTransform? root = _hiddenWeaponsPanel;
+            if (root == null)
+                return true;
+
+            if (root.GetInstanceID() == _hiddenRootInstanceId)
+                return true;
+
+            string currentPath = BuildTransformPath(root);
+            return string.Equals(currentPath, _hiddenRootPath, System.StringComparison.Ordinal);
+        }
+
+        private static string BuildTransformPath(Transform? node)
+        {
+            if (node == null)
+                return string.Empty;
+
+            string path = node.name;
+            Transform? current = node.parent;
+            while (current != null)
+            {
+                path = current.name + "/" + path;
+                current = current.parent;
+            }
+
+            return path;
+        }
 
         private static bool IsMedusaLayout(GameObject mfdRoot, string? aircraftJsonKey)
         {
@@ -4833,6 +4894,8 @@ namespace MissileCamera
             _overlayOnlyReplacement = false;
 
             _hiddenWeaponsPanel = null;
+            _hiddenRootInstanceId = resolved.Panel != null ? resolved.Panel.GetInstanceID() : 0;
+            _hiddenRootPath = BuildTransformPath(resolved.Panel);
 
             if (!resolved.OverlayOnly)
             {

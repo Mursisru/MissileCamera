@@ -11,9 +11,11 @@ namespace MissileCamera
     internal static class MissileCameraFullscreenController
     {
         private const int OverlaySortingOrder = 50;
+        private const float ToggleDebounceSeconds = 0.15f;
 
         private static bool _sessionWanted;
         private static bool _deferredExit;
+        private static float _nextToggleTimeUnscaled;
         private static GameObject? _overlayGo;
         private static Canvas? _overlayCanvas;
         private static RectTransform? _fullscreenRoot;
@@ -60,6 +62,7 @@ namespace MissileCamera
         /// <summary>Flag-only drop — never Exit→RestoreHiddenChrome (dying/wrong scene).</summary>
         internal static void ResetForMissionUnload()
         {
+            _nextToggleTimeUnscaled = 0f;
             DropOrphanedSession("reset");
         }
 
@@ -74,9 +77,14 @@ namespace MissileCamera
             if (!MissileCameraFullscreenConfig.Enabled)
                 return;
 
+            float now = Time.unscaledTime;
+            if (now < _nextToggleTimeUnscaled)
+                return;
+
             if (_deferredExit)
             {
                 CompleteDeferredExit();
+                _nextToggleTimeUnscaled = now + ToggleDebounceSeconds;
                 return;
             }
 
@@ -87,6 +95,8 @@ namespace MissileCamera
                 RequestExit();
             else
                 Enter();
+
+            _nextToggleTimeUnscaled = now + ToggleDebounceSeconds;
         }
 
         internal static void ExitIfActive()

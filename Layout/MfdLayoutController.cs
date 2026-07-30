@@ -32,6 +32,9 @@ namespace MissileCamera
         private static float _cachedHudLeftInsetExtra = 0.02f;
         private static MissileCameraTelemetryLayout _cachedTelemetryLayout = MissileCameraTelemetryLayout.BottomRow;
         private static float _lastDarkreachPortraitLogTime = -999f;
+        private static bool _cleanupBusy;
+        private static int _cleanupFrame = -1;
+        private static int _layoutGeneration;
 
         internal static bool IsLayoutActive => _layoutActive;
 
@@ -155,8 +158,11 @@ namespace MissileCamera
         private static bool ShouldRetainLayoutForMissileFeed() =>
             MissileCameraFeedController.ShouldRetainLayoutForMissileFeed();
 
-        internal static void TryApplyLayoutFromRetry(TargetCam targetCam)
+        internal static void TryApplyLayoutFromRetry(TargetCam targetCam, int generation)
         {
+            if (generation != _layoutGeneration)
+                return;
+
             if (_layoutActive)
             {
                 MfdLayoutRetryHost.Cancel();
@@ -881,7 +887,7 @@ namespace MissileCamera
             if (!MissileCameraFeedController.HasTrackableOwnedMissile())
                 return;
 
-            MfdLayoutRetryHost.Schedule(targetCam);
+            MfdLayoutRetryHost.Schedule(targetCam, ++_layoutGeneration);
         }
 
         private static void ApplyZoneRect(RectTransform panelRt, MissileCameraZone zone)
@@ -1038,31 +1044,42 @@ namespace MissileCamera
 
         private static void ClearLayout(string reason)
         {
-            bool wasActive = _layoutActive;
-            MfdLayoutRetryHost.Cancel();
-            MissileCameraFeedController.NotifyOverlayGone();
-            MfdWeaponsZoneAccess.Restore();
+            if (!TryBeginCleanup())
+                return;
 
-            if (_tacOverlayRoot != null)
-                _tacOverlayRoot.SetActive(false);
+            try
+            {
+                bool wasActive = _layoutActive;
+                MfdLayoutRetryHost.Cancel();
+                MissileCameraFeedController.NotifyOverlayGone();
+                MfdWeaponsZoneAccess.Restore();
 
-            _layoutActive = false;
-            _activeTargetCam = null;
-            _activeScreenUi = null;
-            _activeTacScreen = null;
-            _appliedConfigRevision = -1;
-            _cachedOverlayZone = null;
-            _cachedOverlayRevision = -1;
-            _cachedSuppressBottomBorder = false;
-            _cachedOverlayRotationZ = 0f;
-            _cachedStubContentRotationZ = 0f;
-            _cachedStubFontRef = 0f;
-            _cachedStubContentBand = Vector2.up;
-            _cachedHudLeftInsetExtra = 0.02f;
-            _cachedTelemetryLayout = MissileCameraTelemetryLayout.BottomRow;
+                if (_tacOverlayRoot != null)
+                    _tacOverlayRoot.SetActive(false);
 
-            if (wasActive)
-                MfdLog.Info("layout cleared reason=" + reason);
+                _layoutActive = false;
+                _activeTargetCam = null;
+                _activeScreenUi = null;
+                _activeTacScreen = null;
+                _appliedConfigRevision = -1;
+                _cachedOverlayZone = null;
+                _cachedOverlayRevision = -1;
+                _cachedSuppressBottomBorder = false;
+                _cachedOverlayRotationZ = 0f;
+                _cachedStubContentRotationZ = 0f;
+                _cachedStubFontRef = 0f;
+                _cachedStubContentBand = Vector2.up;
+                _cachedHudLeftInsetExtra = 0.02f;
+                _cachedTelemetryLayout = MissileCameraTelemetryLayout.BottomRow;
+                _layoutGeneration++;
+
+                if (wasActive)
+                    MfdLog.Info("layout cleared reason=" + reason);
+            }
+            finally
+            {
+                EndCleanup();
+            }
         }
 
         private static void DestroyTacOverlay()
@@ -1074,6 +1091,22 @@ namespace MissileCamera
                 _tacOverlayRoot = null;
                 _stubLabel = null;
             }
+        }
+
+        private static bool TryBeginCleanup()
+        {
+            int frame = Time.frameCount;
+            if (_cleanupBusy && _cleanupFrame == frame)
+                return false;
+
+            _cleanupBusy = true;
+            _cleanupFrame = frame;
+            return true;
+        }
+
+        private static void EndCleanup()
+        {
+            _cleanupBusy = false;
         }
     }
 }

@@ -115,13 +115,21 @@ namespace MissileCamera
 
         internal static void ForceRestoreWorldState()
         {
+            ResetAll();
+        }
+
+        internal static void ResetAll()
+        {
+            UnregisterPipelineHooks();
+            _pipelineFeedCamera = null;
+            _pipelineInfrared = false;
+            _pipelineForceLdr = false;
+            _lastBakedWindow = new Vector2Int(int.MinValue, int.MinValue);
             if (_pipelineFogActive)
             {
                 RenderSettings.fog = _pipelineFogPrev;
                 _pipelineFogActive = false;
             }
-
-            _pipelineFeedCamera = null;
         }
 
         private static void RegisterPipelineHooks()
