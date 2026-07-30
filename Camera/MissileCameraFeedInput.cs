@@ -11,9 +11,8 @@ namespace MissileCamera
             if (!MissileCameraFullscreenConfig.Enabled)
                 return;
 
-            MissileCameraFullscreenConfig.Refresh();
-            bool altOk = !MissileCameraFullscreenConfig.RequireRightAlt || Input.GetKey(KeyCode.RightAlt);
-            if (altOk && Input.GetKeyDown(MissileCameraFullscreenConfig.ToggleKey))
+            MissileCameraKeybindConfig.Refresh();
+            if (IsShortcutDown(MissileCameraKeybindConfig.FullscreenToggle))
                 MissileCameraFullscreenController.Toggle();
         }
 
@@ -32,14 +31,11 @@ namespace MissileCamera
             if (!MissileCameraControlsConfig.Enabled)
                 return;
 
-            if (MissileCameraAircraftCamConfig.Enabled)
+            if (MissileCameraAircraftCamConfig.Enabled
+                && IsShortcutDown(MissileCameraKeybindConfig.AircraftCamCycle))
             {
-                bool altOk = !MissileCameraAircraftCamConfig.RequireRightAlt || Input.GetKey(KeyCode.RightAlt);
-                if (altOk && Input.GetKeyDown(MissileCameraAircraftCamConfig.CycleKey))
-                {
-                    MissileCameraAircraftCamController.CycleMode();
-                    return;
-                }
+                MissileCameraAircraftCamController.CycleMode();
+                return;
             }
 
             bool fullscreen = MissileCameraFullscreenController.IsActive;
@@ -88,7 +84,7 @@ namespace MissileCamera
             if (MissileCameraVisionModeController.IsBlockedByUi())
                 return;
 
-            if (Input.GetKeyDown(MissileCameraFullscreenConfig.VisionCycleKey))
+            if (IsShortcutDown(MissileCameraKeybindConfig.VisionCycle))
                 MissileCameraVisionModeController.Cycle();
         }
 

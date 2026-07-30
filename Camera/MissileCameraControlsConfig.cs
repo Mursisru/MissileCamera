@@ -8,12 +8,14 @@ namespace MissileCamera
         private const float MfdMinFov = 10f;
         private const float MfdMaxFov = 120f;
 
+        // Hardcoded MFD zoom feel (not player-facing — change keybinds instead).
+        internal const float ZoomStep = 0.5f;
+        internal const float ZoomMin = -4f;
+        internal const float ZoomMax = 4f;
+        internal const float ZoomFovDegreesPerUnit = 5f;
+        internal const float IndicatorSeconds = 0.5f;
+
         internal static bool Enabled = true;
-        internal static float ZoomStep = 0.5f;
-        internal static float ZoomMin = -4f;
-        internal static float ZoomMax = 4f;
-        internal static float ZoomFovDegreesPerUnit = 5f;
-        internal static float IndicatorSeconds = 0.5f;
         internal static int Revision;
 
         internal static void Refresh(bool force = false)
@@ -22,27 +24,10 @@ namespace MissileCamera
                 return;
 
             bool enabled = MissileCameraBepInConfig.ControlsEnabled.Value;
-            float zoomStep = MissileCameraBepInConfig.ZoomStep.Value;
-            float zoomMin = MissileCameraBepInConfig.ZoomMin.Value;
-            float zoomMax = MissileCameraBepInConfig.ZoomMax.Value;
-            float zoomFovDegreesPerUnit = MissileCameraBepInConfig.ZoomFovDegreesPerUnit.Value;
-            float indicatorSeconds = MissileCameraBepInConfig.IndicatorSeconds.Value;
-
-            if (!force
-                && enabled == Enabled
-                && zoomStep == ZoomStep
-                && zoomMin == ZoomMin
-                && zoomMax == ZoomMax
-                && zoomFovDegreesPerUnit == ZoomFovDegreesPerUnit
-                && indicatorSeconds == IndicatorSeconds)
+            if (!force && enabled == Enabled)
                 return;
 
             Enabled = enabled;
-            ZoomStep = zoomStep;
-            ZoomMin = zoomMin;
-            ZoomMax = zoomMax;
-            ZoomFovDegreesPerUnit = zoomFovDegreesPerUnit;
-            IndicatorSeconds = indicatorSeconds;
             Revision++;
         }
 

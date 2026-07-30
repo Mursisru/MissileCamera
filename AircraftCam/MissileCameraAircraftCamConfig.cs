@@ -12,18 +12,18 @@ namespace MissileCamera
 
     internal static class MissileCameraAircraftCamConfig
     {
+        // Hardcoded mini-cam size/placement (not player-facing).
+        internal const int RenderFps = 10;
+        internal const int Width = 256;
+        internal const int Height = 256;
+        internal const float AnchorMinX = 0.72f;
+        internal const float AnchorMinY = 0.72f;
+        internal const float AnchorMaxX = 0.98f;
+        internal const float AnchorMaxY = 0.98f;
+
         internal static bool Enabled;
         internal static MissileCameraAircraftCamMode Mode = MissileCameraAircraftCamMode.Rear;
-        internal static int RenderFps = 10;
-        internal static int Width = 256;
-        internal static int Height = 256;
-        internal static float AnchorMinX = 0.72f;
-        internal static float AnchorMinY = 0.72f;
-        internal static float AnchorMaxX = 0.98f;
-        internal static float AnchorMaxY = 0.98f;
         internal static bool HideInFullscreen;
-        internal static KeyCode CycleKey = KeyCode.V;
-        internal static bool RequireRightAlt = true;
         internal static int Revision;
 
         internal static void Refresh(bool force = false)
@@ -33,44 +33,17 @@ namespace MissileCamera
 
             bool enabled = MissileCameraBepInConfig.AircraftCamEnabled.Value;
             MissileCameraAircraftCamMode mode = ParseMode(MissileCameraBepInConfig.AircraftCamMode.Value);
-            int fps = MissileCameraBepInConfig.AircraftCamFps.Value;
-            int width = MissileCameraBepInConfig.AircraftCamWidth.Value;
-            int height = MissileCameraBepInConfig.AircraftCamHeight.Value;
-            float minX = MissileCameraBepInConfig.AircraftCamAnchorMinX.Value;
-            float minY = MissileCameraBepInConfig.AircraftCamAnchorMinY.Value;
-            float maxX = MissileCameraBepInConfig.AircraftCamAnchorMaxX.Value;
-            float maxY = MissileCameraBepInConfig.AircraftCamAnchorMaxY.Value;
             bool hideInFullscreen = MissileCameraBepInConfig.AircraftCamHideInFullscreen.Value;
-            KeyCode cycleKey = ParseKey(MissileCameraBepInConfig.AircraftCamCycleKey.Value, KeyCode.V);
-            bool requireRightAlt = MissileCameraBepInConfig.AircraftCamRequireRightAlt.Value;
 
             if (!force
                 && enabled == Enabled
                 && mode == Mode
-                && fps == RenderFps
-                && width == Width
-                && height == Height
-                && minX == AnchorMinX
-                && minY == AnchorMinY
-                && maxX == AnchorMaxX
-                && maxY == AnchorMaxY
-                && hideInFullscreen == HideInFullscreen
-                && cycleKey == CycleKey
-                && requireRightAlt == RequireRightAlt)
+                && hideInFullscreen == HideInFullscreen)
                 return;
 
             Enabled = enabled;
             Mode = mode;
-            RenderFps = fps;
-            Width = width;
-            Height = height;
-            AnchorMinX = minX;
-            AnchorMinY = minY;
-            AnchorMaxX = maxX;
-            AnchorMaxY = maxY;
             HideInFullscreen = hideInFullscreen;
-            CycleKey = cycleKey;
-            RequireRightAlt = requireRightAlt;
             Revision++;
         }
 
@@ -88,14 +61,6 @@ namespace MissileCamera
                 return mode;
 
             return MissileCameraAircraftCamMode.Rear;
-        }
-
-        private static KeyCode ParseKey(string raw, KeyCode fallback)
-        {
-            if (string.IsNullOrEmpty(raw))
-                return fallback;
-
-            return System.Enum.TryParse(raw, ignoreCase: true, out KeyCode key) ? key : fallback;
         }
     }
 }

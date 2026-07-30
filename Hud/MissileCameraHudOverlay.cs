@@ -12,6 +12,7 @@ namespace MissileCamera
         private MissileCameraFlirHud? _flir;
         private MissileCameraAttitudeWidget? _attitude;
         private MissileCameraZoomIndicator? _zoomIndicator;
+        private MissileCameraTargetMarker? _targetMarker;
         private HudRingGraphic? _interceptRing;
         private RectTransform? _interceptRoot;
         private TargetScreenUI? _screenUi;
@@ -56,6 +57,7 @@ namespace MissileCamera
                 _flirRootStatic = _flir.Root;
                 _attitude = MissileCameraAttitudeWidget.Create(_root);
                 _zoomIndicator = MissileCameraZoomIndicator.Create(_root, screenUi);
+                _targetMarker = MissileCameraTargetMarker.Create(_root);
 
                 var interceptGo = new GameObject("MissileCameraHudIntercept", typeof(RectTransform), typeof(HudRingGraphic));
                 interceptGo.transform.SetParent(_root, false);
@@ -119,6 +121,7 @@ namespace MissileCamera
                     _flir?.UpdateGaugeBarsOnly(snapshot, panel);
 
                 _attitude?.SetVisible(false);
+                _targetMarker?.SetVisible(false);
                 if (_interceptRoot != null)
                     _interceptRoot.gameObject.SetActive(false);
                 _zoomIndicator?.UpdateVisibility();
@@ -163,13 +166,46 @@ namespace MissileCamera
             if (showCenter)
                 _attitude?.Update(snapshot, panel.MinSide);
 
-            // Intercept still needs a live feed camera/texture.
+            // Intercept aimPoint: MFD = filled green; FS FLIR = hollow green ring only.
+            bool showIntercept = MissileCameraHudConfig.ShowCenterCluster && snapshot.HasFeed;
             UpdateIntercept(
                 snapshot,
                 viewRt,
                 feedCamera,
                 panel.MinSide,
-                MissileCameraHudConfig.ShowCenterCluster && snapshot.HasFeed);
+                showIntercept,
+                filled: !flir);
+
+            UpdateTargetMarker(snapshot, viewRt, feedCamera, panel.MinSide, !flir);
+        }
+
+        private void UpdateTargetMarker(
+            MissileCameraHudSnapshot snapshot,
+            RectTransform viewRt,
+            Camera? feedCamera,
+            float minSide,
+            bool mfdClassic)
+        {
+            if (_targetMarker == null)
+                return;
+
+            bool show = mfdClassic
+                && MissileCameraHudConfig.ShowTargetMarker
+                && snapshot.HasFeed
+                && snapshot.HasTarget
+                && feedCamera != null;
+
+            if (!show)
+            {
+                _targetMarker.SetVisible(false);
+                return;
+            }
+
+            FeedProjection projection = FeedScreenProjector.Project(
+                feedCamera!,
+                viewRt,
+                snapshot.TargetPosition);
+            _targetMarker.Update(projection, minSide, visible: true);
         }
 
         internal void InvalidateDynamicSchedule() => _nextDynamicTime = 0f;
@@ -216,6 +252,7 @@ namespace MissileCamera
             _flirRootStatic = null;
             _attitude = null;
             _zoomIndicator = null;
+            _targetMarker = null;
             _interceptRing = null;
             _interceptRoot = null;
         }
@@ -274,7 +311,13 @@ namespace MissileCamera
                 UiImageHelper.ApplySolid(panelImage, TargetScreenUiStyle.GetStubPanelColor(screenUi));
         }
 
-        private void UpdateIntercept(MissileCameraHudSnapshot snapshot, RectTransform viewRt, Camera? feedCamera, float minSide, bool showIntercept)
+        private void UpdateIntercept(
+            MissileCameraHudSnapshot snapshot,
+            RectTransform viewRt,
+            Camera? feedCamera,
+            float minSide,
+            bool showIntercept,
+            bool filled)
         {
             if (_interceptRing == null || _interceptRoot == null)
                 return;
@@ -298,7 +341,10 @@ namespace MissileCamera
 
             float radius = Mathf.Clamp(minSide * 0.022f, 4f, 10f);
             float thickness = Mathf.Max(1.2f, radius * 0.18f);
-            _interceptRing.SetRing(radius, thickness, MissileCameraHudConfig.InterceptColor, filled: false);
+            Color color = filled
+                ? MissileCameraHudConfig.InterceptColor
+                : MissileCameraHudConfig.FsInterceptRingColor;
+            _interceptRing.SetRing(radius, thickness, color, filled);
         }
 
         private static void SetChildActiveDeep(RectTransform layoutRt, string childName, bool active)
