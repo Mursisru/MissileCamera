@@ -393,8 +393,8 @@ namespace MissileCamera
 
             try
             {
+                // Never ForceCombatHudMarkerPass here — SetActive(CombatHUD) lights ILS/weapons on faction select.
                 MissileCameraCombatHudMarkerProjection.RestoreMarkerImages();
-                MissileCameraVanillaHudBridge.ForceCombatHudMarkerPass();
                 MissileCameraVanillaHudBridge.DiagLogMissileMarkers("host_ready");
             }
             catch (Exception ex)

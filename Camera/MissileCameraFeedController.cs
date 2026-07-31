@@ -69,7 +69,7 @@ namespace MissileCamera
 
         internal static void HardResetForMissionUnload()
         {
-            try { NotifyOverlayGone(); }
+            try { NotifyOverlayGone(destroyHud: true); }
             catch { /* ignore */ }
 
             try { TryUnbindAircraft(); }
@@ -373,12 +373,13 @@ namespace MissileCamera
             bool autoInfrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
 
             // Dedicated feed RT → RawImage only. Never touch CameraStateManager (CAMERA_SAFETY).
-            // COLOR/NVG: pipeline-driven (camera enabled → ParticleSystem culling + URP draw).
-            // IR blit modes: manual RenderFrame (HDR→blit); camera stays enabled as Overlay between frames.
-            bool needIrBlit = fullscreen
+            // COLOR: pipeline-driven (camera enabled → ParticleSystem culling + URP draw).
+            // NVG + IR blit: manual RenderFrame (Volume/PP or HDR→blit). Pipeline path wiped NVG Volume each Tick.
+            bool needManual = fullscreen
                 ? MissileCameraVisionModeController.UsesInfraredBlit(MissileCameraVisionModeController.Mode)
+                    || MissileCameraVisionModeController.UsesNightVisionVolume(MissileCameraVisionModeController.Mode)
                 : autoInfrared;
-            rig.SetPipelineDriven(!needIrBlit);
+            rig.SetPipelineDriven(!needManual);
 
             if (fullscreen)
                 MissileCameraVanillaHudBridge.TickHideStubs();
@@ -660,10 +661,11 @@ namespace MissileCamera
             MissileCameraVanillaHudBridge.DiagLogMissileMarkers("owned");
         }
 
-        internal static void NotifyOverlayGone()
+        internal static void NotifyOverlayGone(bool destroyHud = false)
         {
             if (_overlayActive)
-                MissileCameraMissionLifecycleDiag.Info("NotifyOverlayGone");
+                MissileCameraMissionLifecycleDiag.Info(
+                    destroyHud ? "NotifyOverlayGone destroyHud" : "NotifyOverlayGone softPark");
 
             _overlayActive = false;
 
@@ -686,7 +688,14 @@ namespace MissileCamera
             _cachedPanelW = -1f;
             _cachedPanelH = -1f;
 
-            try { HudOverlay.Destroy(); }
+            // Soft park keeps chrome for next missile; Destroy only on mission/aircraft wipe.
+            try
+            {
+                if (destroyHud)
+                    HudOverlay.Destroy();
+                else
+                    HudOverlay.Park();
+            }
             catch { /* ignore */ }
 
             _manualFollowActive = false;
@@ -1305,8 +1314,9 @@ namespace MissileCamera
             _nextReconcileBackoff = 2f;
             MissileCameraSalvoTracker.OnRegister(missile);
 
+            // Defer layout off the spawn frame so vanilla Fire/Spawn + MC discovery do not hitch together.
             if (MissileCameraHost.IsSessionActive)
-                MfdLayoutController.EnsureLayoutForMissileFeed();
+                MfdLayoutRetryHost.ScheduleEnsureLayoutNextFrame();
         }
 
         private static void OnDeregisterMissile(Missile missile)

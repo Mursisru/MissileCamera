@@ -92,8 +92,10 @@ namespace MissileCamera
             if (!_root.gameObject.activeSelf)
                 return;
 
-            float size = Mathf.Clamp(panelMinSide * 0.05f, 10f, 28f);
-            float thickness = Mathf.Max(1.2f, size * 0.1f);
+            // Opaque high-contrast markers — never inherit translucent cfg alpha.
+            color.a = 1f;
+            float size = Mathf.Clamp(panelMinSide * 0.055f, 12f, 32f);
+            float thickness = Mathf.Max(1.6f, size * 0.14f);
             float half = size * 0.5f;
             _root.anchoredPosition = projection.AnchoredPosition;
 

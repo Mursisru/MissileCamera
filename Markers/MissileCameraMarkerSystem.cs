@@ -11,7 +11,6 @@ namespace MissileCamera
     {
         private const float MotionVectorSeconds = 1.5f;
         private const float InboundBlinkHz = 3f;
-        private const float LostAlphaScale = 0.55f;
 
         private readonly MissileCameraMarkerPool _pool = new MissileCameraMarkerPool();
         private readonly List<MissileCameraMarkerData> _scratch = new List<MissileCameraMarkerData>(64);
@@ -205,7 +204,7 @@ namespace MissileCamera
             Color threatLive = MissileCameraMarkersConfig.ThreatColor;
             threatLive.a = alpha;
             Color threatLost = MissileCameraMarkersConfig.ThreatColor;
-            threatLost.a = alpha * LostAlphaScale;
+            threatLost.a = alpha * MissileCameraMarkersConfig.LostAlphaScale;
             Color ally = MissileCameraMarkersConfig.AllyColor;
             ally.a = alpha;
 

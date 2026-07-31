@@ -1,18 +1,19 @@
 using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace MissileCamera
 {
     /// <summary>
-    /// CombatHUD markers use mainCamera.WorldToScreenPoint (dump HUDUnitMarker.UpdatePosition).
-    /// Fullscreen video is the seeker RT → Overlay RawImage, so those positions stick near cockpit center.
-    /// Reproject via feed camera viewport → Screen (RT WorldToScreen is RT pixels — wrong for Overlay).
-    /// Missile units: hide image in FS only (cockpit ghosts) — never DeselectMarker.
-    /// Never moves CameraStateManager (CAMERA_SAFETY.md).
+    /// CombatHUD markers use mainCamera.WorldToScreenPoint — center-stuck on seeker FS.
+    /// Reproject via feed camera viewport → Screen. Missile units: hide image only (never Deselect).
+    /// Opaque/high-contrast applied after vanilla color writes. CAMERA_SAFETY: no CSM writes.
     /// </summary>
     internal static class MissileCameraCombatHudMarkerProjection
     {
+        private const float ContrastBoost = 0.35f;
+
         private static readonly FieldInfo? HiddenField =
             AccessTools.Field(typeof(HUDUnitMarker), "hidden");
         private static readonly FieldInfo? MarkersField =
@@ -27,10 +28,23 @@ namespace MissileCamera
             _feedCameraCached = null;
         }
 
-        /// <summary>
-        /// After FS exit/unload: re-enable images that ReprojectIfFullscreen disabled (z&lt;=0).
-        /// Vanilla UpdatePosition will correct behind-camera markers next frame.
-        /// </summary>
+        /// <summary>Force opaque + boost RGB — call only while FS is active.</summary>
+        internal static void ApplyOpaqueContrast(HUDUnitMarker marker)
+        {
+            if (!MissileCameraFullscreenController.IsActive)
+                return;
+
+            if (marker?.image == null || !marker.image.enabled)
+                return;
+
+            Color c = marker.image.color;
+            c.r = Mathf.Lerp(c.r, 1f, ContrastBoost);
+            c.g = Mathf.Lerp(c.g, 1f, ContrastBoost);
+            c.b = Mathf.Lerp(c.b, 1f, ContrastBoost);
+            c.a = 1f;
+            marker.image.color = c;
+        }
+
         internal static void RestoreMarkerImages()
         {
             try
@@ -63,7 +77,6 @@ namespace MissileCamera
 
         internal static void ReprojectIfFullscreen(HUDUnitMarker marker)
         {
-            // Screen-owner: never touch vanilla markers unless FS overlay is truly on screen.
             if (!MissileCameraFullscreenController.IsActive)
                 return;
 
@@ -72,9 +85,7 @@ namespace MissileCamera
 
             try
             {
-                // FS overlay elevates CombatHUD: vanilla missile markers stay on cockpit mainCamera
-                // and look like ghost dots on seeker video. Hide image only — never DeselectMarker
-                // (friendly missiles → sprite=null). Glass outside FS is untouched (IsActive gate).
+                // Cockpit ghosts of friendly missiles on elevated CombatHUD — hide image only.
                 if (marker.unit is Missile)
                 {
                     HideMarkerImage(marker);
@@ -87,7 +98,6 @@ namespace MissileCamera
                 Camera? feed = ResolveFeedCamera();
                 if (feed == null)
                 {
-                    // No seeker cam: do not leave cockpit-projected ghosts on FS.
                     HideMarkerImage(marker);
                     return;
                 }
@@ -101,14 +111,13 @@ namespace MissileCamera
                 if (marker.selected)
                 {
                     ReprojectSelected(marker, feed, world);
+                    ApplyOpaqueContrast(marker);
                     return;
                 }
 
                 Vector3 screen = FeedWorldToOverlayScreen(feed, world);
                 if (screen.z <= 0f)
                 {
-                    // Off-seeker: hide only while FS is the owner.
-                    // RestoreMarkerImages + IsActive gate handle cleanup on exit.
                     HideMarkerImage(marker);
                     return;
                 }
@@ -117,6 +126,7 @@ namespace MissileCamera
                     marker.image.enabled = true;
 
                 marker.image.transform.position = new Vector3(screen.x, screen.y, 0f);
+                ApplyOpaqueContrast(marker);
             }
             catch
             {
@@ -187,7 +197,6 @@ namespace MissileCamera
             }
         }
 
-        /// <summary>Dump HUDFunctions.PinToScreenEdge, but feed camera + Overlay screen mapping.</summary>
         private static bool PinToScreenEdgeFeed(
             Camera feed,
             Vector3 world,
@@ -224,7 +233,7 @@ namespace MissileCamera
             return offScreen;
         }
 
-        internal static Vector3 FeedWorldToOverlayScreen(Camera feed, Vector3 world)
+        private static Vector3 FeedWorldToOverlayScreen(Camera feed, Vector3 world)
         {
             Vector3 vp = feed.WorldToViewportPoint(world);
             return new Vector3(vp.x * Screen.width, vp.y * Screen.height, vp.z);

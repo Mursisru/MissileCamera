@@ -18,10 +18,13 @@ namespace MissileCamera
     internal static class UnitRegistryAccess
     {
         /// <summary>
-        /// HQ that owns the player's map / datalink. Prefer DynamicMap, then CombatHUD aircraft, then missile/local.
+        /// HQ for feed markers — seeker NetworkHQ first so markers work without ownship.
         /// </summary>
         internal static FactionHQ? ResolveOwnHq(Missile? missile)
         {
+            if (missile != null && !missile.disabled && missile.NetworkHQ != null)
+                return missile.NetworkHQ;
+
             try
             {
                 DynamicMap? map = SceneSingleton<DynamicMap>.i;
@@ -43,9 +46,6 @@ namespace MissileCamera
             {
                 // ignore
             }
-
-            if (missile != null && !missile.disabled && missile.NetworkHQ != null)
-                return missile.NetworkHQ;
 
             if (AircraftCamAccess.TryGetLocalAircraft(out Aircraft aircraft)
                 && aircraft != null

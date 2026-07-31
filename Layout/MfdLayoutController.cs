@@ -111,7 +111,7 @@ namespace MissileCamera
             if (ShouldRetainLayoutForMissileFeed())
                 return;
 
-            ClearLayout("target_cam_disabled");
+            SoftParkMissileFeed("target_cam_disabled");
         }
 
         internal static void OnTargetListCleared(TargetCam? targetCam)
@@ -122,7 +122,7 @@ namespace MissileCamera
             if (ShouldRetainLayoutForMissileFeed())
                 return;
 
-            ClearLayout("target_list_empty");
+            SoftParkMissileFeed("target_list_empty");
         }
 
         internal static void ReleaseLayoutIfNoMissileFeed()
@@ -133,7 +133,30 @@ namespace MissileCamera
             if (ShouldRetainLayoutForMissileFeed())
                 return;
 
-            ClearLayout("missile_feed_ended");
+            // Keep weapons hidden + stub; only soft-park feed. Next launch reuses without PrepareReplacement.
+            SoftParkMissileFeed("missile_feed_ended");
+        }
+
+        /// <summary>
+        /// Drop live feed/HUD bind but keep tac stub + ApplyHidden strip for the sortie.
+        /// Avoids Restore+discovery+ApplyHidden hitch on every subsequent launch.
+        /// </summary>
+        private static void SoftParkMissileFeed(string reason)
+        {
+            try { MfdLayoutRetryHost.Cancel(); }
+            catch { /* ignore */ }
+
+            try { MissileCameraFeedController.NotifyOverlayGone(destroyHud: false); }
+            catch { /* ignore */ }
+
+            if (_tacOverlayRoot != null)
+            {
+                try { _tacOverlayRoot.SetActive(false); }
+                catch { /* ignore */ }
+            }
+
+            // Stay _layoutActive so EnsureLayoutForMissileFeed reactivates stub only.
+            MissileCameraMissionLifecycleDiag.Info("SoftParkMissileFeed reason=" + reason);
         }
 
         internal static void ResetForMissionUnload() => HardResetForMissionUnload();
@@ -373,12 +396,7 @@ namespace MissileCamera
                 return;
             }
 
-            if (!MfdWeaponsZoneAccess.CanDiscoverWeaponsPanel(tacScreen, jsonKey))
-            {
-                LogNoOpThrottled("weapons panel not found тАФ no-op");
-                return;
-            }
-
+            // Single resolve pass — PrepareReplacement already TryResolveWeaponsPanel (no CanDiscover duplicate).
             WeaponsReplacementResult replacement = MfdWeaponsZoneAccess.PrepareReplacement(tacScreen, jsonKey);
             if (!replacement.Success)
             {
@@ -1280,7 +1298,7 @@ namespace MissileCamera
             _tacOverlayRoot = null;
             _stubLabel = null;
 
-            try { MissileCameraFeedController.NotifyOverlayGone(); }
+            try { MissileCameraFeedController.NotifyOverlayGone(destroyHud: true); }
             catch { /* ignore */ }
 
             if (go != null)
