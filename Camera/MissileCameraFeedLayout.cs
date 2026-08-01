@@ -98,12 +98,18 @@ namespace MissileCamera
                 EnsureRotatedView(layoutRt, contentRotationZ);
         }
 
+        private static readonly string[] RotatedContentNames =
+        {
+            "MissileCameraFeed",
+            "MissileCameraHudOverlay"
+        };
+
         private static void ReparentRotatedContent(RectTransform layoutRt, RectTransform viewRt)
         {
             RectTransform? panelRt = FindMissileCameraPanel(layoutRt);
-            foreach (string childName in new[] { "MissileCameraFeed", "MissileCameraHudOverlay" })
+            for (int i = 0; i < RotatedContentNames.Length; i++)
             {
-                Transform? child = FindFeedChild(layoutRt, panelRt, childName);
+                Transform? child = FindFeedChild(layoutRt, panelRt, RotatedContentNames[i]);
                 if (child == null || child.parent == viewRt)
                     continue;
 

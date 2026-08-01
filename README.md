@@ -2,7 +2,7 @@
 
 [![Nuclear Option](https://img.shields.io/badge/Game-Nuclear%20Option-blue)](https://store.steampowered.com/app/2168680/Nuclear_Option/)
 [![BepInEx 5](https://img.shields.io/badge/Loader-BepInEx%205-orange)](https://docs.bepinex.dev/)
-[![Version](https://img.shields.io/badge/Version-1.2.0-green)](https://github.com/Mursisru/MissileCamera/releases)
+[![Version](https://img.shields.io/badge/Version-1.2.1-green)](https://github.com/Mursisru/MissileCamera/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow)](https://github.com/Mursisru/MissileCamera/blob/BepInExVersion/LICENSE)
 
 ---
@@ -41,22 +41,20 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 ## Features
 
 * **MFD split-screen UI:** Splits the wide tactical MFD (Target view) into zones and embeds the missile feed in the weapons panel area.
-* **Seeker cam (missile nose cam):** Renders a live `RawImage` feed from your latest **player-owned** in-flight missile. **No selected target required** — dumb-fire / no-lock launches still open the MFD feed. On destruction / switch / FS exit, a bordered **NO SIGNAL** flash plays before the panel closes.
-* **Fullscreen feed (`K`):** dedicated seeker RenderTexture on an independent fullscreen host (works without MFD). **Never hijacks** vanilla `CameraStateManager` / cockpit camera. First enter per mission plays a ~3.5s boot (tile assemble → symbol cal → hex/value drums + diagnostics). FLIR chrome overlay; CombatHUD unit markers only.
+* **Seeker cam (missile nose cam):** Renders a live `RawImage` feed from your latest **player-owned** in-flight missile. **No selected target required** — dumb-fire / no-lock launches still open the MFD feed. On destruction, a brief TV-static burst plays before the panel closes.
+* **Fullscreen feed:** `RightAlt+F` — dedicated seeker RenderTexture on a fullscreen `RawImage` (same as MFD). **Never hijacks** vanilla `CameraStateManager` / cockpit camera. First enter per mission plays a ~3.5s boot (tile assemble → symbol cal → hex/value drums + diagnostics). FLIR chrome overlay; CombatHUD unit markers only.
 * **Fullscreen zoom / filters:** mouse wheel optical zoom up to **50×** (MMB reset); **J** cycles vision modes (Color / NVG / WhiteHot / BlackHot / Contour±). MFD keeps keyboard zoom + auto IR when dark.
-* **Fullscreen FLIR HUD:** green framed panels (MSL/KIN, TGT, SENSOR, GUIDANCE), FUEL/THR gauges, ownship PiP, stock pitch ladder, hollow intercept ring; **vanilla CombatHUD target markers** — **fullscreen only**. MFD keeps the classic S/A/R corner HUD.
+* **Fullscreen FLIR HUD:** green sensor chrome with live `— MSL —` / `— TGT —` telemetry, scrolling compass, dials; **vanilla CombatHUD target markers** — **fullscreen only**. MFD keeps the classic S/A/R corner HUD.
 * **Classic MFD HUD:** S/A/R corners + salvo (1.30.1 style).
 * **Post-FX:** optional scanlines / motion blur / chromatic / bloom (`MissileCameraEffects`) — inactive with a startup warning if shaders are missing from the embedded bundle.
 * **Aircraft mini-cam:** optional second feed (`MissileCameraAircraftCam`, default off). **No-op when `DisplayMode=skip`.**
 * **Auto B/W IR (WhiteHot):** When dark at the missile — low `GetDaylightFactor` (night / under thick clouds) or very low `GetAmbientLight` — the feed switches to black-and-white IR. Not a fixed clock window. Disable with `InfraredAutoEnabled=false`.
-* **Manual feed controls:** Cycle in-flight owned missiles and adjust camera zoom while the MFD overlay is active (see **Controls** below). Fullscreen toggle works even when MFD layout is missing.
+* **Manual feed controls:** Cycle in-flight owned missiles and adjust camera zoom while the MFD overlay is active (see **Controls** below).
 * **Per-aircraft layout (`DisplayMode=auto`):**
   * **Dedicated split** (e.g. KR-67): wide target cam on the left, missile panel on the right.
   * **VT-7 Vagrant:** MissileCamera replaces the right-column **NOZZLE + ENGINE** block (weapons silhouette kept).
-  * **SFB-81 Darkreach:** right-column tac weapon panel when present.
-  * **SAH-46 Chicane:** left Turbine MFD (overlay over L/R TURBINE; TAIL DUCT stays vanilla).
   * **Small tac overlay** (e.g. Cricket): mod **skipped** — vanilla tactical MFD unchanged.
-* **Mission-only bootstrap:** Harmony patches and the feed driver attach on the **first mission scene**, not in the main menu. Multi-sortie HardReset keeps MFD/HUD/markers stable across menu → new sortie.
+* **Mission-only bootstrap:** Harmony patches and the feed driver attach on the **first mission scene**, not in the main menu.
 
 ---
 

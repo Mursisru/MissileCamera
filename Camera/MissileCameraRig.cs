@@ -81,9 +81,11 @@ namespace MissileCamera
             _irVolume = _root.AddComponent<Volume>();
             _irVolume.isGlobal = false;
             _irVolume.priority = 1000f;
-            _irVolume.blendDistance = 100000f;
+            _irVolume.blendDistance = 0f;
             _irVolume.enabled = false;
             _irVolume.weight = 1f;
+            // No SphereCollider — huge local volumes tint/break world when Camera.main is null/spectate.
+            // NVG enables isGlobal only for the duration of Camera.Render() then clears.
 
             VolumeProfile profile = ScriptableObject.CreateInstance<VolumeProfile>();
             profile.hideFlags = HideFlags.HideAndDontSave;
@@ -140,6 +142,11 @@ namespace MissileCamera
                     if (!Mathf.Approximately(_lastPolicyExposure, infraredExposure)
                         || !_infraredVolumeActive)
                         SetInfraredVolume(true, infraredExposure);
+                }
+                else if (nvg)
+                {
+                    // Re-arm Volume/gain — pipeline wipe or early-out must not leave NVG dead.
+                    EnableNightVisionVolume();
                 }
 
                 return;
@@ -441,7 +448,11 @@ namespace MissileCamera
                 {
                     TickNightVisionGain();
                     if (_irVolume != null)
+                    {
+                        // Scoped global only for this Camera.Render — no persistent world tint.
+                        _irVolume.isGlobal = true;
                         _irVolume.enabled = true;
+                    }
                     urp.renderPostProcessing = true;
                     urp.volumeTrigger = _camera.transform;
                     _renderPostProcessingEnabled = true;
@@ -484,7 +495,10 @@ namespace MissileCamera
                 if (urp != null)
                     urp.renderPostProcessing = false;
                 if (_irVolume != null)
+                {
                     _irVolume.enabled = false;
+                    _irVolume.isGlobal = false;
+                }
 
                 _camera.targetTexture = prevCameraTarget ?? _renderTexture;
                 _camera.allowHDR = prevAllowHdr;
@@ -617,9 +631,14 @@ namespace MissileCamera
                 return;
 
             _nightVisionActive = true;
+            _irVolume.isGlobal = false;
+            _irVolume.enabled = false; // armed in RenderFrame only
             _colorAdjustments.saturation.overrideState = false;
             _colorAdjustments.contrast.Override(5f);
             _colorAdjustments.contrast.overrideState = true;
+            // Soft green tint (stock NVG feel) without hijacking cockpit NightVision.Toggle.
+            _colorAdjustments.colorFilter.Override(new Color(0.55f, 1f, 0.55f, 1f));
+            _colorAdjustments.colorFilter.overrideState = true;
             _bloom.intensity.Override(0.35f);
             _bloom.intensity.overrideState = true;
             _bloom.threshold.overrideState = true;
@@ -632,6 +651,19 @@ namespace MissileCamera
             _nightVisionActive = false;
             _bloom.threshold.overrideState = false;
             _bloom.intensity.overrideState = false;
+            _colorAdjustments.contrast.overrideState = false;
+            _colorAdjustments.postExposure.overrideState = false;
+            _colorAdjustments.colorFilter.overrideState = false;
+            if (_irVolume != null)
+            {
+                _irVolume.enabled = false;
+                _irVolume.isGlobal = false;
+            }
+            if (IsRootAlive)
+            {
+                UniversalAdditionalCameraData urp = _camera.GetUniversalAdditionalCameraData();
+                urp.renderPostProcessing = false;
+            }
             MissileCameraRenderPrep.SetPipelineNightVision(false);
         }
 

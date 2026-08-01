@@ -69,7 +69,7 @@ namespace MissileCamera
 
         internal static void HardResetForMissionUnload()
         {
-            try { NotifyOverlayGone(); }
+            try { NotifyOverlayGone(destroyHud: true); }
             catch { /* ignore */ }
 
             try { TryUnbindAircraft(); }
@@ -105,7 +105,8 @@ namespace MissileCamera
             _telemetryText = null;
             _colorLabel = null;
             _cachedLayoutRoot = null;
-            _rig = null;
+            try { DestroyAndClearRig(); }
+            catch { /* ignore */ }
             UseIdleDriverWait = true;
 
             try { MissileCameraVisionModeController.Reset(); }
@@ -118,6 +119,9 @@ namespace MissileCamera
             catch { /* ignore */ }
 
             try { MissileCameraRenderPrep.ResetAll(); }
+            catch { /* ignore */ }
+
+            try { MissileCameraNoseResolver.ResetCache(); }
             catch { /* ignore */ }
         }
 
@@ -331,8 +335,9 @@ namespace MissileCamera
             if (!IsDisplayPipelineActive())
             {
                 UseIdleDriverWait = !HasTrackableOwnedMissile();
+                // Soft-parked MFD keeps Rig+RT; only tear down when layout fully cleared.
                 if (!MissileCameraFullscreenController.IsActive)
-                    DetachRig();
+                    ParkOrReleaseRig();
                 UpdateDisplay(null);
                 return;
             }
@@ -373,12 +378,13 @@ namespace MissileCamera
             bool autoInfrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
 
             // Dedicated feed RT → RawImage only. Never touch CameraStateManager (CAMERA_SAFETY).
-            // COLOR/NVG: pipeline-driven (camera enabled → ParticleSystem culling + URP draw).
-            // IR blit modes: manual RenderFrame (HDR→blit); camera stays enabled as Overlay between frames.
-            bool needIrBlit = fullscreen
+            // COLOR: pipeline-driven (camera enabled → ParticleSystem culling + URP draw).
+            // NVG + IR blit: manual RenderFrame (Volume/PP or HDR→blit). Pipeline path wiped NVG Volume each Tick.
+            bool needManual = fullscreen
                 ? MissileCameraVisionModeController.UsesInfraredBlit(MissileCameraVisionModeController.Mode)
+                    || MissileCameraVisionModeController.UsesNightVisionVolume(MissileCameraVisionModeController.Mode)
                 : autoInfrared;
-            rig.SetPipelineDriven(!needIrBlit);
+            rig.SetPipelineDriven(!needManual);
 
             if (fullscreen)
                 MissileCameraVanillaHudBridge.TickHideStubs();
@@ -660,10 +666,11 @@ namespace MissileCamera
             MissileCameraVanillaHudBridge.DiagLogMissileMarkers("owned");
         }
 
-        internal static void NotifyOverlayGone()
+        internal static void NotifyOverlayGone(bool destroyHud = false)
         {
             if (_overlayActive)
-                MissileCameraMissionLifecycleDiag.Info("NotifyOverlayGone");
+                MissileCameraMissionLifecycleDiag.Info(
+                    destroyHud ? "NotifyOverlayGone destroyHud" : "NotifyOverlayGone softPark");
 
             _overlayActive = false;
 
@@ -676,28 +683,92 @@ namespace MissileCamera
             try { MissileCameraPostFxStack.Release(); }
             catch { /* ignore */ }
 
-            _feedImage = null;
-            _telemetryText = null;
-            _colorLabel = null;
-            _layoutRoot = null;
-            _panelRt = null;
-            _cachedLayoutRoot = null;
-            _cachedLayoutRotationZ = float.NaN;
-            _cachedPanelW = -1f;
-            _cachedPanelH = -1f;
+            // Soft park: keep RawImage/panel/layout refs so next launch rewakes without BindPanel.
+            // Hard wipe: clear everything (mission / aircraft / stub destroy).
+            if (destroyHud)
+            {
+                _feedImage = null;
+                _telemetryText = null;
+                _colorLabel = null;
+                _layoutRoot = null;
+                _panelRt = null;
+                _cachedLayoutRoot = null;
+                _cachedLayoutRotationZ = float.NaN;
+                _cachedPanelW = -1f;
+                _cachedPanelH = -1f;
+            }
+            else
+            {
+                _cachedPanelW = -1f;
+                _cachedPanelH = -1f;
+            }
 
-            try { HudOverlay.Destroy(); }
+            try
+            {
+                if (destroyHud)
+                    HudOverlay.Destroy();
+                else
+                    HudOverlay.Park();
+            }
             catch { /* ignore */ }
 
             _manualFollowActive = false;
             _zoomOffset = 0f;
 
-            try { DetachRig(); }
+            try
+            {
+                if (destroyHud)
+                    DestroyAndClearRig();
+                else
+                    SoftParkRig();
+            }
             catch { /* ignore */ }
 
             try { MissileCameraTelemetry.ResetThrottle(); }
             catch { /* ignore */ }
         }
+
+        /// <summary>
+        /// Soft-parked MFD wake: stub+feed+HUD refs still valid — no BindPanel/EnsureBuilt rebuild.
+        /// </summary>
+        internal static bool TrySoftRewakeOverlay()
+        {
+            if (!MissileCameraHost.IsSessionActive)
+                return false;
+
+            if (_panelRt == null || !_panelRt)
+                return false;
+
+            if (_feedImage == null || !_feedImage)
+                return false;
+
+            if (_layoutRoot == null || !_layoutRoot)
+                return false;
+
+            try
+            {
+                if (!_feedImage.gameObject.activeSelf)
+                    _feedImage.gameObject.SetActive(true);
+
+                HudOverlay.EnsureBuilt(_layoutRoot, MfdLayoutController.GetActiveScreenUi());
+            }
+            catch (System.Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "TrySoftRewakeOverlay HUD: " + ex.GetType().Name + ": " + ex.Message);
+            }
+
+            bool wasOff = !_overlayActive;
+            _overlayActive = true;
+            if (wasOff)
+                MissileCameraMissionLifecycleDiag.Info("NotifyOverlayReady softRewake");
+            return true;
+        }
+
+        internal static bool HasLiveMfdFeedBind() =>
+            _feedImage != null && _feedImage
+            && _panelRt != null && _panelRt
+            && _layoutRoot != null && _layoutRoot;
 
         private static void BindPanel(RectTransform panelRt)
         {
@@ -1117,7 +1188,34 @@ namespace MissileCamera
         internal static bool ShouldRetainLayoutForMissileFeed() =>
             HasTrackableOwnedMissile();
 
-        private static void DetachRig()
+        /// <summary>Detach missile from feed cam but keep Rig+RT for soft-parked MFD reuse.</summary>
+        private static void SoftParkRig()
+        {
+            _followedMissile = null;
+
+            try { MissileCameraRenderPrep.ForceRestoreWorldState(); }
+            catch { /* ignore */ }
+
+            if (_rig == null)
+                return;
+
+            try { _rig.SetPipelineDriven(false); }
+            catch { /* ignore */ }
+
+            try { _rig.Detach(); }
+            catch { /* ignore */ }
+        }
+
+        /// <summary>Idle tick: keep Rig while MFD layout soft-parked; destroy only when layout gone.</summary>
+        private static void ParkOrReleaseRig()
+        {
+            if (MfdLayoutController.IsLayoutActive)
+                SoftParkRig();
+            else
+                DestroyAndClearRig();
+        }
+
+        private static void DestroyAndClearRig()
         {
             _followedMissile = null;
 
@@ -1132,9 +1230,16 @@ namespace MissileCamera
             try { rig.SetPipelineDriven(false); }
             catch { /* ignore */ }
 
-            try { rig.Detach(); }
-            catch { /* ignore */ }
+            try { rig.Destroy(); }
+            catch
+            {
+                try { rig.Detach(); }
+                catch { /* ignore */ }
+            }
         }
+
+        /// <summary>Legacy alias — full release (disabled feed / hard paths).</summary>
+        private static void DetachRig() => DestroyAndClearRig();
 
         internal static bool HasTrackableOwnedMissile()
         {
@@ -1305,8 +1410,15 @@ namespace MissileCamera
             _nextReconcileBackoff = 2f;
             MissileCameraSalvoTracker.OnRegister(missile);
 
-            if (MissileCameraHost.IsSessionActive)
-                MfdLayoutController.EnsureLayoutForMissileFeed();
+            // Defer layout off the spawn frame so vanilla Fire/Spawn + MC discovery do not hitch together.
+            // Live overlay: Tick already Attach()s — skip EnsureLayout schedule (BindPanel hitch).
+            if (!MissileCameraHost.IsSessionActive)
+                return;
+
+            if (_overlayActive && MfdLayoutController.IsLayoutActive && HasLiveMfdFeedBind())
+                return;
+
+            MfdLayoutRetryHost.ScheduleEnsureLayoutNextFrame();
         }
 
         private static void OnDeregisterMissile(Missile missile)

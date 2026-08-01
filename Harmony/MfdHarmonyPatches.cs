@@ -139,6 +139,7 @@ namespace MissileCamera.Patches
     /// <summary>
     /// Fullscreen: vanilla UpdatePosition projects via cockpit mainCamera (center-stuck).
     /// Reproject onto seeker feed viewport → Overlay screen. CSM untouched.
+    /// Opaque contrast after every vanilla color write.
     /// </summary>
     [HarmonyPatch]
     internal static class HUDUnitMarker_UpdatePosition_Patch
@@ -150,8 +151,124 @@ namespace MissileCamera.Patches
         [HarmonyPostfix]
         internal static void Postfix(object __instance)
         {
+            if (__instance is not HUDUnitMarker marker)
+                return;
+
+            // Reproject + opaque contrast are FS-only — never touch cockpit glass markers.
+            if (!MissileCameraFullscreenController.IsActive)
+                return;
+
+            MissileCameraCombatHudMarkerProjection.ReprojectIfFullscreen(marker);
+            MissileCameraCombatHudMarkerProjection.ApplyOpaqueContrast(marker);
+        }
+    }
+
+    [HarmonyPatch]
+    internal static class HUDUnitMarker_UpdateColor_Patch
+    {
+        internal static MethodBase TargetMethod() =>
+            AccessTools.Method(GameAssembly.RequireType("HUDUnitMarker"), "UpdateColor")
+            ?? throw new InvalidOperationException("HUDUnitMarker.UpdateColor not found.");
+
+        [HarmonyPostfix]
+        internal static void Postfix(object __instance)
+        {
+            if (!MissileCameraFullscreenController.IsActive)
+                return;
+
             if (__instance is HUDUnitMarker marker)
-                MissileCameraCombatHudMarkerProjection.ReprojectIfFullscreen(marker);
+                MissileCameraCombatHudMarkerProjection.ApplyOpaqueContrast(marker);
+        }
+    }
+
+    [HarmonyPatch]
+    internal static class HUDUnitMarker_JammingDistortion_Patch
+    {
+        internal static MethodBase TargetMethod() =>
+            AccessTools.Method(GameAssembly.RequireType("HUDUnitMarker"), "JammingDistortion")
+            ?? throw new InvalidOperationException("HUDUnitMarker.JammingDistortion not found.");
+
+        [HarmonyPostfix]
+        internal static void Postfix(object __instance)
+        {
+            if (!MissileCameraFullscreenController.IsActive)
+                return;
+
+            if (__instance is HUDUnitMarker marker)
+                MissileCameraCombatHudMarkerProjection.ApplyOpaqueContrast(marker);
+        }
+    }
+
+    /// <summary>
+    /// When CombatHUD.aircraft is null, vanilla LateUpdate returns early — keep existing markers
+    /// ticking in FS only (ctor still needs aircraft for new CreateMarker).
+    /// </summary>
+    [HarmonyPatch]
+    internal static class CombatHUD_LateUpdate_Patch
+    {
+        internal static MethodBase TargetMethod() =>
+            AccessTools.Method(GameAssembly.RequireType("CombatHUD"), "LateUpdate")
+            ?? throw new InvalidOperationException("CombatHUD.LateUpdate not found.");
+
+        [HarmonyPrefix]
+        internal static bool Prefix(CombatHUD __instance)
+        {
+            if (__instance == null || __instance.aircraft != null)
+                return true;
+
+            if (!MissileCameraFullscreenController.IsActive)
+                return true;
+
+            try
+            {
+                MissileCameraVanillaHudBridge.ForceCombatHudMarkerPass();
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// CreateMarker no-ops without aircraft; HUDUnitMarker ctor also needs aircraft.
+    /// FS: temporarily bind missile owner / HQ aircraft as proxy for the call.
+    /// </summary>
+    [HarmonyPatch]
+    internal static class CombatHUD_CreateMarker_Patch
+    {
+        internal static MethodBase TargetMethod() =>
+            AccessTools.Method(GameAssembly.RequireType("CombatHUD"), "CreateMarker")
+            ?? throw new InvalidOperationException("CombatHUD.CreateMarker not found.");
+
+        [HarmonyPrefix]
+        internal static void Prefix(CombatHUD __instance, ref Aircraft? __state)
+        {
+            __state = null;
+            if (__instance == null || __instance.aircraft != null)
+                return;
+
+            if (!MissileCameraFullscreenController.IsActive)
+                return;
+
+            Aircraft? proxy = MissileCameraVanillaHudBridge.TryResolveMarkerAircraftProxy();
+            if (proxy == null)
+                return;
+
+            __instance.aircraft = proxy;
+            __state = proxy;
+        }
+
+        [HarmonyPostfix]
+        internal static void Postfix(CombatHUD __instance, Aircraft? __state)
+        {
+            if (__state == null || __instance == null)
+                return;
+
+            if (ReferenceEquals(__instance.aircraft, __state))
+                __instance.aircraft = null;
         }
     }
 }

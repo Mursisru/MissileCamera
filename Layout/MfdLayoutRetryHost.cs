@@ -19,6 +19,13 @@ namespace MissileCamera
             _behaviour.Begin(targetCam, generation, IntervalSeconds, MaxAttempts);
         }
 
+        /// <summary>Run EnsureLayout after current frame — avoids hitch on missile spawn callback.</summary>
+        internal static void ScheduleEnsureLayoutNextFrame()
+        {
+            EnsureBehaviour();
+            _behaviour?.BeginEnsureLayoutNextFrame();
+        }
+
         internal static void Cancel()
         {
             try
@@ -43,9 +50,7 @@ namespace MissileCamera
             try
             {
                 if (_behaviour != null)
-                {
                     Object.Destroy(_behaviour.gameObject);
-                }
             }
             catch
             {
@@ -71,6 +76,7 @@ namespace MissileCamera
     {
         private TargetCam? _targetCam;
         private Coroutine? _retryCoroutine;
+        private Coroutine? _ensureLayoutCoroutine;
         private float _intervalSeconds;
         private int _maxAttempts;
         private int _generation;
@@ -88,6 +94,14 @@ namespace MissileCamera
             _retryCoroutine = StartCoroutine(RetryLoop());
         }
 
+        internal void BeginEnsureLayoutNextFrame()
+        {
+            if (_ensureLayoutCoroutine != null)
+                return;
+
+            _ensureLayoutCoroutine = StartCoroutine(EnsureLayoutNextFrame());
+        }
+
         internal void StopRetry()
         {
             try
@@ -100,8 +114,29 @@ namespace MissileCamera
                 // ignore destroyed
             }
 
+            try
+            {
+                if (_ensureLayoutCoroutine != null && this != null)
+                    StopCoroutine(_ensureLayoutCoroutine);
+            }
+            catch
+            {
+                // ignore
+            }
+
             _retryCoroutine = null;
+            _ensureLayoutCoroutine = null;
             _targetCam = null;
+        }
+
+        private IEnumerator EnsureLayoutNextFrame()
+        {
+            yield return null;
+            _ensureLayoutCoroutine = null;
+            if (!MissileCameraHost.IsSessionActive)
+                yield break;
+
+            MfdLayoutController.EnsureLayoutForMissileFeed();
         }
 
         private IEnumerator RetryLoop()

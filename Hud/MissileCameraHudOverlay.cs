@@ -6,6 +6,7 @@ namespace MissileCamera
     internal sealed class MissileCameraHudOverlay
     {
         private const string RootName = "MissileCameraHudOverlay";
+        private const float DynamicInterval = 1f / 10f;
 
         private RectTransform? _root;
         private MissileCameraCornerHud? _corners;
@@ -17,7 +18,6 @@ namespace MissileCamera
         private RectTransform? _interceptRoot;
         private TargetScreenUI? _screenUi;
         private float _nextDynamicTime;
-        private const float DynamicInterval = 1f / 10f;
 
         internal RectTransform? Root => _root;
 
@@ -35,6 +35,8 @@ namespace MissileCamera
 
             if (_root != null && _root.parent == viewRt)
             {
+                if (!_root.gameObject.activeSelf)
+                    _root.gameObject.SetActive(true);
                 MissileCameraFeedLayout.ApplyContentRotation(layoutRt, contentRotationZ);
                 _corners?.BindScreenUi(screenUi);
                 _zoomIndicator?.BindScreenUi(screenUi);
@@ -53,8 +55,9 @@ namespace MissileCamera
                 Stretch(_root);
 
                 _corners = MissileCameraCornerHud.Create(_root, screenUi);
-                _flir = MissileCameraFlirHud.Create(_root);
-                _flirRootStatic = _flir.Root;
+                // FlirHud is lazy — MFD launch must not Instantiate ~7 panels every missile.
+                _flir = null;
+                _flirRootStatic = null;
                 _attitude = MissileCameraAttitudeWidget.Create(_root);
                 _zoomIndicator = MissileCameraZoomIndicator.Create(_root, screenUi);
                 _targetMarker = MissileCameraTargetMarker.Create(_root);
@@ -77,8 +80,27 @@ namespace MissileCamera
                 MissileCameraMissionLifecycleDiag.Warn(
                     "HudOverlay.EnsureBuilt failed: " + ex.GetType().Name + ": " + ex.Message
                     + " | " + ex.StackTrace);
-                // Clear half-built chrome; feed RawImage must still work without HUD.
                 Destroy();
+            }
+        }
+
+        /// <summary>Create FLIR chrome on first FS need — never on MFD launch path.</summary>
+        private void EnsureFlirBuilt()
+        {
+            if (_root == null || _flir != null)
+                return;
+
+            try
+            {
+                _flir = MissileCameraFlirHud.Create(_root);
+                _flirRootStatic = _flir.Root;
+            }
+            catch (System.Exception ex)
+            {
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "FlirHud lazy Create: " + ex.GetType().Name + ": " + ex.Message);
+                _flir = null;
+                _flirRootStatic = null;
             }
         }
 
@@ -97,9 +119,6 @@ namespace MissileCamera
 
             UpdateZoomIndicatorVisibility();
 
-            // Screen-owner rule: keep MC HUD chrome alive whenever this overlay is driven.
-            // Do NOT gate the whole root on snapshot.HasFeed — RawImage can show pixels while
-            // RT/rig briefly reports no Texture, which previously blanked CornerHud entirely.
             bool hudEnabled = MissileCameraHudConfig.Enabled;
             if (_root.gameObject.activeSelf != hudEnabled)
                 _root.gameObject.SetActive(hudEnabled);
@@ -112,8 +131,9 @@ namespace MissileCamera
             bool bootPlaying = MissileCameraFullscreenController.IsActive
                 && MissileCameraFullscreenBootstrap.IsRunning;
             bool flir = MissileCameraHudConfig.UseFullscreenFlirHud;
+            if (flir)
+                EnsureFlirBuilt();
 
-            // During FS boot, BootSequence owns FlirHud — hide leftover center chrome on FS panel only.
             if (bootPlaying)
             {
                 _corners?.SetVisible(false);
@@ -129,7 +149,6 @@ namespace MissileCamera
                 return;
             }
 
-            // MFD classic HUD: force corners on whenever FLIR is not the owner.
             if (!flir)
             {
                 _corners?.SetVisible(true);
@@ -166,7 +185,6 @@ namespace MissileCamera
             if (showCenter)
                 _attitude?.Update(snapshot, panel.MinSide);
 
-            // Intercept aimPoint: MFD = filled green; FS FLIR = hollow green ring only.
             bool showIntercept = MissileCameraHudConfig.ShowCenterCluster && snapshot.HasFeed;
             UpdateIntercept(
                 snapshot,
@@ -222,6 +240,7 @@ namespace MissileCamera
 
         internal void ForceFlirUpdate(MissileCameraHudSnapshot snapshot, MissileCameraPanelMetrics panel)
         {
+            EnsureFlirBuilt();
             if (_flir == null)
                 return;
 
@@ -230,9 +249,27 @@ namespace MissileCamera
             _flirRootStatic = _flir.Root;
         }
 
+        /// <summary>
+        /// Soft park between missiles: keep chrome GameObjects under inactive stub.
+        /// Hard Destroy only on mission/aircraft wipe or tac overlay destroy.
+        /// </summary>
+        internal void Park()
+        {
+            try { MissileCameraCockpitPipController.Shutdown(); }
+            catch { /* ignore */ }
+
+            try { _flir?.SetVisible(false); }
+            catch { /* ignore */ }
+
+            if (_root != null)
+            {
+                try { _root.gameObject.SetActive(false); }
+                catch { /* ignore */ }
+            }
+        }
+
         internal void Destroy()
         {
-            // Always drop C# refs even if Unity objects were already scene-destroyed.
             try { MissileCameraCockpitPipController.Shutdown(); }
             catch { /* ignore */ }
 
@@ -276,7 +313,6 @@ namespace MissileCamera
             if (searchRoot == null)
                 return;
 
-            // Fullscreen must never show legacy stubs regardless of HudConfig.
             if (MissileCameraFullscreenController.IsActive)
                 hide = true;
 

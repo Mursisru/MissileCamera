@@ -57,6 +57,8 @@ namespace MissileCamera
         private static bool _objectiveMgrWasEnabled;
         /// <summary>True only while FS actually disabled ObjectiveOverlayManager — never force-disable on unload.</summary>
         private static bool _objectivesSuppressedByUs;
+        /// <summary>True only while FS SuppressIls hid FlightHud chrome — gates ForceOn restore.</summary>
+        private static bool _ilsSuppressedByUs;
         private static bool _designatorWasEnabled;
         private static readonly List<(GameObject go, bool wasActive)> _hiddenChrome =
             new List<(GameObject, bool)>(64);
@@ -87,6 +89,7 @@ namespace MissileCamera
 
             _objectiveMgrWasEnabled = false;
             _objectivesSuppressedByUs = false;
+            _ilsSuppressedByUs = false;
             _designatorWasEnabled = false;
 
             try
@@ -95,6 +98,7 @@ namespace MissileCamera
                 ElevateCombatHudCanvas();
                 ApplyMarkersOnlyVisibility();
                 SuppressIlsAndObjectives();
+                SyncMarkersFromHqIfNeeded();
                 ForceCombatHudMarkerPass();
                 MissileCameraFullscreenTargetLock.OnFullscreenEntered();
             }
@@ -116,14 +120,16 @@ namespace MissileCamera
             RestoreCombatHudCanvas();
             RestoreHiddenChrome();
             RestoreFlightHudVisuals();
+            // Outside FS: refresh markers only if aircraft alive — never SetActive chrome.
             ForceCombatHudMarkerPass();
             MissileCameraCombatHudMarkerProjection.RestoreMarkerImages();
 
             _flightHudWasActive = false;
+            _ilsSuppressedByUs = false;
         }
 
         internal static bool HasStickyHiddenChrome =>
-            _hiddenChrome.Count > 0 || _canvasElevated || _objectivesSuppressedByUs;
+            _hiddenChrome.Count > 0 || _canvasElevated || _objectivesSuppressedByUs || _ilsSuppressedByUs;
 
         /// <summary>
         /// Off-session / orphan FS: if hide list still holds live refs, unhide immediately.
@@ -151,7 +157,7 @@ namespace MissileCamera
                 RestoreCombatHudCanvas();
                 RestoreHiddenChrome();
                 RestoreFlightHudVisuals();
-                ForceCombatHudMarkerPass();
+                // Unload heal must NOT SetActive CombatHUD/FlightHud — that lights ILS on faction select.
                 MissileCameraCombatHudMarkerProjection.RestoreMarkerImages();
             }
             catch (Exception ex)
@@ -167,6 +173,7 @@ namespace MissileCamera
             _flightHudWasActive = false;
             _objectiveMgrWasEnabled = false;
             _objectivesSuppressedByUs = false;
+            _ilsSuppressedByUs = false;
             _designatorWasEnabled = false;
         }
 
@@ -191,6 +198,7 @@ namespace MissileCamera
             if (now >= _nextMarkerPassUnscaled)
             {
                 _nextMarkerPassUnscaled = now + MarkerPassInterval;
+                SyncMarkersFromHqIfNeeded();
                 ForceCombatHudMarkerPass();
             }
 
@@ -397,6 +405,7 @@ namespace MissileCamera
                 FlightHud? flightHud = SceneSingleton<FlightHud>.i;
                 if (flightHud != null)
                 {
+                    _ilsSuppressedByUs = true;
                     HideGo(flightHud.velocityVector != null ? flightHud.velocityVector.gameObject : null);
                     HideGo(flightHud.waterline != null ? flightHud.waterline.gameObject : null);
                     HideGo(flightHud.virtualJoystickPos != null ? flightHud.virtualJoystickPos.gameObject : null);
@@ -456,6 +465,10 @@ namespace MissileCamera
 
         private static void RestoreFlightHudVisuals()
         {
+            // Only undo what SuppressIls hid during a real FS session — never ForceOn at mission boot.
+            if (!_ilsSuppressedByUs)
+                return;
+
             try
             {
                 FlightHud? flightHud = SceneSingleton<FlightHud>.i;
@@ -478,6 +491,10 @@ namespace MissileCamera
             catch
             {
                 // ignore
+            }
+            finally
+            {
+                _ilsSuppressedByUs = false;
             }
         }
 
@@ -662,32 +679,172 @@ namespace MissileCamera
             _savedWorldCamera = null;
         }
 
-        /// <summary>Re-enable iconLayer + force vanilla UpdateMarkers (safe mid-sortie / host_ready).</summary>
+        /// <summary>
+        /// FS: ensure iconLayer + tick markers. Outside FS: UpdateMarkers only if aircraft set — never SetActive chrome.
+        /// </summary>
         internal static void ForceCombatHudMarkerPass()
         {
             CombatHUD? hud = SceneSingleton<CombatHUD>.i;
-            if (hud == null || hud.aircraft == null)
+            if (hud == null)
                 return;
 
-            if (!hud.gameObject.activeSelf)
-                hud.gameObject.SetActive(true);
+            bool fs = MissileCameraFullscreenController.IsActive;
+            if (!fs)
+            {
+                if (hud.aircraft == null)
+                    return;
 
+                try { UpdateMarkersMethod?.Invoke(hud, null); }
+                catch { /* ignore */ }
+                return;
+            }
+
+            // FS markers-only: iconLayer only — never force whole CombatHUD (weapons/ILS siblings).
             if (hud.iconLayer != null && !hud.iconLayer.gameObject.activeSelf)
                 hud.iconLayer.gameObject.SetActive(true);
 
-            // Designator GO must stay active for TargetSelect range checks (dump).
-            if (hud.targetDesignator != null && !hud.targetDesignator.gameObject.activeSelf)
-                hud.targetDesignator.gameObject.SetActive(true);
-
             try
             {
-                UpdateMarkersMethod?.Invoke(hud, null);
+                if (hud.aircraft != null)
+                    UpdateMarkersMethod?.Invoke(hud, null);
+                else
+                    TickMarkersWithoutAircraft(hud);
             }
             catch
             {
                 // ignore
             }
         }
+
+        /// <summary>FS without ownship: seed vanilla markers from seeker/DynamicMap HQ (CreateMarker needs aircraft proxy).</summary>
+        internal static void SyncMarkersFromHqIfNeeded()
+        {
+            if (!MissileCameraFullscreenController.IsActive)
+                return;
+
+            CombatHUD? hud = SceneSingleton<CombatHUD>.i;
+            if (hud == null)
+                return;
+
+            if (MarkersListField?.GetValue(hud) is System.Collections.Generic.List<HUDUnitMarker> existing
+                && existing.Count > 0)
+                return;
+
+            FactionHQ? hq = ResolveMarkerHq(hud.aircraft);
+            if (hq == null)
+                return;
+
+            try
+            {
+                for (int i = 0; i < hq.factionUnits.Count; i++)
+                    hud.CreateMarker(hq.factionUnits[i]);
+
+                foreach (KeyValuePair<PersistentID, TrackingInfo> pair in hq.trackingDatabase)
+                    hud.CreateMarker(pair.Key);
+            }
+            catch (Exception ex)
+            {
+                MfdLog.Info("FS SyncMarkersFromHq failed: " + ex.Message);
+            }
+        }
+
+        private static void TickMarkersWithoutAircraft(CombatHUD hud)
+        {
+            FactionHQ? hq = ResolveMarkerHq(null);
+            if (hq == null || MarkersListField == null)
+                return;
+
+            if (MarkersListField.GetValue(hud) is not System.Collections.Generic.List<HUDUnitMarker> markers
+                || markers.Count == 0)
+                return;
+
+            Camera? feed = MissileCameraFeedController.TryGetFeedCamera();
+            Transform viewTf;
+            if (feed != null)
+            {
+                viewTf = feed.transform;
+            }
+            else
+            {
+                CameraStateManager? csm = SceneSingleton<CameraStateManager>.i;
+                if (csm == null)
+                    return;
+                viewTf = csm.transform;
+            }
+
+            GlobalPosition viewPos = viewTf.GlobalPosition();
+            Vector3 forward = viewTf.forward;
+            for (int i = 0; i < markers.Count; i++)
+            {
+                HUDUnitMarker? m = markers[i];
+                if (m == null)
+                    continue;
+
+                try
+                {
+                    m.UpdatePosition(hq, viewPos, forward);
+                    MissileCameraCombatHudMarkerProjection.ApplyOpaqueContrast(m);
+                }
+                catch
+                {
+                    // ignore single marker
+                }
+            }
+        }
+
+        private static FactionHQ? ResolveMarkerHq(Aircraft? aircraft)
+        {
+            if (aircraft != null && aircraft.NetworkHQ != null)
+                return aircraft.NetworkHQ;
+
+            Missile? seeker = MissileCameraFeedController.TryGetFollowedMissile();
+            if (seeker != null && !seeker.disabled && seeker.NetworkHQ != null)
+                return seeker.NetworkHQ;
+
+            try
+            {
+                DynamicMap? map = SceneSingleton<DynamicMap>.i;
+                if (map != null && map.HQ != null)
+                    return map.HQ;
+            }
+            catch
+            {
+                // ignore
+            }
+
+            return null;
+        }
+
+        /// <summary>Aircraft proxy for HUDUnitMarker ctor when CombatHUD.aircraft is null (FS only).</summary>
+        internal static Aircraft? TryResolveMarkerAircraftProxy()
+        {
+            if (!MissileCameraFullscreenController.IsActive)
+                return null;
+
+            Missile? seeker = MissileCameraFeedController.TryGetFollowedMissile();
+            if (seeker == null || seeker.disabled)
+                return null;
+
+            if (seeker.owner is Aircraft ownerAc)
+                return ownerAc;
+
+            FactionHQ? hq = seeker.NetworkHQ;
+            if (hq == null)
+                return null;
+
+            for (int i = 0; i < hq.factionUnits.Count; i++)
+            {
+                if (!UnitRegistry.TryGetUnit(new PersistentID?(hq.factionUnits[i]), out Unit unit))
+                    continue;
+                if (unit is Aircraft ac)
+                    return ac;
+            }
+
+            return null;
+        }
+
+        private static readonly FieldInfo? MarkersListField =
+            AccessToolsField(typeof(CombatHUD), "markers");
 
         /// <summary>TEMP diag: count CombatHUD markers that are Missile units + image state.</summary>
         internal static void DiagLogMissileMarkers(string tag)

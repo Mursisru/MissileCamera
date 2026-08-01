@@ -64,12 +64,41 @@ namespace MissileCamera
 
         internal static void AfterRender()
         {
-            Camera? main = Camera.main;
-            if (main == null)
+            Camera? restore = ResolveWorldCamera();
+            if (restore == null)
                 return;
 
-            ApplyShaderGlobalsForCamera(main);
-            BakeTerrainWindowForCamera(main);
+            ApplyShaderGlobalsForCamera(restore);
+            BakeTerrainWindowForCamera(restore);
+        }
+
+        /// <summary>Camera.main is often null without local aircraft — fall back to CSM / any camera.</summary>
+        private static Camera? ResolveWorldCamera()
+        {
+            Camera? main = Camera.main;
+            if (main != null)
+                return main;
+
+            try
+            {
+                CameraStateManager? csm = SceneSingleton<CameraStateManager>.i;
+                if (csm != null && csm.mainCamera != null)
+                    return csm.mainCamera;
+            }
+            catch
+            {
+                // ignore
+            }
+
+            Camera[] cams = Camera.allCameras;
+            for (int i = 0; i < cams.Length; i++)
+            {
+                Camera c = cams[i];
+                if (c != null && c.enabled && c.targetTexture == null)
+                    return c;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -123,6 +152,7 @@ namespace MissileCamera
             UnregisterPipelineHooks();
             _pipelineFeedCamera = null;
             _pipelineInfrared = false;
+            _pipelineNightVision = false;
             _pipelineForceLdr = false;
             _lastBakedWindow = new Vector2Int(int.MinValue, int.MinValue);
             if (_pipelineFogActive)
