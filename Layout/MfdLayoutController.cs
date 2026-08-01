@@ -244,7 +244,11 @@ namespace MissileCamera
                     if (!_tacOverlayRoot.activeSelf)
                         _tacOverlayRoot.SetActive(true);
 
-                    // Re-bind feed/HUD if FS/disable tore down RawImage/corners while flags stayed active.
+                    // Soft park kept feed/HUD refs — rewake without BindPanel/EnsureBuilt rebuild.
+                    if (MissileCameraFeedController.TrySoftRewakeOverlay())
+                        return;
+
+                    // Re-bind only when soft refs were cleared or RawImage died.
                     Transform? panel = _tacOverlayRoot.transform.Find("MissileCameraPanel");
                     if (panel != null && panel.TryGetComponent(out RectTransform panelRt))
                         MissileCameraFeedController.NotifyOverlayReady(panelRt);
@@ -1234,7 +1238,7 @@ namespace MissileCamera
                 try { MfdWeaponsZoneAccess.Restore(); }
                 catch { /* ignore */ }
 
-                try { MissileCameraFeedController.NotifyOverlayGone(); }
+                try { MissileCameraFeedController.NotifyOverlayGone(destroyHud: true); }
                 catch { /* ignore */ }
 
                 _layoutActive = false;
@@ -1247,7 +1251,8 @@ namespace MissileCamera
             {
                 bool wasActive = _layoutActive;
                 MfdLayoutRetryHost.Cancel();
-                MissileCameraFeedController.NotifyOverlayGone();
+                // Full wipe — not SoftPark. SoftPark keeps feed/Rig; ClearLayout restores weapons.
+                MissileCameraFeedController.NotifyOverlayGone(destroyHud: true);
                 MfdWeaponsZoneAccess.Restore();
 
                 if (_tacOverlayRoot != null)

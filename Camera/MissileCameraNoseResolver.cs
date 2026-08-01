@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
@@ -40,7 +41,44 @@ namespace MissileCamera
 
         private static FieldInfo? _effectsTransformField;
 
+        // One mesh/collider scan per missile definition per mission — Attach hits every launch.
+        private static readonly Dictionary<string, float> CameraLocalZByDefinition =
+            new Dictionary<string, float>(32);
+
+        internal static void ResetCache() => CameraLocalZByDefinition.Clear();
+
         internal static MissileCameraNoseResolveResult Resolve(Missile missile)
+        {
+            string cacheKey = ResolveCacheKey(missile);
+            if (!string.IsNullOrEmpty(cacheKey)
+                && CameraLocalZByDefinition.TryGetValue(cacheKey, out float cachedZ))
+            {
+                return new MissileCameraNoseResolveResult(
+                    cachedZ,
+                    cachedZ,
+                    cachedZ,
+                    0f,
+                    0f,
+                    "cached",
+                    "cache");
+            }
+
+            MissileCameraNoseResolveResult result = ResolveUncached(missile);
+            if (!string.IsNullOrEmpty(cacheKey) && result.CameraLocalZ > 0f)
+                CameraLocalZByDefinition[cacheKey] = result.CameraLocalZ;
+            return result;
+        }
+
+        private static string ResolveCacheKey(Missile missile)
+        {
+            if (missile?.definition != null && !string.IsNullOrEmpty(missile.definition.unitName))
+                return missile.definition.unitName;
+            if (missile != null && !string.IsNullOrEmpty(missile.name))
+                return missile.name;
+            return string.Empty;
+        }
+
+        private static MissileCameraNoseResolveResult ResolveUncached(Missile missile)
         {
             Transform missileTransform = missile.transform;
             Transform? effectsRoot = GetEffectsTransform(missile);
