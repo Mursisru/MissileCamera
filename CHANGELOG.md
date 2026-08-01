@@ -4,6 +4,15 @@ All notable changes to **MissileCamera** (BepInEx) are documented here. Public v
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.1] — 2026-08-01
+
+### Fixed
+
+- **Hotfix — MFD hitch on missile launch:** SoftPark no longer tears down the seeker Rig/RT or clears feed RawImage/panel refs between missiles. Next launch soft-rewakes the stub (`TrySoftRewakeOverlay`) without `BindPanel` / full `EnsureBuilt`. Live overlay skips deferred `EnsureLayout` on `OnRegisterMissile`. Nose camera offset is cached per missile definition. `ClearLayout` / HardReset still fully wipe with `destroyHud:true`.
+
+> [!NOTE]
+> **First cold launch** in a sortie still pays one-time weapons discovery + TacStub create. Subsequent launches in the same layout session should no longer hitch.
+
 ## [1.2.0] — 2026-07-30
 
 ### Added
