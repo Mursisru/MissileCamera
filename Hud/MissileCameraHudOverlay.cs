@@ -10,7 +10,7 @@ namespace MissileCamera
 
         private RectTransform? _root;
         private MissileCameraCornerHud? _corners;
-        private MissileCameraFlirHud? _flir;
+        private MissileCameraGunshipHud? _flir;
         private MissileCameraAttitudeWidget? _attitude;
         private MissileCameraZoomIndicator? _zoomIndicator;
         private MissileCameraTargetMarker? _targetMarker;
@@ -49,7 +49,7 @@ namespace MissileCamera
 
             try
             {
-                var rootGo = new GameObject(RootName, typeof(RectTransform));
+                var rootGo = new GameObject(RootName, typeof(RectTransform), typeof(RectMask2D));
                 rootGo.transform.SetParent(viewRt, false);
                 _root = rootGo.GetComponent<RectTransform>();
                 Stretch(_root);
@@ -84,7 +84,7 @@ namespace MissileCamera
             }
         }
 
-        /// <summary>Create FLIR chrome on first FS need — never on MFD launch path.</summary>
+        /// <summary>Create gunship chrome on first FS need — never on MFD launch path.</summary>
         private void EnsureFlirBuilt()
         {
             if (_root == null || _flir != null)
@@ -92,13 +92,13 @@ namespace MissileCamera
 
             try
             {
-                _flir = MissileCameraFlirHud.Create(_root);
+                _flir = MissileCameraGunshipHud.Create(_root);
                 _flirRootStatic = _flir.Root;
             }
             catch (System.Exception ex)
             {
                 MissileCameraMissionLifecycleDiag.Warn(
-                    "FlirHud lazy Create: " + ex.GetType().Name + ": " + ex.Message);
+                    "GunshipHud lazy Create: " + ex.GetType().Name + ": " + ex.Message);
                 _flir = null;
                 _flirRootStatic = null;
             }

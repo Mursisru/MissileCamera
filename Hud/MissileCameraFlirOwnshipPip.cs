@@ -77,6 +77,9 @@ namespace MissileCamera
 
         internal void Place(MissileCameraPanelMetrics panel, float pad)
         {
+            if (_root != null && !_root.gameObject.activeSelf)
+                _root.gameObject.SetActive(true);
+
             if (Mathf.Approximately(panel.Width, _layoutW)
                 && Mathf.Approximately(panel.Height, _layoutH))
                 return;
@@ -159,6 +162,13 @@ namespace MissileCamera
 
         internal void Hide()
         {
+            try
+            {
+                if (_root != null && _root.gameObject.activeSelf)
+                    _root.gameObject.SetActive(false);
+            }
+            catch { /* ignore */ }
+
             // Scene may have already destroyed RawImage — never touch enabled on a dead Behaviour.
             try
             {

@@ -15,7 +15,7 @@ namespace MissileCamera
         internal const string StubLabel = "MISSILE CAMERA";
 
         internal static bool Enabled = true;
-        internal static string DisplayMode = "split";
+        internal static string DisplayMode = "auto";
         internal static int Revision;
 
         internal static void Init(string modRoot)

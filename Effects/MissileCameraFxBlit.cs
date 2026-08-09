@@ -24,6 +24,12 @@ namespace MissileCamera
                 return false;
 
             mat.SetFloat(IntensityId, Mathf.Clamp01(intensity));
+            if (mat.HasProperty("_LineDensity"))
+                mat.SetFloat("_LineDensity", 540f);
+            if (mat.HasProperty("_Opacity"))
+                mat.SetFloat("_Opacity", Mathf.Clamp01(Mathf.Max(intensity, 0.22f)));
+            if (mat.HasProperty("_Fisheye"))
+                mat.SetFloat("_Fisheye", MissileCameraFullscreenController.IsActive ? 0.11f : 0.06f);
             if (mat.HasProperty(MainTexId))
                 mat.SetTexture(MainTexId, source);
 
@@ -46,6 +52,16 @@ namespace MissileCamera
             if (!MissileCameraShaderBundle.TryGetFxShader(shaderFindName, out Shader? shader) || shader == null)
             {
                 initFailed = true;
+                return null;
+            }
+
+            // Error/pink shader = InternalErrorShader — never blit (full magenta feed).
+            if (!shader.isSupported
+                || string.IsNullOrEmpty(shader.name)
+                || shader.name.IndexOf("Error", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                initFailed = true;
+                MfdLog.Error(materialName + " rejected broken shader=" + shader.name);
                 return null;
             }
 

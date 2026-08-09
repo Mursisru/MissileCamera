@@ -5,21 +5,18 @@ using UnityEngine.UI;
 namespace MissileCamera
 {
     /// <summary>
-    /// Fullscreen FLIR vertical FUEL / THR bars at screen edges.
-    /// Side labels (rotated, toward center) + percent under the bar.
+    /// Laconic white edge gauges for gunship HUD.
+    /// RC contract: Update(HudSnapshot, PanelMetrics) + smooth throttle fields.
     /// </summary>
     internal sealed class MissileCameraFlirGaugeBars
     {
-        private static readonly Color FlirGreen = new Color(0.55f, 1f, 0.9f, 1f);
-        private static readonly Color FuelLow = new Color(1f, 0.55f, 0.12f, 1f);
-        private static readonly Color FrameHole = new Color(0f, 0f, 0f, 0.94f);
-        private static readonly Color TickDim = new Color(0.55f, 1f, 0.9f, 0.55f);
+        private static readonly Color BarWhite = new Color(1f, 1f, 1f, 0.88f);
+        private static readonly Color FuelLow = new Color(1f, 0.55f, 0.22f, 0.92f);
+        private static readonly Color Track = new Color(1f, 1f, 1f, 0.18f);
 
-        private const float BorderPx = 2.0f;
         private const float FuelWarnFraction = 0.25f;
         private const float FractionEpsilon = 0.002f;
         private const float DisplaySmoothHz = 2.5f;
-        private const int TickCount = 5;
 
         private readonly Gauge _fuel;
         private readonly Gauge _throttle;
@@ -59,7 +56,6 @@ namespace MissileCamera
             float fuelTarget = Mathf.Clamp01(snapshot.FuelFraction);
             float thrTarget = Mathf.Clamp01(snapshot.ThrottleFraction);
 
-            // Extra visual smoothing — motor fuel/throttle can step hard from reflection samples.
             float t = 1f - Mathf.Exp(-DisplaySmoothHz * Time.unscaledDeltaTime);
             if (!_displayReady || _displayFuel < 0f || _displayThrottle < 0f)
             {
@@ -69,7 +65,6 @@ namespace MissileCamera
             }
             else
             {
-                // Snap on missile switch / huge sample jumps, otherwise ease.
                 if (Mathf.Abs(fuelTarget - _displayFuel) > 0.55f)
                     _displayFuel = fuelTarget;
                 else
@@ -89,32 +84,27 @@ namespace MissileCamera
 
         private void ApplyLayout(MissileCameraPanelMetrics panel)
         {
-            float barH = Mathf.Clamp(panel.Height * 0.28f, 130f, 220f);
-            float barW = 14f;
-            float edgeInset = Mathf.Max(panel.HorizontalInset, 10f);
-            float labelGap = 6f;
-            float labelW = 56f;
-            float labelH = 14f;
-            float valueH = 14f;
-            int fontSize = 11;
+            // Thin edge rails mid-height — sit clear of telemetery / weapon block.
+            float barH = Mathf.Clamp(panel.Height * 0.22f, 90f, 150f);
+            float barW = 3f;
+            float edgeInset = Mathf.Max(panel.HorizontalInset, 8f) + 2f;
+            float labelGap = 5f;
+            int fontSize = 10;
 
-            // Bar hugs the edge; label sits toward center of screen.
             float barX = edgeInset + barW * 0.5f;
             PlaceBar(_fuel.Root, leftEdge: true, barX, barW, barH);
             PlaceBar(_throttle.Root, leftEdge: false, barX, barW, barH);
 
-            PlaceSideLabel(_fuel.Label, insideTowardCenter: true, leftEdge: true, barW, labelGap, labelW, labelH, fontSize);
-            PlaceSideLabel(_throttle.Label, insideTowardCenter: true, leftEdge: false, barW, labelGap, labelW, labelH, fontSize);
-            PlacePercent(_fuel.Value, barH, valueH, fontSize);
-            PlacePercent(_throttle.Value, barH, valueH, fontSize);
-            PlaceTicks(_fuel, barW, barH);
-            PlaceTicks(_throttle, barW, barH);
+            PlaceSideLabel(_fuel.Label, leftEdge: true, barW, labelGap, fontSize);
+            PlaceSideLabel(_throttle.Label, leftEdge: false, barW, labelGap, fontSize);
+            PlacePercent(_fuel.Value, barH, fontSize);
+            PlacePercent(_throttle.Value, barH, fontSize);
 
             Font font = HudFontHelper.GetFont();
-            ApplyTextStyle(_fuel.Label, font, fontSize, FlirGreen);
-            ApplyTextStyle(_throttle.Label, font, fontSize, FlirGreen);
-            ApplyTextStyle(_fuel.Value, font, fontSize, FlirGreen);
-            ApplyTextStyle(_throttle.Value, font, fontSize, FlirGreen);
+            ApplyTextStyle(_fuel.Label, font, fontSize, BarWhite);
+            ApplyTextStyle(_throttle.Label, font, fontSize, BarWhite);
+            ApplyTextStyle(_fuel.Value, font, fontSize, BarWhite);
+            ApplyTextStyle(_throttle.Value, font, fontSize, BarWhite);
 
             SetFill(_fuel, Mathf.Max(0f, _lastFuel), fuelStyle: true, ref _lastFuel, force: true);
             SetFill(_throttle, Mathf.Max(0f, _lastThrottle), fuelStyle: false, ref _lastThrottle, force: true);
@@ -130,62 +120,34 @@ namespace MissileCamera
             root.sizeDelta = new Vector2(barW, barH);
         }
 
-        private static void PlaceSideLabel(
-            Text label,
-            bool insideTowardCenter,
-            bool leftEdge,
-            float barW,
-            float gap,
-            float labelW,
-            float labelH,
-            int fontSize)
+        private static void PlaceSideLabel(Text label, bool leftEdge, float barW, float gap, int fontSize)
         {
             RectTransform rt = label.rectTransform;
             rt.anchorMin = new Vector2(0.5f, 0.5f);
             rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
-            float side = (barW * 0.5f) + gap + (labelH * 0.5f);
-            bool positiveX = leftEdge == insideTowardCenter;
-            rt.anchoredPosition = new Vector2(positiveX ? side : -side, 0f);
-            rt.sizeDelta = new Vector2(labelW, labelH);
-            rt.localEulerAngles = new Vector3(0f, 0f, positiveX ? -90f : 90f);
+            float side = (barW * 0.5f) + gap + 7f;
+            rt.anchoredPosition = new Vector2(leftEdge ? side : -side, 0f);
+            rt.sizeDelta = new Vector2(48f, 12f);
+            rt.localEulerAngles = new Vector3(0f, 0f, leftEdge ? -90f : 90f);
             label.fontSize = fontSize;
             label.alignment = TextAnchor.MiddleCenter;
             label.horizontalOverflow = HorizontalWrapMode.Overflow;
             label.verticalOverflow = VerticalWrapMode.Overflow;
         }
 
-        /// <summary>Percent sits just under the bar (parent is bar root, center-pivoted).</summary>
-        private static void PlacePercent(Text value, float barH, float valueH, int fontSize)
+        private static void PlacePercent(Text value, float barH, int fontSize)
         {
             RectTransform rt = value.rectTransform;
             rt.anchorMin = new Vector2(0.5f, 0.5f);
             rt.anchorMax = new Vector2(0.5f, 0.5f);
             rt.pivot = new Vector2(0.5f, 1f);
-            rt.anchoredPosition = new Vector2(0f, -(barH * 0.5f) - 3f);
-            rt.sizeDelta = new Vector2(40f, valueH);
+            rt.anchoredPosition = new Vector2(0f, -(barH * 0.5f) - 2f);
+            rt.sizeDelta = new Vector2(36f, 12f);
             value.fontSize = fontSize;
             value.alignment = TextAnchor.UpperCenter;
             value.horizontalOverflow = HorizontalWrapMode.Overflow;
             value.verticalOverflow = VerticalWrapMode.Overflow;
-        }
-
-        private static void PlaceTicks(Gauge gauge, float barW, float barH)
-        {
-            float innerH = barH - BorderPx * 2f;
-            for (int i = 0; i < TickCount; i++)
-            {
-                float frac = (i + 1) / (float)(TickCount + 1);
-                float y = -barH * 0.5f + BorderPx + innerH * frac;
-                Image tick = gauge.Ticks[i];
-                RectTransform rt = tick.rectTransform;
-                rt.anchorMin = new Vector2(0.5f, 0.5f);
-                rt.anchorMax = new Vector2(0.5f, 0.5f);
-                rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.anchoredPosition = new Vector2(0f, y);
-                rt.sizeDelta = new Vector2(Mathf.Max(2f, barW - BorderPx * 2f - 2f), 1f);
-                tick.color = TickDim;
-            }
         }
 
         private static void ApplyTextStyle(Text text, Font font, int fontSize, Color color)
@@ -220,21 +182,13 @@ namespace MissileCamera
             float top = Mathf.Max(fraction, 0.001f);
             fillRt.anchorMin = new Vector2(0f, 0f);
             fillRt.anchorMax = new Vector2(1f, top);
-            fillRt.offsetMin = new Vector2(BorderPx + 1f, BorderPx + 1f);
-            fillRt.offsetMax = new Vector2(-(BorderPx + 1f), -(BorderPx + 1f));
+            fillRt.offsetMin = Vector2.zero;
+            fillRt.offsetMax = Vector2.zero;
             gauge.Fill.enabled = fraction > 0.001f;
 
-            if (fuelStyle)
-            {
-                Color c = fraction <= FuelWarnFraction ? FuelLow : FlirGreen;
-                gauge.Fill.color = c;
-                gauge.Value.color = c;
-            }
-            else
-            {
-                gauge.Fill.color = FlirGreen;
-                gauge.Value.color = FlirGreen;
-            }
+            Color c = fuelStyle && fraction <= FuelWarnFraction ? FuelLow : BarWhite;
+            gauge.Fill.color = c;
+            gauge.Value.color = c;
         }
 
         private static Gauge CreateGauge(RectTransform parent, string name, string labelText)
@@ -243,31 +197,20 @@ namespace MissileCamera
             rootGo.transform.SetParent(parent, false);
             RectTransform root = rootGo.GetComponent<RectTransform>();
 
-            Image frame = CreateImage(root, "Frame", FlirGreen);
-            Stretch(frame.rectTransform);
+            Image track = CreateImage(root, "Track", Track);
+            Stretch(track.rectTransform);
 
-            Image hole = CreateImage(root, "Hole", FrameHole);
-            RectTransform holeRt = hole.rectTransform;
-            holeRt.anchorMin = Vector2.zero;
-            holeRt.anchorMax = Vector2.one;
-            holeRt.offsetMin = new Vector2(BorderPx, BorderPx);
-            holeRt.offsetMax = new Vector2(-BorderPx, -BorderPx);
-
-            var ticks = new Image[TickCount];
-            for (int i = 0; i < TickCount; i++)
-                ticks[i] = CreateImage(root, "Tick" + i, TickDim);
-
-            Image fill = CreateImage(root, "Fill", FlirGreen);
+            Image fill = CreateImage(root, "Fill", BarWhite);
             RectTransform fillRt = fill.rectTransform;
             fillRt.anchorMin = new Vector2(0f, 0f);
             fillRt.anchorMax = new Vector2(1f, 0f);
             fillRt.pivot = new Vector2(0.5f, 0f);
-            fillRt.offsetMin = new Vector2(BorderPx + 1f, BorderPx + 1f);
-            fillRt.offsetMax = new Vector2(-(BorderPx + 1f), 0f);
+            fillRt.offsetMin = Vector2.zero;
+            fillRt.offsetMax = Vector2.zero;
 
             Text label = CreateLabel(root, "Label", labelText);
             Text value = CreateLabel(root, "Value", "0%");
-            return new Gauge(root, fill, label, value, ticks);
+            return new Gauge(root, fill, label, value);
         }
 
         private static Image CreateImage(RectTransform parent, string name, Color color)
@@ -276,6 +219,7 @@ namespace MissileCamera
             go.transform.SetParent(parent, false);
             Image img = go.GetComponent<Image>();
             UiImageHelper.ApplySolid(img, color);
+            img.raycastTarget = false;
             return img;
         }
 
@@ -286,10 +230,10 @@ namespace MissileCamera
             Text label = go.GetComponent<Text>();
             label.text = text;
             label.alignment = TextAnchor.MiddleCenter;
-            label.color = FlirGreen;
+            label.color = BarWhite;
             var outline = go.AddComponent<Outline>();
-            outline.effectColor = new Color(0f, 0f, 0f, 0.85f);
-            outline.effectDistance = new Vector2(0.7f, 0.7f);
+            outline.effectColor = new Color(0f, 0f, 0f, 0.7f);
+            outline.effectDistance = new Vector2(0.5f, 0.5f);
             label.raycastTarget = false;
             return label;
         }
@@ -304,20 +248,18 @@ namespace MissileCamera
 
         private readonly struct Gauge
         {
-            internal Gauge(RectTransform root, Image fill, Text label, Text value, Image[] ticks)
+            internal Gauge(RectTransform root, Image fill, Text label, Text value)
             {
                 Root = root;
                 Fill = fill;
                 Label = label;
                 Value = value;
-                Ticks = ticks;
             }
 
             internal RectTransform Root { get; }
             internal Image Fill { get; }
             internal Text Label { get; }
             internal Text Value { get; }
-            internal Image[] Ticks { get; }
         }
     }
 }

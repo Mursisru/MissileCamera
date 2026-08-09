@@ -99,19 +99,31 @@ namespace MissileCamera
         private static Material? EnsureMaterial()
         {
             if (_material != null)
-                return _material;
+            {
+                Shader? live = _material.shader;
+                if (live != null
+                    && live.isSupported
+                    && live.name.IndexOf("Error", System.StringComparison.OrdinalIgnoreCase) < 0)
+                    return _material;
+
+                Object.Destroy(_material);
+                _material = null;
+                _materialInitFailed = false;
+            }
 
             if (_materialInitFailed)
                 return null;
 
             Shader? shader = MissileCameraShaderBundle.InfraredBlitShader;
-            if (shader == null || !shader.isSupported)
+            if (shader == null
+                || !shader.isSupported
+                || shader.name.IndexOf("Error", System.StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 _materialInitFailed = true;
                 MfdLog.Error(
                     shader == null
                         ? "Vision blit shader missing from AssetBundle/Shader.Find."
-                        : "Vision blit shader not supported on this GPU.");
+                        : "Vision blit rejected broken shader=" + shader.name);
                 return null;
             }
 

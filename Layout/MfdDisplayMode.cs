@@ -65,9 +65,14 @@ namespace MissileCamera
                 return MfdLayoutProfile.DedicatedSplit;
             }
 
-            // Corner radar widget only тАФ not a half-screen target feed (even if roughly square).
-            if (width < 0.32f && height < 0.42f)
+            // Corner radar widget only — skip ONLY when no weapons strip exists to replace.
+            // Multirole1 (Revoker etc.): small TargetCam display but full weapons bay → still DedicatedSplit.
+            // Proven: LogOutput spam "skip profile=Skip ... jsonKey=Multirole1" = first-launch no MFD cam.
+            if (width < 0.32f && height < 0.42f
+                && !MfdWeaponsZoneAccess.CanDiscoverWeaponsPanel(tacScreen, jsonKey))
+            {
                 return MfdLayoutProfile.Skip;
+            }
 
             return MfdLayoutProfile.DedicatedSplit;
         }

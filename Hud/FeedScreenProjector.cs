@@ -29,6 +29,12 @@ namespace MissileCamera
             if (viewport.z <= 0f)
                 return new FeedProjection(false, false, Vector2.zero);
 
+            // Hide when off the feed image — otherwise diamond/ring spill past the MFD panel (issue #6).
+            const float margin = 0.02f;
+            if (viewport.x < -margin || viewport.x > 1f + margin
+                || viewport.y < -margin || viewport.y > 1f + margin)
+                return new FeedProjection(false, true, Vector2.zero);
+
             Vector2 size = feedRect.rect.size;
             if (size.x < 1f || size.y < 1f)
                 return FeedProjection.Invalid;

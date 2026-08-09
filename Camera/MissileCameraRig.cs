@@ -224,7 +224,6 @@ namespace MissileCamera
             if (!IsRootAlive)
                 return;
 
-            bool following = _missile != null && !_missile.disabled && _renderTexture != null;
             UniversalAdditionalCameraData urp = _camera.GetUniversalAdditionalCameraData();
 
             if (_pipelineDriven)
@@ -235,15 +234,11 @@ namespace MissileCamera
                 return;
             }
 
-            if (following)
-            {
-                urp.renderType = CameraRenderType.Overlay;
-                _camera.targetTexture = _renderTexture;
-                _camera.enabled = true;
-                return;
-            }
-
-            urp.renderType = CameraRenderType.Base;
+            // Manual IR/NVG: Overlay + Camera.Render only. Leaving enabled=true made URP
+            // treat it as a live camera alongside main/aircraft mini-cam (issue #3 FPS).
+            // Particles: COLOR path is pipeline-driven (enabled Base) — not this branch.
+            urp.renderType = CameraRenderType.Overlay;
+            _camera.targetTexture = _renderTexture;
             _camera.enabled = false;
         }
 

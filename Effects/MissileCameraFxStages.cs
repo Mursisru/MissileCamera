@@ -9,8 +9,8 @@ namespace MissileCamera
 
         public string StageId => "Scanlines";
         public bool IsAvailable => MissileCameraEffectsAvailability.IsStageAvailable(StageId);
-        public bool IsEnabled => MissileCameraEffectsConfig.ScanlinesEnabled && IsAvailable;
-        public float Intensity => MissileCameraEffectsConfig.ScanlinesIntensity;
+        public bool IsEnabled => false; // PostFx scanlines disabled — wrong Unity rebuild pinked feed; TV via UI overlay.
+        public float Intensity => 0f;
 
         public bool Apply(RenderTexture source, RenderTexture destination) =>
             MissileCameraFxBlit.TryBlit(

@@ -1,3 +1,4 @@
+using System;
 using BepInEx.Configuration;
 
 namespace MissileCamera.Config
@@ -63,14 +64,16 @@ namespace MissileCamera.Config
         internal static ConfigEntry<bool> AircraftCamHideInFullscreen { get; private set; } = null!;
         internal static ConfigEntry<KeyboardShortcut> AircraftCamCycle { get; private set; } = null!;
 
+        private static bool _liveRefreshHooked;
+
         internal static void Bind(ConfigFile config)
         {
             const string layout = "Layout";
             LayoutEnabled = config.Bind(layout, "Enabled", true,
                 "Turns MFD layout splitting on/off. Off = vanilla MFD never touched.");
-            DisplayMode = config.Bind(layout, "DisplayMode", "split",
+            DisplayMode = config.Bind(layout, "DisplayMode", "auto",
                 new ConfigDescription(
-                    "Which aircraft get the missile panel: auto = per airframe, skip = never, split = always.",
+                    "Which aircraft get the missile panel: auto = per airframe (recommended), skip = never, split = force on all.",
                     new AcceptableValueList<string>("auto", "skip", "split")));
 
             const string feed = "MissileCameraFeed";
@@ -111,7 +114,7 @@ namespace MissileCamera.Config
             ShowTargetMarker = config.Bind(hud, "ShowTargetMarker", true,
                 "Shows MFD target diamond marker.");
             HudCockpitPipEnabled = config.Bind(hud, "CockpitPipEnabled", true,
-                "Shows MFD bottom-left cockpit picture-in-picture.");
+                "Shows fullscreen FLIR ownship nose PiP (bottom-left). MFD classic has no separate cockpit PiP.");
 
             const string controls = "MissileCameraControls";
             ControlsEnabled = config.Bind(controls, "Enabled", true,
@@ -160,8 +163,8 @@ namespace MissileCamera.Config
                 "Shows stock FlightHud pitch ladder on fullscreen FLIR.");
 
             const string fx = "MissileCameraEffects";
-            FxScanlinesEnabled = config.Bind(fx, "ScanlinesEnabled", false,
-                "MFD post-FX: scanlines (needs shader bundle).");
+            FxScanlinesEnabled = config.Bind(fx, "ScanlinesEnabled", true,
+                "TV scanline overlay on the missile feed (above IR, below HUD). Default on.");
             FxMotionBlurEnabled = config.Bind(fx, "MotionBlurEnabled", false,
                 "MFD post-FX: motion blur (needs shader bundle).");
             FxChromaticEnabled = config.Bind(fx, "ChromaticEnabled", false,
@@ -181,6 +184,40 @@ namespace MissileCamera.Config
                 "Keybind: cycle mini-cam mode. Default: RightAlt + V");
 
             IsBound = true;
+            HookLiveRefresh(config);
+        }
+
+        /// <summary>Apply cfg changes immediately (Configuration Manager) — not only on 1s Tick poll.</summary>
+        private static void HookLiveRefresh(ConfigFile config)
+        {
+            if (_liveRefreshHooked)
+                return;
+
+            _liveRefreshHooked = true;
+            config.SettingChanged += (_, __) =>
+            {
+                try
+                {
+                    MissileCameraLayoutConfigRefresh();
+                }
+                catch
+                {
+                    // ignore mid-teardown
+                }
+            };
+        }
+
+        private static void MissileCameraLayoutConfigRefresh()
+        {
+            MfdLayoutConfig.Refresh(force: true);
+            MissileCameraFeedConfig.Refresh(force: true);
+            MissileCameraHudConfig.Refresh(force: true);
+            MissileCameraControlsConfig.Refresh(force: true);
+            MissileCameraKeybindConfig.Refresh(force: true);
+            MissileCameraFullscreenConfig.Refresh(force: true);
+            MissileCameraTelemetryConfig.Refresh(force: true);
+            MissileCameraEffectsConfig.Refresh(force: true);
+            MissileCameraAircraftCamConfig.Refresh(force: true);
         }
     }
 }

@@ -54,7 +54,9 @@ namespace MissileCamera
             int keep = 0;
             for (int i = 0; i < found.Length; i++)
             {
-                if (found[i] != null && !IsUnderFuelThrottleGauge(found[i].transform))
+                if (found[i] != null
+                    && !IsUnderFuelThrottleGauge(found[i].transform)
+                    && !IsUnderGunshipHud(found[i].transform))
                     keep++;
             }
 
@@ -69,7 +71,9 @@ namespace MissileCamera
             for (int i = 0; i < found.Length; i++)
             {
                 Text? text = found[i];
-                if (text == null || IsUnderFuelThrottleGauge(text.transform))
+                if (text == null
+                    || IsUnderFuelThrottleGauge(text.transform)
+                    || IsUnderGunshipHud(text.transform))
                     continue;
 
                 _texts[w] = text;
@@ -413,6 +417,20 @@ namespace MissileCamera
                 string n = t.name;
                 if (n.StartsWith("FlirFuelGauge", System.StringComparison.Ordinal)
                     || n.StartsWith("FlirThrottleGauge", System.StringComparison.Ordinal))
+                    return true;
+                t = t.parent;
+            }
+
+            return false;
+        }
+
+        /// <summary>Gunship English labels stay intact during boot — only feed tiles animate.</summary>
+        private static bool IsUnderGunshipHud(Transform node)
+        {
+            Transform? t = node;
+            while (t != null)
+            {
+                if (t.name == "MissileCameraGunshipHud")
                     return true;
                 t = t.parent;
             }

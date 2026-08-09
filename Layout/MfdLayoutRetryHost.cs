@@ -5,8 +5,8 @@ namespace MissileCamera
 {
     internal static class MfdLayoutRetryHost
     {
-        private const float IntervalSeconds = 0.5f;
-        private const int MaxAttempts = 2;
+        private const float IntervalSeconds = 0.35f;
+        private const int MaxAttempts = 8;
 
         private static MfdLayoutRetryBehaviour? _behaviour;
 
@@ -24,6 +24,12 @@ namespace MissileCamera
         {
             EnsureBehaviour();
             _behaviour?.BeginEnsureLayoutNextFrame();
+        }
+
+        internal static void KickEnsureLayoutNextFrame()
+        {
+            EnsureBehaviour();
+            _behaviour?.KickEnsureLayoutNextFrame();
         }
 
         internal static void Cancel()
@@ -96,9 +102,24 @@ namespace MissileCamera
 
         internal void BeginEnsureLayoutNextFrame()
         {
+            // Allow re-schedule after a failed first attempt (previous coroutine finished null).
             if (_ensureLayoutCoroutine != null)
                 return;
 
+            _ensureLayoutCoroutine = StartCoroutine(EnsureLayoutNextFrame());
+        }
+
+        /// <summary>Force another next-frame EnsureLayout even if one already ran this session.</summary>
+        internal void KickEnsureLayoutNextFrame()
+        {
+            try
+            {
+                if (_ensureLayoutCoroutine != null && this != null)
+                    StopCoroutine(_ensureLayoutCoroutine);
+            }
+            catch { /* ignore */ }
+
+            _ensureLayoutCoroutine = null;
             _ensureLayoutCoroutine = StartCoroutine(EnsureLayoutNextFrame());
         }
 

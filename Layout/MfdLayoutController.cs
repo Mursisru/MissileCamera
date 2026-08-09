@@ -138,26 +138,64 @@ namespace MissileCamera
         }
 
         /// <summary>
-        /// Drop live feed/HUD bind but keep tac stub + ApplyHidden strip for the sortie.
-        /// Avoids Restore+discovery+ApplyHidden hitch on every subsequent launch.
+        /// End of missile feed: restore vanilla MFD strip and drop stub.
+        /// Clears UI bind refs (destroyHud) so next launch cold-binds reliably.
         /// </summary>
         private static void SoftParkMissileFeed(string reason)
         {
-            try { MfdLayoutRetryHost.Cancel(); }
+            // First-launch race: Harmony target_list_empty / cam_disabled can fire before any
+            // layout exists — do not DestroyAndClearRig / wipe HUD (killed MFD first bind).
+            if (!_layoutActive && _tacOverlayRoot == null)
+                return;
+
+            // Do not Cancel pending EnsureLayout — a new missile may already have scheduled wake.
+            try { MissileCameraFeedController.NotifyOverlayGone(destroyHud: true); }
             catch { /* ignore */ }
 
-            try { MissileCameraFeedController.NotifyOverlayGone(destroyHud: false); }
+            try { MfdWeaponsZoneAccess.Restore(); }
             catch { /* ignore */ }
 
-            if (_tacOverlayRoot != null)
+            GameObject? stubGo = null;
+            try
             {
-                try { _tacOverlayRoot.SetActive(false); }
+                if (_tacOverlayRoot != null)
+                    stubGo = _tacOverlayRoot.gameObject;
+            }
+            catch { /* ignore */ }
+
+            _tacOverlayRoot = null;
+            _stubLabel = null;
+
+            if (stubGo != null)
+            {
+                try { Object.Destroy(stubGo); }
                 catch { /* ignore */ }
             }
 
-            // Stay _layoutActive so EnsureLayoutForMissileFeed reactivates stub only.
-            MissileCameraMissionLifecycleDiag.Info("SoftParkMissileFeed reason=" + reason);
+            _layoutActive = false;
+            _activeTargetCam = null;
+            _activeScreenUi = null;
+            _activeTacScreen = null;
+            _appliedConfigRevision = -1;
+            _cachedOverlayZone = null;
+            _cachedOverlayRevision = -1;
+            _cachedSuppressBottomDivider = false;
+            _cachedShowPanelBorder = false;
+            _cachedSuppressBottomBorder = false;
+            _cachedOverlayRotationZ = 0f;
+            _cachedStubContentRotationZ = 0f;
+            _cachedStubFontRef = 0f;
+            _cachedStubContentBand = Vector2.up;
+            _cachedStubForcePortraitLayout = false;
+            _cachedHudLeftInsetExtra = 0.02f;
+            _cachedTelemetryLayout = MissileCameraTelemetryLayout.BottomRow;
+            _layoutGeneration++;
+
+            MissileCameraMissionLifecycleDiag.Info("SoftParkMissileFeed restored weapons reason=" + reason);
         }
+
+        /// <summary>Public full wipe (feed disabled mid-sortie, etc.).</summary>
+        internal static void ReleaseFully(string reason) => ClearLayout(reason);
 
         internal static void ResetForMissionUnload() => HardResetForMissionUnload();
 
@@ -235,6 +273,7 @@ namespace MissileCamera
 
             if (_layoutActive)
             {
+                // SoftPark may have destroyed stub while a stale flag lingered — heal.
                 if (_tacOverlayRoot == null)
                 {
                     ClearLayout("overlay_destroyed");
@@ -244,11 +283,11 @@ namespace MissileCamera
                     if (!_tacOverlayRoot.activeSelf)
                         _tacOverlayRoot.SetActive(true);
 
-                    // Soft park kept feed/HUD refs — rewake without BindPanel/EnsureBuilt rebuild.
-                    if (MissileCameraFeedController.TrySoftRewakeOverlay())
+                    // SoftRewake only when stub+feed refs are still live (pre-#5 park path).
+                    if (MissileCameraFeedController.HasLiveMfdFeedBind()
+                        && MissileCameraFeedController.TrySoftRewakeOverlay())
                         return;
 
-                    // Re-bind only when soft refs were cleared or RawImage died.
                     Transform? panel = _tacOverlayRoot.transform.Find("MissileCameraPanel");
                     if (panel != null && panel.TryGetComponent(out RectTransform panelRt))
                         MissileCameraFeedController.NotifyOverlayReady(panelRt);

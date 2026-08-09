@@ -7,7 +7,7 @@ namespace MissileCamera
         internal const bool InfraredEnabled = true;
 
         // Hardcoded intensities (toggles stay in cfg).
-        internal const float ScanlinesIntensity = 0.35f;
+        internal const float ScanlinesIntensity = 0.42f;
         internal const float MotionBlurIntensity = 0.25f;
         internal const float ChromaticIntensity = 0.2f;
         internal const float BloomIntensity = 0.3f;
