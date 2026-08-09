@@ -68,7 +68,7 @@ namespace MissileCamera.Config
             const string layout = "Layout";
             LayoutEnabled = config.Bind(layout, "Enabled", true,
                 "Turns MFD layout splitting on/off. Off = vanilla MFD never touched.");
-            DisplayMode = config.Bind(layout, "DisplayMode", "split",
+            DisplayMode = config.Bind(layout, "DisplayMode", "auto",
                 new ConfigDescription(
                     "Which aircraft get the missile panel: auto = per airframe, skip = never, split = always.",
                     new AcceptableValueList<string>("auto", "skip", "split")));

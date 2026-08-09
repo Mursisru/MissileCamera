@@ -137,6 +137,30 @@ namespace MissileCamera
             SoftParkMissileFeed("missile_feed_ended");
         }
 
+        /// <summary>Mid-sortie cfg off — restore vanilla weapons and drop tac stub.</summary>
+        internal static void ReleaseFully(string reason)
+        {
+            if (!_layoutActive && _tacOverlayRoot == null)
+                return;
+
+            try { MfdLayoutRetryHost.Cancel(); }
+            catch { /* ignore */ }
+
+            if (_layoutActive)
+                ClearLayout(reason);
+            else
+            {
+                try { MissileCameraFeedController.NotifyOverlayGone(destroyHud: true); }
+                catch { /* ignore */ }
+
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
+            }
+
+            try { DestroyTacOverlay(); }
+            catch { /* ignore */ }
+        }
+
         /// <summary>
         /// Drop live feed/HUD bind but keep tac stub + ApplyHidden strip for the sortie.
         /// Avoids Restore+discovery+ApplyHidden hitch on every subsequent launch.

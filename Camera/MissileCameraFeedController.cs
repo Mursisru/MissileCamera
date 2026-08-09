@@ -298,6 +298,8 @@ namespace MissileCamera
                 DetachRig();
                 UpdateDisplay(null);
                 TryUnbindAircraft();
+                if (MfdLayoutController.IsLayoutActive)
+                    MfdLayoutController.ReleaseFully("feed_disabled");
                 return;
             }
 
@@ -995,6 +997,7 @@ namespace MissileCamera
                 return;
 
             _nextConfigRefreshTime = now + ConfigRefreshInterval;
+            MfdLayoutConfig.Refresh();
             MissileCameraKeybindConfig.Refresh();
             MissileCameraFeedConfig.Refresh();
             MissileCameraHudConfig.Refresh();

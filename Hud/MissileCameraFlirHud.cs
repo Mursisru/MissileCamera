@@ -267,7 +267,10 @@ namespace MissileCamera
 
             ApplyContent(snapshot, panel);
             _gaugeBars.Update(snapshot, panel);
-            _ownshipPip.Update();
+            if (MissileCameraHudConfig.CockpitPipEnabled)
+                _ownshipPip.Update();
+            else
+                _ownshipPip.Hide();
 
             bool showLadder = snapshot.HasFeed && !MissileCameraFullscreenBootstrap.IsRunning;
             Camera? feedCamera = MissileCameraFeedController.TryGetFeedCamera();
@@ -666,7 +669,7 @@ namespace MissileCamera
 
             // Ownship PiP sits bottom-left; if the rail overlaps, shift it to the right just enough
             // so it remains in a "normal" HUD position and doesn't protrude beside the PiP.
-            float pipSize = _ownshipPip.Size;
+            float pipSize = MissileCameraHudConfig.CockpitPipEnabled ? _ownshipPip.Size : 0f;
             if (pipSize > 0f && panel.Width > 0f)
             {
                 float pipXPad = Mathf.Max(panel.HorizontalInset, 8f);
@@ -869,10 +872,17 @@ namespace MissileCamera
             Place(_northArrow, 0f, 0.58f, pad + 22f, 8f, 64f, row, TextAnchor.MiddleLeft);
 
             float pipPad = Mathf.Clamp(panel.HorizontalInset, 6f, 18f);
-            _ownshipPip.Place(panel, pipPad);
-            // Keep bottom-left blocks readable under potentially large PiP.
-            float pipTopY = pipPad + _ownshipPip.Size;
-            float sensorBottomY = Mathf.Max(bottomY, pipTopY + stackGap);
+            float sensorBottomY = bottomY;
+            if (MissileCameraHudConfig.CockpitPipEnabled)
+            {
+                _ownshipPip.Place(panel, pipPad);
+                float pipTopY = pipPad + _ownshipPip.Size;
+                sensorBottomY = Mathf.Max(bottomY, pipTopY + stackGap);
+            }
+            else
+            {
+                _ownshipPip.Hide();
+            }
             _sensorPanel.Place(0f, 0f, pad, sensorBottomY, colW, sensorH, TextAnchor.MiddleLeft, TextAnchor.UpperLeft);
             _guidancePanel.Place(1f, 0f, -pad, bottomY, colW, guidanceH, TextAnchor.MiddleRight, TextAnchor.UpperRight);
         }

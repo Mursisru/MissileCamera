@@ -127,7 +127,7 @@ BepInEx\config\com.at747.missilecamera.bepinex.cfg
 | Key | Default | Description |
 | :--- | :---: | :--- |
 | `Enabled` | `true` | Turns MFD layout splitting on/off |
-| `DisplayMode` | `split` | Which aircraft get the missile panel: `auto` \| `skip` \| `split` |
+| `DisplayMode` | `auto` | Which aircraft get the missile panel: `auto` \| `skip` \| `split` |
 
 ### MissileCameraFeed
 

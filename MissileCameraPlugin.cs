@@ -18,6 +18,7 @@ namespace MissileCamera
             ModLogger = base.Logger;
 
             MissileCameraBepInConfig.Bind(Config);
+            MissileCameraConfigLiveRefresh.Subscribe(Config);
 
             string? pluginDir = Path.GetDirectoryName(Info.Location);
             if (string.IsNullOrEmpty(pluginDir))
