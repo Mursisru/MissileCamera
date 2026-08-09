@@ -66,9 +66,12 @@ namespace MissileCamera
                 _ => "TV"
             };
 
+            int count = Mathf.Max(1, snapshot.SalvoTotal);
+            string missileWord = count == 1 ? "MISSILE" : "MISSILES";
+
             // Single right-aligned column (Arial isn't mono — no space padding)
             Sb.Length = 0;
-            Sb.Append("1 MISSILE");
+            Sb.Append(count.ToString(CultureInfo.InvariantCulture)).Append(' ').Append(missileWord);
             Sb.Append('\n').Append(fuel.ToString(CultureInfo.InvariantCulture)).Append("% FUEL");
             Sb.Append('\n').Append(thr.ToString(CultureInfo.InvariantCulture)).Append("% THR");
             Sb.Append('\n').Append(mode).Append(" MODE");
