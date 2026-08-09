@@ -797,6 +797,8 @@ namespace MissileCamera
             {
                 HudOverlay.EnsureBuilt(layoutRt, MfdLayoutController.GetActiveScreenUi());
                 HudOverlay.InvalidateDynamicSchedule();
+                // EnsureBuilt creates HUD after first Apply — reorder feed under HUD.
+                MissileCameraFeedLayout.Apply(layoutRt, portrait, contentRotationZ);
             }
             catch (System.Exception ex)
             {

@@ -5411,10 +5411,16 @@ namespace MissileCamera
                 telemetryLayout);
         }
 
-        private static MissileCameraTelemetryLayout ResolveTelemetryLayout(ResolvedPanel resolved) =>
-            resolved.IsIfritStrip
-                ? MissileCameraTelemetryLayout.BottomRow
-                : MissileCameraTelemetryLayout.RightColumn;
+        private static MissileCameraTelemetryLayout ResolveTelemetryLayout(ResolvedPanel resolved)
+        {
+            // RightColumn on narrow portrait / Darkreach strips pushes chrome off the drawable.
+            if (resolved.IsIfritStrip
+                || resolved.IsDarkreachSection
+                || resolved.StubForcePortraitLayout)
+                return MissileCameraTelemetryLayout.BottomRow;
+
+            return MissileCameraTelemetryLayout.RightColumn;
+        }
 
         private readonly struct ResolvedPanel
         {

@@ -33,12 +33,13 @@ namespace MissileCamera
             float contentRotationZ = contentRotationZOverride ?? MfdLayoutController.ActiveStubContentRotationZ;
             RectTransform viewRt = MissileCameraFeedLayout.EnsureRotatedView(layoutRt, contentRotationZ);
 
-            if (_root != null && _root.parent == viewRt)
+            // Reuse only when chrome is intact — missing corners after SoftPark/partial fail must rebuild.
+            if (_root != null && _root.parent == viewRt && _corners != null)
             {
                 if (!_root.gameObject.activeSelf)
                     _root.gameObject.SetActive(true);
                 MissileCameraFeedLayout.ApplyContentRotation(layoutRt, contentRotationZ);
-                _corners?.BindScreenUi(screenUi);
+                _corners.BindScreenUi(screenUi);
                 _zoomIndicator?.BindScreenUi(screenUi);
                 RectTransform? panelRt = FindMissileCameraPanel(layoutRt);
                 ApplyLegacyStubVisibility(panelRt ?? layoutRt, hide: MissileCameraHudConfig.Enabled);

@@ -52,9 +52,18 @@ namespace MissileCamera
 
         internal static TargetScreenUI? GetActiveScreenUi() => _activeScreenUi;
 
-        /// <summary>Same drawable root as <see cref="ApplyScaledStubLayout"/> (feed + HUD must match).</summary>
-        internal static RectTransform ResolveFeedLayoutRoot(RectTransform panelRt) =>
-            ResolveStubLayoutRoot(panelRt, _cachedStubContentRotationZ, _cachedStubContentBand);
+        /// <summary>Same drawable root as stub feed (MissileCameraContent when present).</summary>
+        internal static RectTransform ResolveFeedLayoutRoot(RectTransform panelRt)
+        {
+            // Stub always parents feed under MissileCameraContent. Resolving the panel instead
+            // put RotatedView+HUD on the panel while the live RawImage stayed in Content —
+            // camera visible, classic CornerHud missing/clipped (Darkreach / portrait columns).
+            Transform? content = panelRt.Find(StubContentName);
+            if (content is RectTransform contentRt)
+                return contentRt;
+
+            return ResolveStubLayoutRoot(panelRt, _cachedStubContentRotationZ, _cachedStubContentBand);
+        }
 
         internal static void OnSetupCamera(TargetScreenUI screenUi, TargetCam targetCam)
         {
