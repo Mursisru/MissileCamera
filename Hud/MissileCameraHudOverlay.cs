@@ -37,6 +37,7 @@ namespace MissileCamera
             {
                 if (!_root.gameObject.activeSelf)
                     _root.gameObject.SetActive(true);
+                EnsureRectMask(_root);
                 MissileCameraFeedLayout.ApplyContentRotation(layoutRt, contentRotationZ);
                 _corners?.BindScreenUi(screenUi);
                 _zoomIndicator?.BindScreenUi(screenUi);
@@ -49,7 +50,7 @@ namespace MissileCamera
 
             try
             {
-                var rootGo = new GameObject(RootName, typeof(RectTransform));
+                var rootGo = new GameObject(RootName, typeof(RectTransform), typeof(RectMask2D));
                 rootGo.transform.SetParent(viewRt, false);
                 _root = rootGo.GetComponent<RectTransform>();
                 Stretch(_root);
@@ -418,6 +419,14 @@ namespace MissileCamera
             rt.anchorMax = Vector2.one;
             rt.offsetMin = Vector2.zero;
             rt.offsetMax = Vector2.zero;
+        }
+
+        private static void EnsureRectMask(RectTransform root)
+        {
+            if (root == null || root.TryGetComponent(out RectMask2D _))
+                return;
+
+            root.gameObject.AddComponent<RectMask2D>();
         }
     }
 }
