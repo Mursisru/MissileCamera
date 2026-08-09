@@ -327,12 +327,35 @@ namespace MissileCamera
             if (searchRoot == null)
                 return;
 
+            // FS: always suppress legacy stub on the MFD panel.
             if (MissileCameraFullscreenController.IsActive)
-                hide = true;
+            {
+                SetChildActiveDeep(searchRoot, "MissileCameraTitle", false);
+                SetChildActiveDeep(searchRoot, "MissileCameraColor", false);
+                SetChildActiveDeep(searchRoot, "MissileTelemetry", false);
+                return;
+            }
+
+            // Do not blank Title/COLOR/Telemetry until CornerHud exists — bare seeker looks "UI missing".
+            if (hide && !HasLiveHudChrome(searchRoot))
+                hide = false;
 
             SetChildActiveDeep(searchRoot, "MissileCameraTitle", !hide);
             SetChildActiveDeep(searchRoot, "MissileCameraColor", !hide);
             SetChildActiveDeep(searchRoot, "MissileTelemetry", !hide);
+        }
+
+        private static bool HasLiveHudChrome(RectTransform searchRoot)
+        {
+            Transform? hud = FindDeep(searchRoot, RootName);
+            if (hud == null)
+            {
+                Transform? panel = FindMissileCameraPanel(searchRoot);
+                if (panel != null && panel != searchRoot)
+                    hud = FindDeep(panel, RootName);
+            }
+
+            return hud != null && hud.gameObject.activeInHierarchy;
         }
 
         internal static void ApplyPanelBackground(Image? panelImage, TargetScreenUI? screenUi)
@@ -404,11 +427,8 @@ namespace MissileCamera
                 return;
 
             child.gameObject.SetActive(active);
-            if (!active && child.TryGetComponent(out Text text))
-            {
-                text.text = string.Empty;
-                text.enabled = false;
-            }
+            if (child.TryGetComponent(out Text text))
+                text.enabled = active;
         }
 
         private static Transform? FindDeep(Transform root, string name)
