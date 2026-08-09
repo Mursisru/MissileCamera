@@ -55,10 +55,11 @@ namespace MissileCamera
             float fuelTarget = Mathf.Clamp01(snapshot.FuelFraction);
             float thrTarget = Mathf.Clamp01(snapshot.ThrottleFraction);
 
-            // No display smoothing — RC Harmony may still snap _displayThrottle.
+            // No display smoothing — RC Harmony may still snap _displayThrottle / read _displayReady.
+            if (!_displayReady)
+                _displayReady = true;
             _displayFuel = fuelTarget;
             _displayThrottle = thrTarget;
-            _displayReady = true;
 
             SetFill(_fuel, _displayFuel, fuelStyle: true, ref _lastFuel);
             SetFill(_throttle, _displayThrottle, fuelStyle: false, ref _lastThrottle);
