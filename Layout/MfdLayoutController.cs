@@ -133,30 +133,55 @@ namespace MissileCamera
             if (ShouldRetainLayoutForMissileFeed())
                 return;
 
-            // Keep weapons hidden + stub; only soft-park feed. Next launch reuses without PrepareReplacement.
             SoftParkMissileFeed("missile_feed_ended");
         }
 
         /// <summary>
-        /// Drop live feed/HUD bind but keep tac stub + ApplyHidden strip for the sortie.
-        /// Avoids Restore+discovery+ApplyHidden hitch on every subsequent launch.
+        /// Restore vanilla weapons, destroy TacStub, clear layout flags; soft-park feed Rig/HUD only.
+        /// Next launch rediscovers/rebuilds the panel (no dead ApplyHidden strip).
         /// </summary>
         private static void SoftParkMissileFeed(string reason)
         {
-            try { MfdLayoutRetryHost.Cancel(); }
-            catch { /* ignore */ }
-
-            try { MissileCameraFeedController.NotifyOverlayGone(destroyHud: false); }
-            catch { /* ignore */ }
-
-            if (_tacOverlayRoot != null)
+            if (!TryBeginCleanup())
             {
-                try { _tacOverlayRoot.SetActive(false); }
+                try { MfdWeaponsZoneAccess.Restore(); }
                 catch { /* ignore */ }
+
+                _layoutActive = false;
+                MissileCameraMissionLifecycleDiag.Warn(
+                    "SoftParkMissileFeed busy-skip reason=" + reason + " forced restore");
+                return;
             }
 
-            // Stay _layoutActive so EnsureLayoutForMissileFeed reactivates stub only.
-            MissileCameraMissionLifecycleDiag.Info("SoftParkMissileFeed reason=" + reason);
+            try
+            {
+                try { MfdLayoutRetryHost.Cancel(); }
+                catch { /* ignore */ }
+
+                try { MissileCameraFeedController.NotifyOverlayGone(destroyHud: false); }
+                catch { /* ignore */ }
+
+                try { DestroyTacStubOnly(); }
+                catch { /* ignore */ }
+
+                try { MfdWeaponsZoneAccess.Restore(); }
+                catch { /* ignore */ }
+
+                _layoutActive = false;
+                _activeTargetCam = null;
+                _activeScreenUi = null;
+                _activeTacScreen = null;
+                _appliedConfigRevision = -1;
+                _cachedOverlayZone = null;
+                _cachedOverlayRevision = -1;
+                _layoutGeneration++;
+
+                MissileCameraMissionLifecycleDiag.Info("SoftParkMissileFeed reason=" + reason);
+            }
+            finally
+            {
+                EndCleanup();
+            }
         }
 
         internal static void ResetForMissionUnload() => HardResetForMissionUnload();
@@ -1283,6 +1308,33 @@ namespace MissileCamera
             finally
             {
                 EndCleanup();
+            }
+        }
+
+        /// <summary>Drop TacStub GO only — feed Rig/HUD stay soft-parked (NotifyOverlayGone already ran).</summary>
+        private static void DestroyTacStubOnly()
+        {
+            GameObject? go = null;
+            try
+            {
+                if (_tacOverlayRoot != null)
+                    go = _tacOverlayRoot.gameObject;
+            }
+            catch
+            {
+                // destroyed RectTransform
+            }
+
+            _tacOverlayRoot = null;
+            _stubLabel = null;
+
+            try { MissileCameraFeedController.ClearStaleMfdPanelRefs(); }
+            catch { /* ignore */ }
+
+            if (go != null)
+            {
+                try { Object.Destroy(go); }
+                catch { /* ignore */ }
             }
         }
 

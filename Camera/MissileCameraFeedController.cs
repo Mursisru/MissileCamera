@@ -27,6 +27,7 @@ namespace MissileCamera
         private static float _nextRenderTimeUnscaled;
         private static float _nextReconcileTimeUnscaled;
         private static bool _loggedBind;
+        private static bool _rigSoftParked;
         private static RectTransform? _cachedLayoutRoot;
         private static float _cachedLayoutRotationZ = float.NaN;
         private static float _cachedPanelW = -1f;
@@ -720,12 +721,29 @@ namespace MissileCamera
                 if (destroyHud)
                     DestroyAndClearRig();
                 else
+                {
                     SoftParkRig();
+                    _rigSoftParked = true;
+                }
             }
             catch { /* ignore */ }
 
             try { MissileCameraTelemetry.ResetThrottle(); }
             catch { /* ignore */ }
+        }
+
+        /// <summary>After TacStub destroy — panel refs are dead; Rig/HUD stay soft-parked.</summary>
+        internal static void ClearStaleMfdPanelRefs()
+        {
+            _feedImage = null;
+            _telemetryText = null;
+            _colorLabel = null;
+            _layoutRoot = null;
+            _panelRt = null;
+            _cachedLayoutRoot = null;
+            _cachedLayoutRotationZ = float.NaN;
+            _cachedPanelW = -1f;
+            _cachedPanelH = -1f;
         }
 
         /// <summary>
@@ -1209,7 +1227,7 @@ namespace MissileCamera
         /// <summary>Idle tick: keep Rig while MFD layout soft-parked; destroy only when layout gone.</summary>
         private static void ParkOrReleaseRig()
         {
-            if (MfdLayoutController.IsLayoutActive)
+            if (MfdLayoutController.IsLayoutActive || _rigSoftParked)
                 SoftParkRig();
             else
                 DestroyAndClearRig();
@@ -1217,6 +1235,7 @@ namespace MissileCamera
 
         private static void DestroyAndClearRig()
         {
+            _rigSoftParked = false;
             _followedMissile = null;
 
             try { MissileCameraRenderPrep.ForceRestoreWorldState(); }
