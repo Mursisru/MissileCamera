@@ -212,7 +212,7 @@ namespace MissileCamera.Patches
 
             try
             {
-                MissileCameraVanillaHudBridge.ForceCombatHudMarkerPass();
+                MissileCameraVanillaHudBridge.ForceCombatHudMarkerPassIfDue();
             }
             catch
             {

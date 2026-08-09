@@ -52,7 +52,11 @@ namespace MissileCamera
             HarmonyLib.AccessTools.Method(typeof(CombatHUD), "UpdateMarkers");
 
         private const float MarkerPassInterval = 1f / 10f;
+        private const float SuppressIlsInterval = 1f / 10f;
+        private const float HideStubsInterval = 1f / 5f;
         private static float _nextMarkerPassUnscaled;
+        private static float _nextSuppressIlsUnscaled;
+        private static float _nextHideStubsUnscaled;
         private static bool _flightHudWasActive;
         private static bool _objectiveMgrWasEnabled;
         /// <summary>True only while FS actually disabled ObjectiveOverlayManager — never force-disable on unload.</summary>
@@ -91,6 +95,9 @@ namespace MissileCamera
             _objectivesSuppressedByUs = false;
             _ilsSuppressedByUs = false;
             _designatorWasEnabled = false;
+            _nextMarkerPassUnscaled = 0f;
+            _nextSuppressIlsUnscaled = 0f;
+            _nextHideStubsUnscaled = 0f;
 
             try
             {
@@ -98,8 +105,10 @@ namespace MissileCamera
                 ElevateCombatHudCanvas();
                 ApplyMarkersOnlyVisibility();
                 SuppressIlsAndObjectives();
+                _nextSuppressIlsUnscaled = Time.unscaledTime + SuppressIlsInterval;
                 SyncMarkersFromHqIfNeeded();
                 ForceCombatHudMarkerPass();
+                _nextMarkerPassUnscaled = Time.unscaledTime + MarkerPassInterval;
                 MissileCameraFullscreenTargetLock.OnFullscreenEntered();
             }
             catch (Exception ex)
@@ -149,6 +158,8 @@ namespace MissileCamera
         internal static void ResetForMissionUnload()
         {
             _nextMarkerPassUnscaled = 0f;
+            _nextSuppressIlsUnscaled = 0f;
+            _nextHideStubsUnscaled = 0f;
             // Always attempt live unhide first — never abandon SetActive(false) chrome.
             try
             {
@@ -182,6 +193,12 @@ namespace MissileCamera
             if (!MissileCameraFullscreenController.IsActive)
                 return;
 
+            // Stubs stay off — 5 Hz heal is enough (invisible vs every feed Tick).
+            float now = Time.unscaledTime;
+            if (now < _nextHideStubsUnscaled)
+                return;
+
+            _nextHideStubsUnscaled = now + HideStubsInterval;
             HideStubsOnMissilePanel();
         }
 
@@ -190,19 +207,93 @@ namespace MissileCamera
             if (!MissileCameraFullscreenController.IsActive)
                 return;
 
-            // FlightHud / ObjectiveOverlay re-enable themselves in Update — suppress every LateUpdate.
-            SuppressIlsAndObjectives();
+            // Full suppress only on interval or when vanilla re-enabled chrome (dirty heal).
+            SuppressIlsAndObjectivesIfDue();
+            ForceCombatHudMarkerPassIfDue();
+            MissileCameraFullscreenTargetLock.Maintain();
+        }
 
-            // Full UpdateMarkers every LateUpdate doubles vanilla cost — soft rate is enough for FS.
+        /// <summary>
+        /// Shared 10 Hz slot for Force markers (LateTickMarkers + CombatHUD Prefix when aircraft null).
+        /// </summary>
+        internal static void ForceCombatHudMarkerPassIfDue()
+        {
+            if (!MissileCameraFullscreenController.IsActive)
+                return;
+
             float now = Time.unscaledTime;
-            if (now >= _nextMarkerPassUnscaled)
+            if (now < _nextMarkerPassUnscaled)
+                return;
+
+            _nextMarkerPassUnscaled = now + MarkerPassInterval;
+            SyncMarkersFromHqIfNeeded();
+            ForceCombatHudMarkerPass();
+        }
+
+        private static void SuppressIlsAndObjectivesIfDue()
+        {
+            float now = Time.unscaledTime;
+            if (now < _nextSuppressIlsUnscaled && !NeedsSuppressIlsHeal())
+                return;
+
+            _nextSuppressIlsUnscaled = now + SuppressIlsInterval;
+            SuppressIlsAndObjectives();
+        }
+
+        /// <summary>Cheap check — vanilla Update may turn ILS / Target TMP / objectives back on.</summary>
+        private static bool NeedsSuppressIlsHeal()
+        {
+            try
             {
-                _nextMarkerPassUnscaled = now + MarkerPassInterval;
-                SyncMarkersFromHqIfNeeded();
-                ForceCombatHudMarkerPass();
+                FlightHud? flightHud = SceneSingleton<FlightHud>.i;
+                if (flightHud != null)
+                {
+                    if (flightHud.velocityVector != null && flightHud.velocityVector.gameObject.activeSelf)
+                        return true;
+                    if (flightHud.waterline != null && flightHud.waterline.gameObject.activeSelf)
+                        return true;
+                    if (flightHud.virtualJoystickPos != null && flightHud.virtualJoystickPos.gameObject.activeSelf)
+                        return true;
+                    if (FlightHudCenterField?.GetValue(flightHud) is Transform hudCenter
+                        && hudCenter != null
+                        && hudCenter.gameObject.activeSelf)
+                        return true;
+                }
+
+                CombatHUD? hud = SceneSingleton<CombatHUD>.i;
+                if (hud == null)
+                    return false;
+
+                if (hud.targetDesignator != null
+                    && (hud.targetDesignator.enabled || hud.targetDesignator.color.a > 0.01f))
+                    return true;
+
+                if (TargetArrowField?.GetValue(hud) is Image arrow
+                    && arrow != null
+                    && (arrow.enabled || arrow.gameObject.activeSelf))
+                    return true;
+
+                if (TargetTextField?.GetValue(hud) is Behaviour targetText
+                    && targetText != null
+                    && (targetText.enabled || targetText.gameObject.activeSelf))
+                    return true;
+
+                if (TargetInfoField?.GetValue(hud) is Behaviour targetInfo
+                    && targetInfo != null
+                    && targetInfo.gameObject.activeSelf)
+                    return true;
+
+                if (ObjectiveOverlayField?.GetValue(hud) is ObjectiveOverlayManager mgr
+                    && mgr != null
+                    && mgr.enabled)
+                    return true;
+            }
+            catch
+            {
+                return true;
             }
 
-            MissileCameraFullscreenTargetLock.Maintain();
+            return false;
         }
 
         private static void SoftHideDynamicMap()
@@ -395,8 +486,8 @@ namespace MissileCamera
         }
 
         /// <summary>
-        /// Per-frame: FlightHud.Update turns velocityVector back on; ObjectiveOverlay re-enables mission icons.
-        /// Uses HideGo (tracked) — never ForceOff without restore (that killed half the ILS on exit).
+        /// Soft-rate + dirty heal: FlightHud.Update may turn velocityVector back on;
+        /// ObjectiveOverlay may re-enable mission icons. HideGo tracked — never ForceOff without restore.
         /// </summary>
         private static void SuppressIlsAndObjectives()
         {

@@ -16,6 +16,10 @@ namespace MissileCamera
             AccessTools.Field(typeof(HUDUnitMarker), "hidden");
         private static readonly FieldInfo? MarkersField =
             AccessTools.Field(typeof(CombatHUD), "markers");
+        private static readonly FieldInfo? TargetArrowField =
+            AccessTools.Field(typeof(CombatHUD), "targetArrow");
+        private static readonly FieldInfo? TargetTextField =
+            AccessTools.Field(typeof(CombatHUD), "targetText");
 
         private static int _feedCameraFrame = -1;
         private static Camera? _feedCameraCached;
@@ -178,8 +182,35 @@ namespace MissileCamera
                 marker.image.transform.position = position;
             }
 
-            try { hud.SetTargetArrow(false, Vector3.zero, Vector3.zero); }
+            try
+            {
+                // Only when vanilla arrow/TMP still lit — SetTargetArrow(false) every marker is waste.
+                if (TargetArrowStillVisible(hud))
+                    hud.SetTargetArrow(false, Vector3.zero, Vector3.zero);
+            }
             catch { /* ignore */ }
+        }
+
+        private static bool TargetArrowStillVisible(CombatHUD hud)
+        {
+            try
+            {
+                if (TargetArrowField?.GetValue(hud) is Image arrow
+                    && arrow != null
+                    && (arrow.enabled || arrow.gameObject.activeSelf))
+                    return true;
+
+                if (TargetTextField?.GetValue(hud) is Behaviour text
+                    && text != null
+                    && (text.enabled || text.gameObject.activeSelf))
+                    return true;
+            }
+            catch
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private static bool PinToScreenEdgeFeed(
