@@ -39,6 +39,7 @@ namespace MissileCamera
                 if (!_root.gameObject.activeSelf)
                     _root.gameObject.SetActive(true);
                 MissileCameraFeedLayout.ApplyContentRotation(layoutRt, contentRotationZ);
+                SyncHudClipMask(contentRotationZ);
                 _corners.BindScreenUi(screenUi);
                 _zoomIndicator?.BindScreenUi(screenUi);
                 RectTransform? panelRt = FindMissileCameraPanel(layoutRt);
@@ -50,10 +51,12 @@ namespace MissileCamera
 
             try
             {
-                var rootGo = new GameObject(RootName, typeof(RectTransform), typeof(RectMask2D));
+                // RectMask2D added only when unrotated — under 90° parent it clips all chrome (#6 vs rotated MFD).
+                var rootGo = new GameObject(RootName, typeof(RectTransform));
                 rootGo.transform.SetParent(viewRt, false);
                 _root = rootGo.GetComponent<RectTransform>();
                 Stretch(_root);
+                SyncHudClipMask(contentRotationZ);
 
                 _corners = MissileCameraCornerHud.Create(_root, screenUi);
                 // FlirHud is lazy — MFD launch must not Instantiate ~7 panels every missile.
@@ -306,6 +309,31 @@ namespace MissileCamera
             _targetMarker = null;
             _interceptRing = null;
             _interceptRoot = null;
+        }
+
+        /// <summary>
+        /// RectMask2D clips MFD marker overflow on upright panels.
+        /// Under intentional RotatedView (~90° for sideways MFD) Unity RectMask2D culls all children —
+        /// feed RawImage still draws, classic HUD vanishes.
+        /// </summary>
+        private void SyncHudClipMask(float contentRotationZ)
+        {
+            if (_root == null)
+                return;
+
+            bool wantMask = Mathf.Abs(contentRotationZ) < 0.5f;
+            RectMask2D? mask = _root.GetComponent<RectMask2D>();
+            if (wantMask)
+            {
+                if (mask == null)
+                    _root.gameObject.AddComponent<RectMask2D>();
+                else if (!mask.enabled)
+                    mask.enabled = true;
+                return;
+            }
+
+            if (mask != null && mask.enabled)
+                mask.enabled = false;
         }
 
         private static RectTransform? FindMissileCameraPanel(RectTransform layoutRt)
