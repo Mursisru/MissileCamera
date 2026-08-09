@@ -159,7 +159,6 @@ namespace MissileCamera.Patches
                 return;
 
             MissileCameraCombatHudMarkerProjection.ReprojectIfFullscreen(marker);
-            MissileCameraCombatHudMarkerProjection.ApplyOpaqueContrast(marker);
         }
     }
 
@@ -173,11 +172,7 @@ namespace MissileCamera.Patches
         [HarmonyPostfix]
         internal static void Postfix(object __instance)
         {
-            if (!MissileCameraFullscreenController.IsActive)
-                return;
-
-            if (__instance is HUDUnitMarker marker)
-                MissileCameraCombatHudMarkerProjection.ApplyOpaqueContrast(marker);
+            // No opaque contrast — leave vanilla faction colors alone.
         }
     }
 
@@ -191,11 +186,7 @@ namespace MissileCamera.Patches
         [HarmonyPostfix]
         internal static void Postfix(object __instance)
         {
-            if (!MissileCameraFullscreenController.IsActive)
-                return;
-
-            if (__instance is HUDUnitMarker marker)
-                MissileCameraCombatHudMarkerProjection.ApplyOpaqueContrast(marker);
+            // No opaque contrast — leave vanilla faction colors alone.
         }
     }
 

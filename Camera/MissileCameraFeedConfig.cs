@@ -78,7 +78,7 @@ namespace MissileCamera
         }
 
         /// <summary>
-        /// MFD feed uses cfg size; fullscreen uses FeedWidth/Height scaled by optical mag buckets (cap 3840).
+        /// MFD feed uses cfg size; fullscreen uses fixed FeedWidth/Height (zoom = FOV only — no RT upscale lag).
         /// </summary>
         internal static void ResolveActiveFeedSize(out int width, out int height)
         {
@@ -90,25 +90,12 @@ namespace MissileCamera
             }
 
             MissileCameraFullscreenConfig.Refresh();
-            int baseW = Mathf.Clamp(MissileCameraFullscreenConfig.FeedWidth, 640, 3840);
-            int baseH = Mathf.Clamp(MissileCameraFullscreenConfig.FeedHeight, 360, 2160);
-            float scale = ResolveFullscreenQualityScale(MissileCameraFeedController.FullscreenMagnification);
-            width = EvenClamp(Mathf.RoundToInt(baseW * scale), 640, 3840);
-            height = EvenClamp(Mathf.RoundToInt(baseH * scale), 360, 2160);
+            width = EvenClamp(Mathf.Clamp(MissileCameraFullscreenConfig.FeedWidth, 640, 3840), 640, 3840);
+            height = EvenClamp(Mathf.Clamp(MissileCameraFullscreenConfig.FeedHeight, 360, 2160), 360, 2160);
         }
 
-        internal static float ResolveFullscreenQualityScale(float magnification)
-        {
-            float mag = Mathf.Max(magnification, 1f);
-            float raw = Mathf.Sqrt(mag);
-            if (raw < 1.25f)
-                return 1f;
-            if (raw < 1.75f)
-                return 1.5f;
-            if (raw < 2.25f)
-                return 2f;
-            return 2.5f;
-        }
+        /// <summary>Kept for callers; always 1 — optical zoom must not recreate RT buckets.</summary>
+        internal static float ResolveFullscreenQualityScale(float magnification) => 1f;
 
         private static int EvenClamp(int value, int min, int max)
         {

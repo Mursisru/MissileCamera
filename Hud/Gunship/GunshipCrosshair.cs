@@ -4,47 +4,58 @@ using UnityEngine.UI;
 namespace MissileCamera
 {
     /// <summary>
-    /// Reference gunship reticle: full vertical bar, gapped horizontal with tick marks,
-    /// tiny center +, N/E/S/W rotating with heading.
+    /// COD AC-130 reticle (~15% under previous span):
+    /// gapped arms + T-caps + ticks; 4 axis dots at inner tips (not corner square).
+    /// N/E/S/W orbit OUTSIDE the cross (on map), rotate with HDG.
     /// </summary>
     internal sealed class GunshipCrosshair
     {
-        private readonly RectTransform _compassRoot;
+        private const int TicksPerArm = 2;
+        private static readonly string[] Labels = { "N", "E", "S", "W" };
+        private static readonly float[] WorldBearing = { 0f, 90f, 180f, 270f };
+
         private readonly Text _area;
-        private readonly Text _mag;
-        private readonly Image _vBar;
-        private readonly Image _hLeft;
-        private readonly Image _hRight;
-        private readonly Image _cH;
-        private readonly Image _cV;
-        private readonly Image[] _hTicks;
-        private readonly Text[] _cardinals;
+        private readonly Text[] _nesw;
+        private readonly Image _armN;
+        private readonly Image _armS;
+        private readonly Image _armE;
+        private readonly Image _armW;
+        private readonly Image _capN;
+        private readonly Image _capS;
+        private readonly Image _capE;
+        private readonly Image _capW;
+        private readonly Image[] _ticks;
+        // COD: one dot at inner tip of each arm (axis-aligned)
+        private readonly Image _dotN;
+        private readonly Image _dotS;
+        private readonly Image _dotE;
+        private readonly Image _dotW;
+        private float _cardinalR = 120f;
         private string _lastArea = "";
-        private string _lastMag = "";
         private float _lastHdg = float.NaN;
 
         private GunshipCrosshair(
-            RectTransform compassRoot,
-            Text area,
-            Text mag,
-            Image vBar,
-            Image hLeft,
-            Image hRight,
-            Image cH,
-            Image cV,
-            Image[] hTicks,
-            Text[] cardinals)
+            Text area, Text[] nesw,
+            Image armN, Image armS, Image armE, Image armW,
+            Image capN, Image capS, Image capE, Image capW,
+            Image[] ticks,
+            Image dotN, Image dotS, Image dotE, Image dotW)
         {
-            _compassRoot = compassRoot;
             _area = area;
-            _mag = mag;
-            _vBar = vBar;
-            _hLeft = hLeft;
-            _hRight = hRight;
-            _cH = cH;
-            _cV = cV;
-            _hTicks = hTicks;
-            _cardinals = cardinals;
+            _nesw = nesw;
+            _armN = armN;
+            _armS = armS;
+            _armE = armE;
+            _armW = armW;
+            _capN = capN;
+            _capS = capS;
+            _capE = capE;
+            _capW = capW;
+            _ticks = ticks;
+            _dotN = dotN;
+            _dotS = dotS;
+            _dotE = dotE;
+            _dotW = dotW;
         }
 
         internal static GunshipCrosshair Create(RectTransform parent)
@@ -54,85 +65,97 @@ namespace MissileCamera
             RectTransform root = rootGo.GetComponent<RectTransform>();
             GunshipChrome.Stretch(root);
 
-            Image vBar = MakeLine(root, "V");
-            Image hLeft = MakeLine(root, "HL");
-            Image hRight = MakeLine(root, "HR");
-            Image cH = MakeLine(root, "CH");
-            Image cV = MakeLine(root, "CV");
+            Image armN = Line(root, "ArmN");
+            Image armS = Line(root, "ArmS");
+            Image armE = Line(root, "ArmE");
+            Image armW = Line(root, "ArmW");
+            Image capN = Line(root, "CapN");
+            Image capS = Line(root, "CapS");
+            Image capE = Line(root, "CapE");
+            Image capW = Line(root, "CapW");
 
-            var ticks = new Image[10];
+            var ticks = new Image[TicksPerArm * 4];
             for (int i = 0; i < ticks.Length; i++)
-                ticks[i] = MakeLine(root, "T" + i);
+                ticks[i] = Line(root, "Tk" + i);
 
-            var compassGo = new GameObject("GunshipCompass", typeof(RectTransform));
-            compassGo.transform.SetParent(root, false);
-            RectTransform compassRoot = compassGo.GetComponent<RectTransform>();
-            compassRoot.anchorMin = compassRoot.anchorMax = new Vector2(0.5f, 0.5f);
-            compassRoot.pivot = new Vector2(0.5f, 0.5f);
-            compassRoot.sizeDelta = Vector2.zero;
+            Image dotN = Line(root, "DotN");
+            Image dotS = Line(root, "DotS");
+            Image dotE = Line(root, "DotE");
+            Image dotW = Line(root, "DotW");
 
-            var cardinals = new Text[4];
-            string[] letters = { "N", "E", "S", "W" };
+            var nesw = new Text[4];
             for (int i = 0; i < 4; i++)
             {
-                cardinals[i] = GunshipChrome.CreateText(compassRoot, "Card" + letters[i], TextAnchor.MiddleCenter, GunshipChrome.FontSmall);
-                cardinals[i].text = letters[i];
-                cardinals[i].fontStyle = FontStyle.Bold;
-                cardinals[i].color = i == 0 ? GunshipChrome.White : GunshipChrome.WhiteDim;
+                nesw[i] = GunshipChrome.CreateText(root, "Card" + Labels[i], TextAnchor.MiddleCenter, 26);
+                nesw[i].text = Labels[i];
+                nesw[i].fontStyle = FontStyle.Bold;
+                nesw[i].color = GunshipChrome.White;
+                GunshipChrome.Place(nesw[i].rectTransform,
+                    new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                    Vector2.zero, new Vector2(34f, 34f));
             }
 
-            Text area = GunshipChrome.CreateText(root, "GunshipArea", TextAnchor.UpperCenter, GunshipChrome.FontBody);
-            Text mag = GunshipChrome.CreateText(root, "GunshipMag", TextAnchor.UpperCenter, GunshipChrome.FontSmall);
-            mag.color = GunshipChrome.WhiteDim;
-            return new GunshipCrosshair(compassRoot, area, mag, vBar, hLeft, hRight, cH, cV, ticks, cardinals);
+            Text area = GunshipChrome.CreateText(root, "Area", TextAnchor.UpperCenter, GunshipChrome.FontBody);
+            area.fontStyle = FontStyle.Normal;
+
+            return new GunshipCrosshair(
+                area, nesw,
+                armN, armS, armE, armW,
+                capN, capS, capE, capW,
+                ticks, dotN, dotS, dotE, dotW);
         }
 
         internal void Place(MissileCameraPanelMetrics panel)
         {
             float min = panel.MinSide;
-            float halfH = Mathf.Clamp(min * 0.42f, 220f, 420f);
-            float halfArm = Mathf.Clamp(min * 0.28f, 160f, 320f);
-            float gap = Mathf.Clamp(min * 0.018f, 14f, 22f);
-            float t = 1.6f;
+            float thick = 1.15f;
+            // Previous 0.275 → −15% ≈ 0.234 of min
+            float halfSpan = Mathf.Clamp(min * 0.234f, 120f, 220f);
+            // COD: clear center gap; dots sit at inner tips
+            float gap = Mathf.Clamp(min * 0.028f, 14f, 24f);
+            float arm = halfSpan - gap;
+            float capLen = Mathf.Clamp(min * 0.016f, 8f, 13f);
+            float tickLen = Mathf.Clamp(min * 0.011f, 5.5f, 9f);
+            float dot = Mathf.Clamp(min * 0.0055f, 2.6f, 4.2f);
 
-            // Full vertical through center (reference style)
-            _vBar.rectTransform.anchoredPosition = Vector2.zero;
-            _vBar.rectTransform.sizeDelta = new Vector2(t, halfH * 2f);
+            float armMid = gap + arm * 0.5f;
+            float tip = gap + arm;
+            Size(_armN, 0f, armMid, thick, arm);
+            Size(_armS, 0f, -armMid, thick, arm);
+            Size(_armE, armMid, 0f, arm, thick);
+            Size(_armW, -armMid, 0f, arm, thick);
 
-            // Horizontal arms with center gap
-            _hLeft.rectTransform.anchoredPosition = new Vector2(-(gap + halfArm * 0.5f), 0f);
-            _hLeft.rectTransform.sizeDelta = new Vector2(halfArm, t);
-            _hRight.rectTransform.anchoredPosition = new Vector2(gap + halfArm * 0.5f, 0f);
-            _hRight.rectTransform.sizeDelta = new Vector2(halfArm, t);
+            Size(_capN, 0f, tip, capLen, thick);
+            Size(_capS, 0f, -tip, capLen, thick);
+            Size(_capE, tip, 0f, thick, capLen);
+            Size(_capW, -tip, 0f, thick, capLen);
 
-            // Tiny center +
-            _cH.rectTransform.anchoredPosition = Vector2.zero;
-            _cH.rectTransform.sizeDelta = new Vector2(10f, t);
-            _cV.rectTransform.anchoredPosition = Vector2.zero;
-            _cV.rectTransform.sizeDelta = new Vector2(t, 10f);
-
-            // Tick marks along horizontal arms
-            int n = _hTicks.Length / 2;
-            for (int i = 0; i < n; i++)
+            for (int i = 0; i < TicksPerArm; i++)
             {
-                float u = (i + 1) / (float)(n + 1);
-                float xL = -(gap + halfArm * u);
-                float xR = gap + halfArm * u;
-                float tickH = i % 2 == 0 ? 10f : 6f;
-                PlaceTick(_hTicks[i], xL, tickH, t);
-                PlaceTick(_hTicks[i + n], xR, tickH, t);
+                float u = (i + 1) / (float)(TicksPerArm + 1);
+                float d = gap + arm * u;
+                int b = i * 4;
+                Size(_ticks[b], 0f, d, tickLen, thick);
+                Size(_ticks[b + 1], 0f, -d, tickLen, thick);
+                Size(_ticks[b + 2], d, 0f, thick, tickLen);
+                Size(_ticks[b + 3], -d, 0f, thick, tickLen);
             }
 
-            float cardR = Mathf.Clamp(min * 0.12f, 70f, 110f);
-            PlaceCard(_cardinals[0], 0f, cardR);
-            PlaceCard(_cardinals[1], cardR, 0f);
-            PlaceCard(_cardinals[2], 0f, -cardR);
-            PlaceCard(_cardinals[3], -cardR, 0f);
+            // 4 axis dots at inner tips of arms (COD — not diagonal corners)
+            float dr = gap * 0.72f;
+            Size(_dotN, 0f, dr, dot, dot);
+            Size(_dotS, 0f, -dr, dot, dot);
+            Size(_dotE, dr, 0f, dot, dot);
+            Size(_dotW, -dr, 0f, dot, dot);
 
-            GunshipChrome.Place(_area.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f),
-                new Vector2(0f, -halfH * 0.22f - 36f), new Vector2(720f, 28f));
-            GunshipChrome.Place(_mag.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f),
-                new Vector2(0f, -halfH * 0.22f - 62f), new Vector2(240f, 22f));
+            // Outside cross onto map — beyond T-caps
+            _cardinalR = tip + Mathf.Clamp(min * 0.055f, 28f, 52f);
+            _lastHdg = float.NaN;
+
+            float areaY = -(_cardinalR + Mathf.Clamp(min * 0.03f, 16f, 30f));
+            GunshipChrome.Place(_area.rectTransform,
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f),
+                new Vector2(0f, areaY), new Vector2(720f, 24f));
         }
 
         internal void Update(MissileCameraHudSnapshot snapshot)
@@ -140,9 +163,9 @@ namespace MissileCamera
             string area;
             if (snapshot.HasTarget)
             {
-                string grid = string.IsNullOrEmpty(snapshot.TargetGridText)
-                    ? (string.IsNullOrEmpty(snapshot.TargetName) ? "TARGET" : snapshot.TargetName.ToUpperInvariant())
-                    : snapshot.TargetGridText;
+                string grid = !string.IsNullOrEmpty(snapshot.TargetGridText)
+                    ? snapshot.TargetGridText
+                    : (!string.IsNullOrEmpty(snapshot.TargetName) ? snapshot.TargetName.ToUpperInvariant() : "TARGET");
                 area = "TARGETING AREA: " + grid;
             }
             else if (snapshot.HasAimPoint)
@@ -150,33 +173,37 @@ namespace MissileCamera
             else
                 area = "TARGETING AREA: ---";
 
-            if (area != _lastArea)
-            {
-                _lastArea = area;
-                _area.text = area;
-            }
+            if (area != _lastArea) { _lastArea = area; _area.text = area; }
 
-            float mag = MissileCameraFeedController.FullscreenMagnification;
-            string magText = mag <= 1.01f
-                ? string.Empty
-                : "MAG  " + mag.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + "×";
-            if (magText != _lastMag)
+            UpdateCardinals(snapshot);
+        }
+
+        private void UpdateCardinals(MissileCameraHudSnapshot snapshot)
+        {
+            bool show = snapshot.HasFeed;
+            for (int i = 0; i < 4; i++)
             {
-                _lastMag = magText;
-                _mag.text = magText;
+                if (_nesw[i].enabled != show)
+                    _nesw[i].enabled = show;
             }
+            if (!show) return;
 
             float hdg = snapshot.MissileHeadingDeg;
-            if (float.IsNaN(_lastHdg) || Mathf.Abs(Mathf.DeltaAngle(_lastHdg, hdg)) > 0.15f)
+            if (!float.IsNaN(_lastHdg) && Mathf.Abs(Mathf.DeltaAngle(_lastHdg, hdg)) < 0.4f)
+                return;
+            _lastHdg = hdg;
+
+            for (int i = 0; i < 4; i++)
             {
-                _lastHdg = hdg;
-                _compassRoot.localEulerAngles = new Vector3(0f, 0f, hdg);
-                for (int i = 0; i < _cardinals.Length; i++)
-                    _cardinals[i].rectTransform.localEulerAngles = new Vector3(0f, 0f, -hdg);
+                float screenDeg = WorldBearing[i] - hdg;
+                float rad = screenDeg * Mathf.Deg2Rad;
+                _nesw[i].rectTransform.anchoredPosition = new Vector2(
+                    Mathf.Sin(rad) * _cardinalR,
+                    Mathf.Cos(rad) * _cardinalR);
             }
         }
 
-        private static Image MakeLine(RectTransform parent, string name)
+        private static Image Line(RectTransform parent, string name)
         {
             Image img = GunshipChrome.CreateImage(parent, name, GunshipChrome.White);
             RectTransform rt = img.rectTransform;
@@ -185,20 +212,11 @@ namespace MissileCamera
             return img;
         }
 
-        private static void PlaceTick(Image img, float x, float h, float w)
+        private static void Size(Image img, float x, float y, float w, float h)
         {
             RectTransform rt = img.rectTransform;
-            rt.anchoredPosition = new Vector2(x, 0f);
-            rt.sizeDelta = new Vector2(w, h);
-        }
-
-        private static void PlaceCard(Text label, float x, float y)
-        {
-            RectTransform rt = label.rectTransform;
-            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, 0.5f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = new Vector2(x, y);
-            rt.sizeDelta = new Vector2(28f, 20f);
+            rt.sizeDelta = new Vector2(w, h);
         }
     }
 }

@@ -284,8 +284,8 @@ namespace MissileCamera
 
             if (TargetArrowField?.GetValue(hud) is Image arrow && arrow != null)
                 HideGo(arrow.gameObject);
-            if (TargetTextField?.GetValue(hud) is Text arrowText && arrowText != null)
-                HideGo(arrowText.gameObject);
+            // targetText is TMP — never cast to UI.Text (always missed → "Target" stuck on).
+            HideComponent(TargetTextField?.GetValue(hud) as Component);
 
             // Aiming pipper: keep transform alive for TargetSelect, kill Image draw.
             if (hud.targetDesignator != null)
@@ -445,6 +445,10 @@ namespace MissileCamera
                 arrow.enabled = false;
                 HideGo(arrow.gameObject);
             }
+
+            // Re-suppress every LateUpdate — SetTargetArrow / ShowTargetInfo can re-enable TMP.
+            HideComponent(TargetTextField?.GetValue(hud) as Component);
+            HideComponent(TargetInfoField?.GetValue(hud) as Component);
 
             if (ObjectiveOverlayField?.GetValue(hud) is ObjectiveOverlayManager mgr && mgr != null)
             {
@@ -783,7 +787,6 @@ namespace MissileCamera
                 try
                 {
                     m.UpdatePosition(hq, viewPos, forward);
-                    MissileCameraCombatHudMarkerProjection.ApplyOpaqueContrast(m);
                 }
                 catch
                 {

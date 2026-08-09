@@ -3,10 +3,13 @@ Shader "Hidden/MissileCamera/Scanlines"
     Properties
     {
         _MainTex ("Texture", 2D) = "white" {}
-        _Intensity ("Intensity", Float) = 0.28
-        _LineDensity ("Line Density", Float) = 540
-        _Opacity ("Opacity", Float) = 0.28
-        _Fisheye ("Fisheye", Float) = 0.085
+        _Intensity ("Intensity", Float) = 0.45
+        _LineDensity ("Line Density", Float) = 720
+        _Opacity ("Opacity", Float) = 0.22
+        _Fisheye ("Fisheye", Float) = 0.12
+        _Scroll ("Scroll", Float) = 0
+        _Noise ("Noise", Float) = 0.12
+        _Vignette ("Vignette", Float) = 0.35
     }
     SubShader
     {
@@ -19,11 +22,17 @@ Shader "Hidden/MissileCamera/Scanlines"
             #pragma fragment frag
             #pragma target 3.0
             #include "UnityCG.cginc"
+
             sampler2D _MainTex;
+            float4 _MainTex_TexelSize;
             float _Intensity;
             float _LineDensity;
             float _Opacity;
             float _Fisheye;
+            float _Scroll;
+            float _Noise;
+            float _Vignette;
+
             struct appdata { float4 vertex : POSITION; float2 uv : TEXCOORD0; };
             struct v2f { float4 pos : SV_POSITION; float2 uv : TEXCOORD0; };
             v2f vert(appdata v) { v2f o; o.pos = UnityObjectToClipPos(v.vertex); o.uv = v.uv; return o; }
@@ -32,42 +41,70 @@ Shader "Hidden/MissileCamera/Scanlines"
             {
                 float2 c = uv - 0.5;
                 float r2 = dot(c, c);
-                // Mild barrel: push corners out slightly.
                 c *= 1.0 + amount * r2;
                 return c + 0.5;
+            }
+
+            float Hash21(float2 p)
+            {
+                p = frac(p * float2(123.34, 456.21));
+                p += dot(p, p + 45.32);
+                return frac(p.x * p.y);
             }
 
             fixed4 frag(v2f i) : SV_Target
             {
                 float intensity = saturate(_Intensity);
                 float2 uv = FisheyeUV(i.uv, _Fisheye * intensity);
-                // Soft edge clamp after warp
                 if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)
                     return fixed4(0, 0, 0, 1);
 
-                fixed4 c = tex2D(_MainTex, uv);
+                // Mild FLIR micro-jitter (sensor sync)
+                float j = (_Scroll * 0.15);
+                float2 juv = uv + float2(
+                    (Hash21(float2(j, uv.y * 40.0)) - 0.5) * _MainTex_TexelSize.x * 0.6,
+                    (Hash21(float2(uv.x * 40.0, j)) - 0.5) * _MainTex_TexelSize.y * 0.35);
 
-                float density = max(_LineDensity, 160.0);
-                // Rolling scan: slow vertical crawl + secondary fine field.
-                float roll = _Time.y * 22.0;
-                float line = frac(uv.y * density + roll * 0.015);
-                float band = smoothstep(0.0, 0.35, line) * smoothstep(1.0, 0.65, line);
-                float fine = sin((uv.y * density * 2.0 + roll) * 6.28318) * 0.5 + 0.5;
-                float scan = lerp(1.0, 0.78 + band * 0.18 + fine * 0.04, saturate(_Opacity) * intensity);
+                fixed4 c = tex2D(_MainTex, juv);
 
-                // Occasional brighter horizontal sweep (CRT beam feel).
-                float beam = abs(frac(uv.y * 0.35 + _Time.y * 0.08) - 0.5);
-                float sweep = smoothstep(0.02, 0.0, beam) * 0.07 * intensity;
+                // --- Realistic FLIR CRT: interlaced field + soft phosphor darkening ---
+                float dens = max(_LineDensity, 240.0);
+                float scroll = _Scroll; // driven from C# every frame (Blit _Time can freeze)
+                float field = dens * 0.5;
 
-                float2 d = uv - 0.5;
-                float vig = 1.0 - saturate(dot(d, d) * 1.35) * (0.22 * intensity);
+                // Primary interlaced bars (odd/even fields crawl slowly)
+                float y1 = juv.y * dens + scroll * 28.0;
+                float lineA = abs(frac(y1) - 0.5) * 2.0;
+                float slotA = smoothstep(0.15, 0.55, lineA);
 
-                float n = frac(sin(dot(uv * float2(12.9898, 78.233), float2(1.0, 1.0)) + _Time.y * 3.1) * 43758.5453);
-                float grain = lerp(1.0, 0.94 + n * 0.12, 0.22 * intensity);
+                // Secondary finer aperture grille
+                float y2 = juv.y * dens * 2.0 - scroll * 11.0;
+                float lineB = abs(frac(y2) - 0.5) * 2.0;
+                float slotB = smoothstep(0.35, 0.7, lineB);
 
-                c.rgb *= scan * vig * grain;
-                c.rgb += sweep;
-                return c;
+                float mask = lerp(1.0, lerp(0.72, 1.0, slotA) * lerp(0.9, 1.0, slotB), saturate(_Opacity) * intensity);
+
+                // Soft vertical refresh beam (rare, slow)
+                float beamY = frac(juv.y * 0.55 + scroll * 0.045);
+                float beam = smoothstep(0.03, 0.0, abs(beamY - 0.5)) * 0.045 * intensity;
+
+                // Analog noise / AGC hiss
+                float n = Hash21(juv * float2(1440.0, 900.0) + scroll * 60.0);
+                float grain = lerp(1.0, 0.9 + n * 0.2, saturate(_Noise) * intensity);
+
+                // Tube vignette + slight center bloom
+                float2 d = juv - 0.5;
+                float r2 = dot(d, d);
+                float vig = 1.0 - saturate(r2 * 1.55) * (_Vignette * intensity);
+                float bloom = 1.0 + (1.0 - saturate(r2 * 3.5)) * 0.035 * intensity;
+
+                // Slight contrast punch like cooled FLIR CRT
+                float3 rgb = c.rgb;
+                rgb = (rgb - 0.5) * (1.0 + 0.08 * intensity) + 0.5;
+                rgb *= mask * vig * grain * bloom;
+                rgb += beam;
+
+                return fixed4(saturate(rgb), c.a);
             }
             ENDCG
         }

@@ -3,42 +3,54 @@ using UnityEngine.UI;
 
 namespace MissileCamera
 {
-    /// <summary>
-    /// Shared white gunship chrome — large COD-style type, thin lines.
-    /// </summary>
+    /// <summary>COD AC-130 chrome — thin white technical HUD (EN).</summary>
     internal static class GunshipChrome
     {
-        internal static readonly Color White = new Color(1f, 1f, 1f, 0.95f);
-        internal static readonly Color WhiteDim = new Color(1f, 1f, 1f, 0.72f);
-        internal static readonly Color WhiteSoft = new Color(1f, 1f, 1f, 0.35f);
-        internal static readonly Color PanelBg = new Color(0f, 0f, 0f, 0.38f);
-        internal static readonly Color FuelWarn = new Color(1f, 0.55f, 0.2f, 0.95f);
+        // --- Layout (fraction of panel, COD ~4–5% bezel) ---
+        internal const float PadXFrac = 0.042f;
+        internal const float PadYFrac = 0.052f;
 
-        internal const int FontCallsign = 36;
-        internal const int FontStatus = 18;
-        internal const int FontBody = 17;
-        internal const int FontSmall = 15;
+        // --- Colors ---
+        internal static readonly Color White = new Color(1f, 1f, 1f, 0.94f);
+        internal static readonly Color WhiteDim = new Color(1f, 1f, 1f, 0.78f);
+        internal static readonly Color WhiteSoft = new Color(1f, 1f, 1f, 0.42f);
+        internal static readonly Color SelFill = new Color(1f, 1f, 1f, 0.06f);
+        internal static readonly Color Ready = new Color(0.92f, 0.18f, 0.14f, 0.92f);
 
-        internal static Text CreateText(RectTransform parent, string name, TextAnchor align, int fontSize = 17)
+        // --- Type ---
+        internal const int FontCallsign = 30;
+        internal const int FontStatus = 15;
+        internal const int FontBody = 16;
+        internal const int FontSmall = 14;
+
+        internal static float PadX(MissileCameraPanelMetrics panel) =>
+            Mathf.Max(panel.Width * PadXFrac, 34f);
+
+        internal static float PadY(MissileCameraPanelMetrics panel) =>
+            Mathf.Max(panel.Height * PadYFrac, 26f);
+
+        // --- Text factory (black outline + soft white ghost = CRT bloom) ---
+        internal static Text CreateText(RectTransform parent, string name, TextAnchor align, int fontSize)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(Text));
             go.transform.SetParent(parent, false);
             Text t = go.GetComponent<Text>();
             t.font = HudFontHelper.GetFont();
             t.fontSize = fontSize;
+            t.fontStyle = FontStyle.Bold;
             t.color = White;
             t.alignment = align;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Overflow;
             t.raycastTarget = false;
-            // COD HUD look: semi-bold weight via style when available
-            t.fontStyle = FontStyle.Bold;
+
+            var ghost = go.AddComponent<Outline>();
+            ghost.effectColor = new Color(1f, 1f, 1f, 0.18f);
+            ghost.effectDistance = new Vector2(1.4f, 0f);
+
             var outline = go.AddComponent<Outline>();
             outline.effectColor = new Color(0f, 0f, 0f, 0.82f);
-            outline.effectDistance = new Vector2(1.1f, 1.1f);
-            var shadow = go.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0f, 0f, 0f, 0.45f);
-            shadow.effectDistance = new Vector2(1.5f, -1.5f);
+            outline.effectDistance = new Vector2(0.9f, -0.9f);
             return t;
         }
 
@@ -52,6 +64,63 @@ namespace MissileCamera
             return img;
         }
 
+        // --- COD sat dish + signal arcs (top-left icon) ---
+        internal static Texture2D BuildSatIconTex()
+        {
+            const int s = 40;
+            var tex = new Texture2D(s, s, TextureFormat.RGBA32, false)
+            {
+                name = "MC.SatIcon",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            for (int y = 0; y < s; y++)
+            for (int x = 0; x < s; x++)
+                tex.SetPixel(x, y, Color.clear);
+
+            // Dish body (left)
+            FillDisc(tex, 11, 16, 6, Color.white);
+            // Mast
+            for (int y = 6; y <= 20; y++)
+            {
+                tex.SetPixel(11, y, Color.white);
+                tex.SetPixel(12, y, Color.white);
+            }
+            // Signal arcs → right (COD bars)
+            DrawArc(tex, 14, 18, 8, 0.12f, 0.52f);
+            DrawArc(tex, 14, 18, 12, 0.12f, 0.52f);
+            DrawArc(tex, 14, 18, 16, 0.12f, 0.52f);
+            tex.Apply(false, true);
+            return tex;
+        }
+
+        private static void FillDisc(Texture2D tex, int cx, int cy, int r, Color c)
+        {
+            for (int y = cy - r; y <= cy + r; y++)
+            for (int x = cx - r; x <= cx + r; x++)
+            {
+                if (x < 0 || y < 0 || x >= tex.width || y >= tex.height) continue;
+                float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                if (d <= r + 0.45f) tex.SetPixel(x, y, c);
+            }
+        }
+
+        private static void DrawArc(Texture2D tex, int cx, int cy, int r, float a0, float a1)
+        {
+            for (int i = 0; i < 56; i++)
+            {
+                float t = Mathf.Lerp(a0, a1, i / 55f) * Mathf.PI;
+                int x = cx + Mathf.RoundToInt(Mathf.Cos(t) * r);
+                int y = cy + Mathf.RoundToInt(Mathf.Sin(t) * r);
+                if (x >= 0 && y >= 0 && x < tex.width && y < tex.height)
+                {
+                    tex.SetPixel(x, y, Color.white);
+                    if (x + 1 < tex.width) tex.SetPixel(x + 1, y, Color.white);
+                }
+            }
+        }
+
         internal static void Stretch(RectTransform rt)
         {
             rt.anchorMin = Vector2.zero;
@@ -60,18 +129,12 @@ namespace MissileCamera
             rt.offsetMax = Vector2.zero;
         }
 
-        internal static void Place(
-            RectTransform rt,
-            Vector2 anchorMin,
-            Vector2 anchorMax,
-            Vector2 pivot,
-            Vector2 anchoredPos,
-            Vector2 size)
+        internal static void Place(RectTransform rt, Vector2 aMin, Vector2 aMax, Vector2 pivot, Vector2 pos, Vector2 size)
         {
-            rt.anchorMin = anchorMin;
-            rt.anchorMax = anchorMax;
+            rt.anchorMin = aMin;
+            rt.anchorMax = aMax;
             rt.pivot = pivot;
-            rt.anchoredPosition = anchoredPos;
+            rt.anchoredPosition = pos;
             rt.sizeDelta = size;
         }
     }

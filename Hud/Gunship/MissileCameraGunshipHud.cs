@@ -3,8 +3,9 @@ using UnityEngine;
 namespace MissileCamera
 {
     /// <summary>
-    /// Fullscreen gunship-style HUD (replaces FLIR panels). English labels.
-    /// TV scanlines = UI overlay (safe). FUEL/THR in weapon table; RC gauge Update kept.
+    /// Fullscreen COD AC-130 gunship HUD (EN).
+    /// TV: UI FLIR CRT overlay (animated) + PostFx fisheye when ScanlinesEnabled.
+    /// FUEL/THR in weapon table; RC FlirGaugeBars.Update kept.
     /// </summary>
     internal sealed class MissileCameraGunshipHud
     {
@@ -74,8 +75,8 @@ namespace MissileCamera
 
         internal void Shutdown()
         {
-            try { _tv.Shutdown(); }
-            catch { /* ignore */ }
+            try { _tv.Shutdown(); } catch { /* ignore */ }
+            try { _telemetry.Shutdown(); } catch { /* ignore */ }
 
             try
             {

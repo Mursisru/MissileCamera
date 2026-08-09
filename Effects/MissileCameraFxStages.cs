@@ -9,7 +9,8 @@ namespace MissileCamera
 
         public string StageId => "Scanlines";
         public bool IsAvailable => MissileCameraEffectsAvailability.IsStageAvailable(StageId);
-        public bool IsEnabled => false; // PostFx scanlines disabled — wrong Unity rebuild pinked feed; TV via UI overlay.
+        // FS TV = UI GunshipTvOverlay only. PostFx blit at FS res caused zoom lag + frozen _Time lines.
+        public bool IsEnabled => false;
         public float Intensity => 0f;
 
         public bool Apply(RenderTexture source, RenderTexture destination) =>

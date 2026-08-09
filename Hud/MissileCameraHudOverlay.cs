@@ -175,12 +175,25 @@ namespace MissileCamera
 
             MissileCameraCockpitPipController.Tick(null, panel);
 
+            // FS: kill classic MFD center chrome every frame (not only dynamic tick —
+            // otherwise intercept/attitude rings stick until next interval).
+            if (flir)
+            {
+                _attitude?.SetVisible(false);
+                if (_interceptRoot != null && _interceptRoot.gameObject.activeSelf)
+                    _interceptRoot.gameObject.SetActive(false);
+                _targetMarker?.SetVisible(false);
+            }
+
             if (!updateDynamic)
                 return;
 
             _nextDynamicTime = Time.unscaledTime + DynamicInterval;
 
-            bool showCenter = MissileCameraHudConfig.ShowCenterCluster && !flir;
+            if (flir)
+                return;
+
+            bool showCenter = MissileCameraHudConfig.ShowCenterCluster;
             _attitude?.SetVisible(showCenter);
             if (showCenter)
                 _attitude?.Update(snapshot, panel.MinSide);
@@ -192,9 +205,9 @@ namespace MissileCamera
                 feedCamera,
                 panel.MinSide,
                 showIntercept,
-                filled: !flir);
+                filled: true);
 
-            UpdateTargetMarker(snapshot, viewRt, feedCamera, panel.MinSide, !flir);
+            UpdateTargetMarker(snapshot, viewRt, feedCamera, panel.MinSide, mfdClassic: true);
         }
 
         private void UpdateTargetMarker(

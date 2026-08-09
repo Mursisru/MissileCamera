@@ -6,63 +6,56 @@ using UnityEngine.UI;
 namespace MissileCamera
 {
     /// <summary>
-    /// Bottom-right ammo-style table. FUEL/THR live here (edge gauges hidden — RC Update still runs).
+    /// Bottom-right gunship status: single neat column (value + label per line).
+    /// No selection frame. FUEL/THR as %.
     /// </summary>
     internal sealed class GunshipWeaponStatus
     {
         private static readonly StringBuilder Sb = new StringBuilder(96);
+        private const float RowH = 20f;
+        private const float Pad = 4f;
 
-        private readonly Image _bg;
-        private readonly RectTransform _sel;
+        private readonly RectTransform _root;
         private readonly Text _body;
         private string _last = "";
 
-        private GunshipWeaponStatus(Image bg, RectTransform sel, Text body)
+        private GunshipWeaponStatus(RectTransform root, Text body)
         {
-            _bg = bg;
-            _sel = sel;
+            _root = root;
             _body = body;
         }
 
         internal static GunshipWeaponStatus Create(RectTransform parent)
         {
-            Image bg = GunshipChrome.CreateImage(parent, "GunshipWeaponBg", GunshipChrome.PanelBg);
-            var selGo = new GameObject("GunshipWeaponSel", typeof(RectTransform));
-            selGo.transform.SetParent(bg.rectTransform, false);
-            RectTransform sel = selGo.GetComponent<RectTransform>();
-            // Hollow selection border around bottom row (active weapon analogue)
-            CreateEdge(sel, "T", true);
-            CreateEdge(sel, "B", true);
-            CreateEdge(sel, "L", false);
-            CreateEdge(sel, "R", false);
+            var go = new GameObject("GunshipWeapon", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            RectTransform root = go.GetComponent<RectTransform>();
 
-            Text body = GunshipChrome.CreateText(bg.rectTransform, "GunshipWeaponBody", TextAnchor.UpperLeft, GunshipChrome.FontBody);
-            body.fontStyle = FontStyle.Bold;
-            body.lineSpacing = 1.15f;
-            return new GunshipWeaponStatus(bg, sel, body);
+            Text body = GunshipChrome.CreateText(root, "Body", TextAnchor.LowerRight, GunshipChrome.FontBody);
+            body.fontStyle = FontStyle.Normal;
+            body.lineSpacing = 1.08f;
+            return new GunshipWeaponStatus(root, body);
         }
 
         internal void Place(MissileCameraPanelMetrics panel)
         {
-            float pad = Mathf.Max(panel.HorizontalInset, 18f) + 10f;
-            float bottom = Mathf.Max(panel.VerticalInset, 16f) + 14f;
-            GunshipChrome.Place(_bg.rectTransform, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f),
-                new Vector2(-pad, bottom), new Vector2(200f, 108f));
+            float px = GunshipChrome.PadX(panel);
+            float py = GunshipChrome.PadY(panel);
+            const int rows = 4;
+            float h = RowH * rows + Pad * 2f;
+            GunshipChrome.Place(_root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f),
+                new Vector2(-px, py), new Vector2(160f, h));
+
             GunshipChrome.Place(_body.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(0.5f, 0.5f),
                 Vector2.zero, Vector2.zero);
-            _body.rectTransform.offsetMin = new Vector2(16f, 10f);
-            _body.rectTransform.offsetMax = new Vector2(-12f, -10f);
-
-            _sel.anchorMin = new Vector2(0.04f, 0.04f);
-            _sel.anchorMax = new Vector2(0.96f, 0.36f);
-            _sel.offsetMin = Vector2.zero;
-            _sel.offsetMax = Vector2.zero;
+            _body.rectTransform.offsetMin = new Vector2(Pad, Pad);
+            _body.rectTransform.offsetMax = new Vector2(-Pad, -Pad);
         }
 
         internal void Update(MissileCameraHudSnapshot snapshot)
         {
-            int fuelPct = Mathf.RoundToInt(Mathf.Clamp01(snapshot.FuelFraction) * 100f);
-            int thrPct = Mathf.RoundToInt(Mathf.Clamp01(snapshot.ThrottleFraction) * 100f);
+            int fuel = Mathf.RoundToInt(Mathf.Clamp01(snapshot.FuelFraction) * 100f);
+            int thr = Mathf.RoundToInt(Mathf.Clamp01(snapshot.ThrottleFraction) * 100f);
             string mode = MissileCameraVisionModeController.Mode switch
             {
                 MissileCameraVisionMode.NightVision => "NVG",
@@ -70,44 +63,20 @@ namespace MissileCamera
                 MissileCameraVisionMode.BlackHot => "BH",
                 MissileCameraVisionMode.WhiteContour => "EDGE+",
                 MissileCameraVisionMode.BlackContour => "EDGE-",
-                _ => "COLOR"
+                _ => "TV"
             };
 
+            // Single right-aligned column (Arial isn't mono — no space padding)
             Sb.Length = 0;
-            Sb.Append("1    MISSILE");
-            Sb.Append('\n').Append(fuelPct.ToString(CultureInfo.InvariantCulture).PadLeft(3)).Append("   FUEL");
-            Sb.Append('\n').Append(thrPct.ToString(CultureInfo.InvariantCulture).PadLeft(3)).Append("   THR");
-            Sb.Append('\n').Append(mode.PadLeft(3)).Append("   MODE");
+            Sb.Append("1 MISSILE");
+            Sb.Append('\n').Append(fuel.ToString(CultureInfo.InvariantCulture)).Append("% FUEL");
+            Sb.Append('\n').Append(thr.ToString(CultureInfo.InvariantCulture)).Append("% THR");
+            Sb.Append('\n').Append(mode).Append(" MODE");
 
             string text = Sb.ToString();
-            if (text == _last)
-                return;
+            if (text == _last) return;
             _last = text;
             _body.text = text;
-        }
-
-        private static void CreateEdge(RectTransform parent, string name, bool horizontal)
-        {
-            Image img = GunshipChrome.CreateImage(parent, name, GunshipChrome.White);
-            RectTransform rt = img.rectTransform;
-            if (horizontal)
-            {
-                bool top = name == "T";
-                rt.anchorMin = new Vector2(0f, top ? 1f : 0f);
-                rt.anchorMax = new Vector2(1f, top ? 1f : 0f);
-                rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.sizeDelta = new Vector2(0f, 1.5f);
-                rt.anchoredPosition = Vector2.zero;
-            }
-            else
-            {
-                bool left = name == "L";
-                rt.anchorMin = new Vector2(left ? 0f : 1f, 0f);
-                rt.anchorMax = new Vector2(left ? 0f : 1f, 1f);
-                rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.sizeDelta = new Vector2(1.5f, 0f);
-                rt.anchoredPosition = Vector2.zero;
-            }
         }
     }
 }

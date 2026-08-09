@@ -25,11 +25,22 @@ namespace MissileCamera
 
             mat.SetFloat(IntensityId, Mathf.Clamp01(intensity));
             if (mat.HasProperty("_LineDensity"))
-                mat.SetFloat("_LineDensity", 540f);
+                mat.SetFloat("_LineDensity", 720f);
             if (mat.HasProperty("_Opacity"))
-                mat.SetFloat("_Opacity", Mathf.Clamp01(Mathf.Max(intensity, 0.22f)));
+                // Soft CRT mask — heavy lines come from UI overlay (Blit _Time often frozen)
+                mat.SetFloat("_Opacity", Mathf.Clamp01(Mathf.Max(intensity * 0.55f, 0.14f)));
             if (mat.HasProperty("_Fisheye"))
-                mat.SetFloat("_Fisheye", MissileCameraFullscreenController.IsActive ? 0.11f : 0.06f);
+            {
+                float eye = MissileCameraFullscreenController.IsActive ? 0.14f : 0.06f;
+                mat.SetFloat("_Fisheye", eye);
+            }
+            // Drive motion from C# — Graphics.Blit may not advance _Time
+            if (mat.HasProperty("_Scroll"))
+                mat.SetFloat("_Scroll", Time.unscaledTime);
+            if (mat.HasProperty("_Noise"))
+                mat.SetFloat("_Noise", 0.14f);
+            if (mat.HasProperty("_Vignette"))
+                mat.SetFloat("_Vignette", 0.32f);
             if (mat.HasProperty(MainTexId))
                 mat.SetTexture(MainTexId, source);
 

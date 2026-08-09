@@ -8,12 +8,10 @@ namespace MissileCamera
     /// <summary>
     /// CombatHUD markers use mainCamera.WorldToScreenPoint — center-stuck on seeker FS.
     /// Reproject via feed camera viewport → Screen. Missile units: hide image only (never Deselect).
-    /// Opaque/high-contrast applied after vanilla color writes. CAMERA_SAFETY: no CSM writes.
+    /// Never rewrite marker.image.color (vanilla faction theme). CAMERA_SAFETY: no CSM writes.
     /// </summary>
     internal static class MissileCameraCombatHudMarkerProjection
     {
-        private const float ContrastBoost = 0.35f;
-
         private static readonly FieldInfo? HiddenField =
             AccessTools.Field(typeof(HUDUnitMarker), "hidden");
         private static readonly FieldInfo? MarkersField =
@@ -28,21 +26,10 @@ namespace MissileCamera
             _feedCameraCached = null;
         }
 
-        /// <summary>Force opaque + boost RGB — call only while FS is active.</summary>
+        /// <summary>No-op — opaque contrast bleached faction colors white. Keep vanilla theme.</summary>
         internal static void ApplyOpaqueContrast(HUDUnitMarker marker)
         {
-            if (!MissileCameraFullscreenController.IsActive)
-                return;
-
-            if (marker?.image == null || !marker.image.enabled)
-                return;
-
-            Color c = marker.image.color;
-            c.r = Mathf.Lerp(c.r, 1f, ContrastBoost);
-            c.g = Mathf.Lerp(c.g, 1f, ContrastBoost);
-            c.b = Mathf.Lerp(c.b, 1f, ContrastBoost);
-            c.a = 1f;
-            marker.image.color = c;
+            // Intentionally empty.
         }
 
         internal static void RestoreMarkerImages()
@@ -111,7 +98,6 @@ namespace MissileCamera
                 if (marker.selected)
                 {
                     ReprojectSelected(marker, feed, world);
-                    ApplyOpaqueContrast(marker);
                     return;
                 }
 
@@ -126,7 +112,6 @@ namespace MissileCamera
                     marker.image.enabled = true;
 
                 marker.image.transform.position = new Vector3(screen.x, screen.y, 0f);
-                ApplyOpaqueContrast(marker);
             }
             catch
             {
@@ -181,20 +166,20 @@ namespace MissileCamera
             if (hud == null)
                 return;
 
-            if (PinToScreenEdgeFeed(feed, world, out Vector3 position, out float arrowAngleRad))
+            // Never SetTargetArrow(true) — enables CombatHUD.targetText ("Target") TMP.
+            // Off-screen selected: hide marker image only (vanilla arrow/label stay suppressed).
+            if (PinToScreenEdgeFeed(feed, world, out Vector3 position, out _))
             {
                 marker.image.enabled = false;
-                hud.SetTargetArrow(
-                    true,
-                    position,
-                    new Vector3(0f, 0f, arrowAngleRad * Mathf.Rad2Deg - 90f));
             }
             else
             {
                 marker.image.enabled = true;
                 marker.image.transform.position = position;
-                hud.SetTargetArrow(false, Vector3.zero, Vector3.zero);
             }
+
+            try { hud.SetTargetArrow(false, Vector3.zero, Vector3.zero); }
+            catch { /* ignore */ }
         }
 
         private static bool PinToScreenEdgeFeed(
