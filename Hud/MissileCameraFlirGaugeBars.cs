@@ -6,7 +6,7 @@ namespace MissileCamera
 {
     /// <summary>
     /// Laconic white edge gauges for gunship HUD.
-    /// RC contract: Update(HudSnapshot, PanelMetrics) + smooth throttle fields.
+    /// RC contract: Update(HudSnapshot, PanelMetrics) + _displayThrottle / _displayReady / _lastThrottle.
     /// </summary>
     internal sealed class MissileCameraFlirGaugeBars
     {
@@ -16,7 +16,6 @@ namespace MissileCamera
 
         private const float FuelWarnFraction = 0.25f;
         private const float FractionEpsilon = 0.002f;
-        private const float DisplaySmoothHz = 2.5f;
 
         private readonly Gauge _fuel;
         private readonly Gauge _throttle;
@@ -56,25 +55,10 @@ namespace MissileCamera
             float fuelTarget = Mathf.Clamp01(snapshot.FuelFraction);
             float thrTarget = Mathf.Clamp01(snapshot.ThrottleFraction);
 
-            float t = 1f - Mathf.Exp(-DisplaySmoothHz * Time.unscaledDeltaTime);
-            if (!_displayReady || _displayFuel < 0f || _displayThrottle < 0f)
-            {
-                _displayFuel = fuelTarget;
-                _displayThrottle = thrTarget;
-                _displayReady = true;
-            }
-            else
-            {
-                if (Mathf.Abs(fuelTarget - _displayFuel) > 0.55f)
-                    _displayFuel = fuelTarget;
-                else
-                    _displayFuel = Mathf.Lerp(_displayFuel, fuelTarget, t);
-
-                if (Mathf.Abs(thrTarget - _displayThrottle) > 0.55f)
-                    _displayThrottle = thrTarget;
-                else
-                    _displayThrottle = Mathf.Lerp(_displayThrottle, thrTarget, t);
-            }
+            // No display smoothing — RC Harmony may still snap _displayThrottle.
+            _displayFuel = fuelTarget;
+            _displayThrottle = thrTarget;
+            _displayReady = true;
 
             SetFill(_fuel, _displayFuel, fuelStyle: true, ref _lastFuel);
             SetFill(_throttle, _displayThrottle, fuelStyle: false, ref _lastThrottle);
