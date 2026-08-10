@@ -4,6 +4,33 @@ All notable changes to **MissileCamera** (BepInEx) are documented here. Public v
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0] — 2026-08-10
+
+> [!IMPORTANT]
+> **Major release** — fullscreen gunship HUD is the default FS experience; seeker pose and RemoteControl-facing contracts remain compatible (`IsActive`, `TryGetFeedCamera`, `FlirGaugeBars.Update`).
+
+### Added
+
+- **Fullscreen gunship HUD (EN):** COD AC-130 style chrome (`Hud/Gunship/*`) — telemetry, reticle + N/E/S/W, range/zoom tape, NAV footer, weapon column, FUEL%/THR%, MODE.
+- **FS look-around (RMB):** pan seeker within a cone; main gunship reticle stays on bore; small center mark follows look.
+- **Soft horizon seeker:** counter-roll around bore so calm flight (and banked aircraft launch) levels the picture; TurnLook bank remains on horizontal turns.
+- **GitHub update check:** compares `AppVersion` to latest **full** release (`releases/latest`); one EN prompt per session when outdated; offline = silent; Don't show again in cfg.
+
+### Changed
+
+- **Default FS vision:** WhiteHot.
+- **FS zoom:** optical FOV only (fixed RT size — no magnify lag).
+- **FUEL/THR:** live motor values (no display smoothing); RC gauge field surface kept.
+- **SoftPark:** restore weapons + destroy stub between missiles so MFD does not stay blank.
+
+### Fixed
+
+- **CombatHUD "Target" TMP** / white marker bleach in FS.
+- **Range tape stuck at 500 m** under RC aim stubs — optical FOV footprint drives zoom feedback again.
+- **Pitch / turn false camera snaps** from world-up rebuild and TurnLook sign jumps.
+- **Rotated MFD HUD cull** (`RectMask2D` under ~90° RotatedView).
+- **Invisible FS cost:** throttled SuppressIls / marker force / stub hide.
+
 ## [1.9.9] — 2026-08-09
 
 > [!NOTE]
