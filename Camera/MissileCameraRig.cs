@@ -27,8 +27,10 @@ namespace MissileCamera
         private float _boreRollDeg;
         private float _rollVelocity;
         private int _lastRollAdvanceFrame = -1;
-        private float _filteredLateralG;
-        private float _filteredTurnSign;
+        private float _filteredSignedG;
+        private float _heldTurnSign;
+        private float _horizonLevelRoll;
+        private float _horizonLevelVelocity;
         private float _zoomOffset;
         private float _fullscreenMagnification = 1f;
         private MissileCameraVisionMode _visionMode = MissileCameraVisionMode.Color;
@@ -224,7 +226,6 @@ namespace MissileCamera
             if (!IsRootAlive)
                 return;
 
-            bool following = _missile != null && !_missile.disabled && _renderTexture != null;
             UniversalAdditionalCameraData urp = _camera.GetUniversalAdditionalCameraData();
 
             if (_pipelineDriven)
@@ -235,15 +236,11 @@ namespace MissileCamera
                 return;
             }
 
-            if (following)
-            {
-                urp.renderType = CameraRenderType.Overlay;
-                _camera.targetTexture = _renderTexture;
-                _camera.enabled = true;
-                return;
-            }
-
-            urp.renderType = CameraRenderType.Base;
+            // Manual IR/NVG: Overlay + Camera.Render only. Leaving enabled=true made URP
+            // treat it as a live camera alongside main/aircraft mini-cam (issue #3 FPS).
+            // Particles: COLOR path is pipeline-driven (enabled Base) — not this branch.
+            urp.renderType = CameraRenderType.Overlay;
+            _camera.targetTexture = _renderTexture;
             _camera.enabled = false;
         }
 
@@ -353,8 +350,10 @@ namespace MissileCamera
             _missile = missile;
             _boreRollDeg = 0f;
             _rollVelocity = 0f;
-            _filteredLateralG = 0f;
-            _filteredTurnSign = 0f;
+            _filteredSignedG = 0f;
+            _heldTurnSign = 0f;
+            _horizonLevelRoll = 0f;
+            _horizonLevelVelocity = 0f;
             _lastRollAdvanceFrame = -1;
             LastHorizonFrame = HorizonFrame.Empty;
 
@@ -364,6 +363,22 @@ namespace MissileCamera
             _root.transform.SetParent(missile.transform, false);
             _root.transform.localPosition = new Vector3(0f, 0f, _localNoseZ);
             _root.transform.localRotation = Quaternion.identity;
+
+            // Seed horizon counter so launch from banked aircraft is level immediately (calm = horizon).
+            if (MissileCameraFeedConfig.HorizonLock)
+            {
+                float bank = HorizonFrame.ComputeBankDeg(missile.transform);
+                float absY = Mathf.Abs(missile.transform.forward.y);
+                float w = absY <= MissileCameraFeedConfig.HorizonLevelFadeStart
+                    ? 1f
+                    : Mathf.InverseLerp(
+                        MissileCameraFeedConfig.HorizonLevelFadeEnd,
+                        MissileCameraFeedConfig.HorizonLevelFadeStart,
+                        absY);
+                _horizonLevelRoll = -bank * w;
+                _horizonLevelVelocity = 0f;
+            }
+
             ApplyFeedCameraActiveState();
 
             string unitName = missile.definition != null ? missile.definition.unitName : missile.name;
@@ -381,8 +396,10 @@ namespace MissileCamera
             _missile = null;
             _boreRollDeg = 0f;
             _rollVelocity = 0f;
-            _filteredLateralG = 0f;
-            _filteredTurnSign = 0f;
+            _filteredSignedG = 0f;
+            _heldTurnSign = 0f;
+            _horizonLevelRoll = 0f;
+            _horizonLevelVelocity = 0f;
             _lastRollAdvanceFrame = -1;
             LastHorizonFrame = HorizonFrame.Empty;
             if (!IsRootAlive)
@@ -535,19 +552,38 @@ namespace MissileCamera
 
             _lastRollAdvanceFrame = Time.frameCount;
 
-            MissileTurnLoad.TrySampleHorizontalTurn(_missile, out float rawLateralG, out float rawTurnSign);
-            float filterT = 1f - Mathf.Exp(-MissileCameraFeedConfig.TurnLookGFilterHz * deltaTime);
-            _filteredLateralG = Mathf.Lerp(_filteredLateralG, rawLateralG, filterT);
+            if (!MissileTurnLoad.TrySampleSignedLateralG(_missile, out float rawSignedG))
+                rawSignedG = 0f;
 
-            if (Mathf.Abs(rawTurnSign) < 0.01f)
-                _filteredTurnSign = Mathf.MoveTowards(_filteredTurnSign, 0f, deltaTime * 2.5f);
+            // Sign hysteresis: RC hard reverse / marker-off-screen spikes must not flip bank instantly.
+            float absRaw = Mathf.Abs(rawSignedG);
+            float gLimit = MissileAccess.TryGetGLimit(_missile, out float limit) && limit > 0f
+                ? limit
+                : MissileCameraFeedConfig.DefaultMissileGLimit;
+            float reverseNeed = gLimit * MissileCameraFeedConfig.TurnLookReverseHysteresis;
+
+            float signedForFilter = rawSignedG;
+            if (absRaw < MissileCameraFeedConfig.TurnLookGDeadband)
+            {
+                signedForFilter = 0f;
+                _heldTurnSign = Mathf.MoveTowards(_heldTurnSign, 0f, deltaTime * 1.5f);
+            }
+            else if (Mathf.Abs(_heldTurnSign) > 0.01f
+                && Mathf.Sign(rawSignedG) != Mathf.Sign(_heldTurnSign)
+                && absRaw < reverseNeed)
+            {
+                // Opposite turn too weak: unwind bank, do not flip side yet (RC spike / marker edge).
+                signedForFilter = 0f;
+            }
             else
-                _filteredTurnSign = Mathf.Lerp(_filteredTurnSign, rawTurnSign, filterT);
+            {
+                _heldTurnSign = Mathf.Sign(rawSignedG);
+            }
 
-            float targetRoll = MissileTurnLoad.ComputeTargetRollDeg(
-                _missile,
-                _filteredLateralG,
-                _filteredTurnSign);
+            float filterT = 1f - Mathf.Exp(-MissileCameraFeedConfig.TurnLookGFilterHz * deltaTime);
+            _filteredSignedG = Mathf.Lerp(_filteredSignedG, signedForFilter, filterT);
+
+            float targetRoll = MissileTurnLoad.ComputeTargetRollDeg(_missile, _filteredSignedG);
 
             float smoothTime = MissileCameraFeedConfig.TurnLookSmoothTime;
             if (smoothTime <= 0.001f)
@@ -577,20 +613,36 @@ namespace MissileCamera
             if (!IsRootAlive || _missile == null)
                 return;
 
-            _root.transform.localPosition = new Vector3(0f, 0f, _localNoseZ);
-            _root.transform.localRotation = Quaternion.identity;
-
             Transform missileTransform = _missile.transform;
+            _root.transform.localPosition = new Vector3(0f, 0f, _localNoseZ);
 
-            Quaternion desiredWorld = HorizonFrame.BuildCameraWorldRotation(
-                missileTransform,
-                _boreRollDeg,
-                MissileCameraFeedConfig.HorizonLock);
+            float totalRoll = _boreRollDeg;
+            float bodyBank = HorizonFrame.ComputeBankDeg(missileTransform);
+            float absY = Mathf.Abs(missileTransform.forward.y);
+            float levelWeight = absY <= MissileCameraFeedConfig.HorizonLevelFadeStart
+                ? 1f
+                : Mathf.InverseLerp(
+                    MissileCameraFeedConfig.HorizonLevelFadeEnd,
+                    MissileCameraFeedConfig.HorizonLevelFadeStart,
+                    absY);
 
-            Quaternion bodyWorld = missileTransform.rotation;
-            _camera.transform.localRotation = Quaternion.Inverse(bodyWorld) * desiredWorld;
+            float targetLevel = -bodyBank * levelWeight;
+            _horizonLevelRoll = Mathf.SmoothDamp(
+                _horizonLevelRoll,
+                targetLevel,
+                ref _horizonLevelVelocity,
+                MissileCameraFeedConfig.HorizonLevelSmoothTime,
+                MissileCameraFeedConfig.HorizonLevelSlewDegPerSec,
+                Time.deltaTime);
+            totalRoll = _horizonLevelRoll + _boreRollDeg;
 
-            LastHorizonFrame = HorizonFrame.FromCamera(_camera, _filteredLateralG, _boreRollDeg);
+            _root.transform.localRotation = Mathf.Abs(totalRoll) < 0.001f
+                ? Quaternion.identity
+                : Quaternion.AngleAxis(totalRoll, Vector3.forward);
+
+            MissileCameraFsLookAround.ApplyToCamera(_camera);
+
+            LastHorizonFrame = HorizonFrame.FromCamera(_camera, bodyBank, totalRoll);
         }
 
         private void ApplyConfigIfNeeded()

@@ -21,7 +21,6 @@ namespace MissileCamera
 
         /// <summary>
         /// Roll around bore: compare level-up to body dorsal in the plane perpendicular to forward.
-        /// Uses a fixed axis priority (up, then right) to avoid frame-to-frame axis flipping.
         /// </summary>
         internal static float ComputeBankDeg(Transform missileTransform)
         {
@@ -42,26 +41,21 @@ namespace MissileCamera
             return Vector3.SignedAngle(levelUp, bodyRef, forward);
         }
 
+        /// <summary>
+        /// Seeker world rotation: body forward + optional bore roll (horizon counter / TurnLook).
+        /// Does not rebuild yaw from world-up (that spun on pitch / snapped near vertical).
+        /// </summary>
         internal static Quaternion BuildCameraWorldRotation(Transform missileTransform, float rollDeg, bool horizonLock)
         {
+            _ = horizonLock;
+
             Vector3 forward = missileTransform.forward;
             if (forward.sqrMagnitude < Epsilon)
                 forward = Vector3.forward;
             else
                 forward.Normalize();
 
-            Quaternion baseLook;
-            if (!horizonLock)
-            {
-                baseLook = Quaternion.LookRotation(forward, missileTransform.up);
-            }
-            else
-            {
-                Vector3 flatForward = Vector3.ProjectOnPlane(forward, Vector3.up);
-                baseLook = flatForward.sqrMagnitude > 1e-8f
-                    ? Quaternion.LookRotation(forward, Vector3.up)
-                    : Quaternion.LookRotation(forward, missileTransform.right);
-            }
+            Quaternion baseLook = Quaternion.LookRotation(forward, missileTransform.up);
 
             if (Mathf.Abs(rollDeg) < 0.001f)
                 return baseLook;

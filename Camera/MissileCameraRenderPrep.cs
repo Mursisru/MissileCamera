@@ -53,23 +53,46 @@ namespace MissileCamera
         private static AntialiasingQuality _lastMirrorAaQuality;
         private static bool _lastMirrorDithering;
         private static bool _lastMirrorStopNaN;
+        private static float _nextDetailSyncUnscaled;
+        private static bool _detailRestorePending;
+
+        /// <summary>
+        /// Detail LateUpdate is expensive. MFD: throttle seeker sync then restore world (cockpit trees).
+        /// FS: every frame force-sync to feed and leave assigned — restore only on FS exit (stops tree flicker).
+        /// </summary>
+        private static float DetailSyncInterval =>
+            1f / Mathf.Max(MissileCameraFeedConfig.RenderFps, 1);
 
         internal static void BeforeRender(Camera feedCamera, bool forceLdr = false)
         {
             ApplyShaderGlobalsForCamera(feedCamera);
             MirrorUrpFromReference(feedCamera, forceLdr);
             BakeTerrainWindowForCamera(feedCamera);
-            SyncDetailsToCamera(feedCamera);
+            bool fs = MissileCameraFullscreenController.IsActive;
+            SyncDetailsToCamera(feedCamera, force: fs, leaveAssigned: fs);
         }
 
         internal static void AfterRender()
         {
+            // Fullscreen seeker view: keep DetailRenderer on feed frustum (no cockpit).
+            if (MissileCameraFullscreenController.IsActive)
+                return;
+
             Camera? restore = ResolveWorldCamera();
             if (restore == null)
+            {
+                _detailRestorePending = false;
                 return;
+            }
 
             ApplyShaderGlobalsForCamera(restore);
             BakeTerrainWindowForCamera(restore);
+
+            if (_detailRestorePending)
+            {
+                SyncDetailsToCamera(restore, force: true, leaveAssigned: true);
+                _detailRestorePending = false;
+            }
         }
 
         /// <summary>Camera.main is often null without local aircraft — fall back to CSM / any camera.</summary>
@@ -144,7 +167,19 @@ namespace MissileCamera
 
         internal static void ForceRestoreWorldState()
         {
-            ResetAll();
+            Camera? world = ResolveWorldCamera();
+            if (world != null)
+            {
+                try
+                {
+                    ApplyShaderGlobalsForCamera(world);
+                    SyncDetailsToCamera(world, force: true, leaveAssigned: true);
+                }
+                catch { /* ignore */ }
+            }
+
+            _detailRestorePending = false;
+            _nextDetailSyncUnscaled = 0f;
         }
 
         internal static void ResetAll()
@@ -154,6 +189,8 @@ namespace MissileCamera
             _pipelineInfrared = false;
             _pipelineNightVision = false;
             _pipelineForceLdr = false;
+            _nextDetailSyncUnscaled = 0f;
+            _detailRestorePending = false;
             _lastBakedWindow = new Vector2Int(int.MinValue, int.MinValue);
             if (_pipelineFogActive)
             {
@@ -193,7 +230,9 @@ namespace MissileCamera
             ApplyShaderGlobalsForCamera(camera);
             MirrorUrpFromReference(camera, _pipelineForceLdr);
             BakeTerrainWindowForCamera(camera);
-            SyncDetailsToCamera(camera);
+            bool fs = MissileCameraFullscreenController.IsActive;
+            // FS: force every frame + leave on feed (stops tree flicker). MFD: throttle.
+            SyncDetailsToCamera(camera, force: fs, leaveAssigned: fs);
         }
 
         private static void OnEndCameraRendering(ScriptableRenderContext context, Camera camera)
@@ -207,17 +246,29 @@ namespace MissileCamera
                 _pipelineFogActive = false;
             }
 
-            AfterRender();
+            // FS: skip world restore (see AfterRender). MFD: restore cockpit trees.
+            if (!MissileCameraFullscreenController.IsActive)
+                AfterRender();
         }
 
         /// <summary>
         /// Dump: DetailRenderer.LateUpdate culls trees/grass with its private camera (Camera.main).
-        /// Point it at the seeker briefly so ComputeFrustumCulling + RenderMeshIndirect match the feed.
+        /// Point it at the seeker briefly so ComputeFrustumCulling + RenderMeshIndirect match the feed,
+        /// then AfterRender must SyncDetails back to the world camera (cockpit trees).
         /// </summary>
-        private static void SyncDetailsToCamera(Camera feedCamera)
+        private static void SyncDetailsToCamera(Camera targetCamera, bool force, bool leaveAssigned)
         {
-            if (feedCamera == null || DetailCameraField == null || DetailLateUpdateMethod == null)
+            if (targetCamera == null || DetailCameraField == null || DetailLateUpdateMethod == null)
                 return;
+
+            if (!force)
+            {
+                float now = Time.unscaledTime;
+                if (now < _nextDetailSyncUnscaled)
+                    return;
+
+                _nextDetailSyncUnscaled = now + DetailSyncInterval;
+            }
 
             DetailRenderer? detail = null;
             try
@@ -235,8 +286,10 @@ namespace MissileCamera
             object? previous = DetailCameraField.GetValue(detail);
             try
             {
-                DetailCameraField.SetValue(detail, feedCamera);
+                DetailCameraField.SetValue(detail, targetCamera);
                 DetailLateUpdateMethod.Invoke(detail, null);
+                if (!IsWorldCamera(targetCamera))
+                    _detailRestorePending = true;
             }
             catch (Exception ex)
             {
@@ -244,16 +297,23 @@ namespace MissileCamera
             }
             finally
             {
-                try
+                if (!leaveAssigned)
                 {
-                    DetailCameraField.SetValue(detail, previous);
-                }
-                catch
-                {
-                    // ignore
+                    try { DetailCameraField.SetValue(detail, previous); }
+                    catch { /* ignore */ }
                 }
             }
         }
+
+        private static bool IsWorldCamera(Camera camera)
+        {
+            Camera? world = ResolveWorldCamera();
+            return world != null && ReferenceEquals(camera, world);
+        }
+
+        /// <summary>Public entry used by BeforeRender / multi-cam prep — throttled feed sync.</summary>
+        private static void SyncDetailsToCamera(Camera feedCamera) =>
+            SyncDetailsToCamera(feedCamera, force: false, leaveAssigned: false);
 
         private static void ApplyShaderGlobalsForCamera(Camera camera)
         {

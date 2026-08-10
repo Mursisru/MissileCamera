@@ -123,10 +123,23 @@ namespace MissileCamera
             if (child != null)
                 return child;
 
+            Transform? content = layoutRt.Find("MissileCameraContent");
+            if (content != null)
+            {
+                child = content.Find(childName);
+                if (child != null)
+                    return child;
+            }
+
             if (panelRt == null || panelRt == layoutRt)
                 return null;
 
-            return panelRt.Find(childName);
+            child = panelRt.Find(childName);
+            if (child != null)
+                return child;
+
+            content = panelRt.Find("MissileCameraContent");
+            return content != null ? content.Find(childName) : null;
         }
 
         private static void ApplyRotatedViewTransform(RectTransform viewRt, RectTransform layoutRt, float contentRotationZ)

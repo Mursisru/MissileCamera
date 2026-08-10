@@ -4,6 +4,60 @@ All notable changes to **MissileCamera** (BepInEx) are documented here. Public v
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2.0.0] — 2026-08-10
+
+> [!IMPORTANT]
+> **Major release** — fullscreen gunship HUD is the default FS experience; seeker pose and RemoteControl-facing contracts remain compatible (`IsActive`, `TryGetFeedCamera`, `FlirGaugeBars.Update`).
+
+### Added
+
+- **Fullscreen gunship HUD (EN):** COD AC-130 style chrome (`Hud/Gunship/*`) — telemetry, reticle + N/E/S/W, range/zoom tape, NAV footer, weapon column, FUEL%/THR%, MODE.
+- **FS look-around (RMB):** pan seeker within a cone; main gunship reticle stays on bore; small center mark follows look.
+- **Soft horizon seeker:** counter-roll around bore so calm flight (and banked aircraft launch) levels the picture; TurnLook bank remains on horizontal turns.
+- **GitHub update check:** compares `AppVersion` to latest **full** release (`releases/latest`); one EN prompt per session when outdated; offline = silent; Don't show again in cfg.
+
+### Changed
+
+- **Default FS vision:** WhiteHot.
+- **FS zoom:** optical FOV only (fixed RT size — no magnify lag).
+- **FUEL/THR:** live motor values (no display smoothing); RC gauge field surface kept.
+- **SoftPark:** restore weapons + destroy stub between missiles so MFD does not stay blank.
+
+### Fixed
+
+- **CombatHUD "Target" TMP** / white marker bleach in FS.
+- **Range tape stuck at 500 m** under RC aim stubs — optical FOV footprint drives zoom feedback again.
+- **Pitch / turn false camera snaps** from world-up rebuild and TurnLook sign jumps.
+- **Rotated MFD HUD cull** (`RectMask2D` under ~90° RotatedView).
+- **Invisible FS cost:** throttled SuppressIls / marker force / stub hide.
+
+## [1.9.9] — 2026-08-09
+
+> [!NOTE]
+> **Pre-release** — gunship fullscreen HUD and related MFD polish. Test before relying on it in a long campaign.
+
+### Added
+
+- **Fullscreen gunship HUD (EN):** COD AC-130 style chrome (`Hud/Gunship/*`) — telemetry with jitter, reticle + N/E/S/W, range tape, NAV footer, weapon column with owned-missile count, FUEL%/THR%, MODE.
+- **FS TV look:** safe UI CRT overlay (`GunshipTvOverlay` scan/grain/vignette). PostFx Scanlines stage stays off (avoids zoom lag / pink IR).
+
+### Changed
+
+- **Default FS vision:** WhiteHot.
+- **FS zoom:** optical FOV only — RT size no longer upscales with magnification (fixes zoom lag).
+- **FS boot loading FX:** skipped — chrome shows immediately.
+- **FUEL/THR:** live motor values (no display/snapshot smoothing). RemoteControl `FlirGaugeBars.Update` field surface kept.
+- **SoftPark (missile gap):** restore weapons + destroy stub (`destroyHud:true`) so MFD does not stay blank; next launch cold-binds again.
+
+### Fixed
+
+- **CombatHUD "Target" TMP** hidden in FS; never `SetTargetArrow(true)` from reproject.
+- **White unit markers:** opaque contrast disabled — vanilla faction colors kept.
+- **Invisible FS LateUpdate cost:** SuppressIls / Force markers / TickHideStubs soft-rate; `SetTargetArrow(false)` only when arrow/TMP still visible.
+- **MFD camera without classic UI:** feed+HUD share `MissileCameraContent`; BottomRow on portrait/Darkreach; stub labels until chrome live.
+- **Rotated MFD (~90°):** disable HUD `RectMask2D` under `RotatedView` (Unity mask was culling chrome while feed still drew).
+- **Multirole1 Skip:** size gate only when weapons panel cannot be discovered.
+
 ## [1.2.1] — 2026-08-01
 
 ### Fixed

@@ -35,15 +35,11 @@ namespace MissileCamera
             if (panelRt == null)
                 return;
 
-            if (_doneThisMission)
-            {
-                ApplyFullVisibility();
-                return;
-            }
-
+            // Boot/loading FX removed — FS chrome shows immediately.
             StopRunning();
             _aborted = false;
-            _running = MissileCameraFeedDriverHost.StartCoroutineSafe(Run(panelRt));
+            _doneThisMission = true;
+            ApplyFullVisibility();
         }
 
         private static void StopRunning()

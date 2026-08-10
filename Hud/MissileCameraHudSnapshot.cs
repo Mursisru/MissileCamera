@@ -473,11 +473,11 @@ namespace MissileCamera
                 return;
             }
 
-            // Fuel/throttle need slower smoothing — discrete motor samples look like hard jumps at 10 Hz.
-            float fuelThrT = 1f - Mathf.Exp(-Mathf.Min(useHz, 2.5f) * Time.unscaledDeltaTime);
+            // FUEL/THR: no smoothing — live motor values (RC may still read _smoothThrottle via Harmony).
+            _smoothFuel = fuel;
+            _smoothThrottle = throttle;
+
             _smoothG = Mathf.Lerp(_smoothG, g, t);
-            _smoothFuel = Mathf.Lerp(_smoothFuel, fuel, fuelThrT);
-            _smoothThrottle = Mathf.Lerp(_smoothThrottle, throttle, fuelThrT);
             _smoothMach = Mathf.Lerp(_smoothMach, mach, t);
             _smoothRange = Mathf.Lerp(_smoothRange, range, t);
             _smoothAngle = Mathf.Lerp(_smoothAngle, angle, t);

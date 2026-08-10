@@ -254,6 +254,9 @@ namespace MissileCamera
 
             MissileCameraFullscreenFeedHost.Hide();
 
+            try { MissileCameraRenderPrep.ForceRestoreWorldState(); }
+            catch { /* ignore */ }
+
             if (_overlayGo != null && _overlayGo)
                 _overlayGo.SetActive(false);
 

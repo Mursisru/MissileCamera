@@ -8,14 +8,26 @@ namespace MissileCamera
         // Hardcoded seeker / IR picture defaults (not player-facing).
         internal const float NoseSkinInset = 0.08f;
         internal const float CameraBackOffset = 0.35f;
+        // Soft horizon: counter body bank around bore when not near-vertical (calm = level picture).
+        // Full world LookRotation rebuild is forbidden (pitch spin / 180° singularity).
         internal const bool HorizonLock = true;
+        /// <summary>|forward.y| above this → fade horizon counter to body-fixed.</summary>
+        internal const float HorizonLevelFadeStart = 0.82f;
+        internal const float HorizonLevelFadeEnd = 0.97f;
+        internal const float HorizonLevelSmoothTime = 0.22f;
+        internal const float HorizonLevelSlewDegPerSec = 180f;
         internal const float TurnLookBankScale = 1f;
-        internal const float MaxTurnLookDegrees = 90f;
+        // Visible bank on turns without near-inverting the view (±90 was saturating on light stick).
+        internal const float MaxTurnLookDegrees = 42f;
         internal const float DefaultMissileGLimit = 20f;
-        internal const float TurnLookGDeadband = 0.15f;
-        internal const float TurnLookGFilterHz = 7f;
-        internal const float TurnLookSlewDegPerSec = 120f;
-        internal const float TurnLookSmoothTime = 0.18f;
+        internal const float TurnLookGDeadband = 0.4f;
+        /// <summary>Reach MaxTurnLook at this fraction of missile gLimit (ease-in below).</summary>
+        internal const float TurnLookFullGFraction = 0.85f;
+        /// <summary>Opposite-turn G must exceed this × gLimit before bank sign may reverse.</summary>
+        internal const float TurnLookReverseHysteresis = 0.28f;
+        internal const float TurnLookGFilterHz = 5f;
+        internal const float TurnLookSlewDegPerSec = 55f;
+        internal const float TurnLookSmoothTime = 0.28f;
         internal const float PostExplosionHoldSeconds = 0f;
         internal const float InfraredContrast = 1f;
         internal const float InfraredBlackPoint = 0.05f;
@@ -78,7 +90,7 @@ namespace MissileCamera
         }
 
         /// <summary>
-        /// MFD feed uses cfg size; fullscreen uses FeedWidth/Height scaled by optical mag buckets (cap 3840).
+        /// MFD feed uses cfg size; fullscreen uses fixed FeedWidth/Height (zoom = FOV only — no RT upscale lag).
         /// </summary>
         internal static void ResolveActiveFeedSize(out int width, out int height)
         {
@@ -90,25 +102,12 @@ namespace MissileCamera
             }
 
             MissileCameraFullscreenConfig.Refresh();
-            int baseW = Mathf.Clamp(MissileCameraFullscreenConfig.FeedWidth, 640, 3840);
-            int baseH = Mathf.Clamp(MissileCameraFullscreenConfig.FeedHeight, 360, 2160);
-            float scale = ResolveFullscreenQualityScale(MissileCameraFeedController.FullscreenMagnification);
-            width = EvenClamp(Mathf.RoundToInt(baseW * scale), 640, 3840);
-            height = EvenClamp(Mathf.RoundToInt(baseH * scale), 360, 2160);
+            width = EvenClamp(Mathf.Clamp(MissileCameraFullscreenConfig.FeedWidth, 640, 3840), 640, 3840);
+            height = EvenClamp(Mathf.Clamp(MissileCameraFullscreenConfig.FeedHeight, 360, 2160), 360, 2160);
         }
 
-        internal static float ResolveFullscreenQualityScale(float magnification)
-        {
-            float mag = Mathf.Max(magnification, 1f);
-            float raw = Mathf.Sqrt(mag);
-            if (raw < 1.25f)
-                return 1f;
-            if (raw < 1.75f)
-                return 1.5f;
-            if (raw < 2.25f)
-                return 2f;
-            return 2.5f;
-        }
+        /// <summary>Kept for callers; always 1 — optical zoom must not recreate RT buckets.</summary>
+        internal static float ResolveFullscreenQualityScale(float magnification) => 1f;
 
         private static int EvenClamp(int value, int min, int max)
         {

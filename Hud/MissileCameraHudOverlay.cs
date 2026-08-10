@@ -10,7 +10,7 @@ namespace MissileCamera
 
         private RectTransform? _root;
         private MissileCameraCornerHud? _corners;
-        private MissileCameraFlirHud? _flir;
+        private MissileCameraGunshipHud? _flir;
         private MissileCameraAttitudeWidget? _attitude;
         private MissileCameraZoomIndicator? _zoomIndicator;
         private MissileCameraTargetMarker? _targetMarker;
@@ -33,12 +33,14 @@ namespace MissileCamera
             float contentRotationZ = contentRotationZOverride ?? MfdLayoutController.ActiveStubContentRotationZ;
             RectTransform viewRt = MissileCameraFeedLayout.EnsureRotatedView(layoutRt, contentRotationZ);
 
-            if (_root != null && _root.parent == viewRt)
+            // Reuse only when chrome is intact — missing corners after SoftPark/partial fail must rebuild.
+            if (_root != null && _root.parent == viewRt && _corners != null)
             {
                 if (!_root.gameObject.activeSelf)
                     _root.gameObject.SetActive(true);
                 MissileCameraFeedLayout.ApplyContentRotation(layoutRt, contentRotationZ);
-                _corners?.BindScreenUi(screenUi);
+                SyncHudClipMask(contentRotationZ);
+                _corners.BindScreenUi(screenUi);
                 _zoomIndicator?.BindScreenUi(screenUi);
                 RectTransform? panelRt = FindMissileCameraPanel(layoutRt);
                 ApplyLegacyStubVisibility(panelRt ?? layoutRt, hide: MissileCameraHudConfig.Enabled);
@@ -49,10 +51,12 @@ namespace MissileCamera
 
             try
             {
+                // RectMask2D added only when unrotated — under 90° parent it clips all chrome (#6 vs rotated MFD).
                 var rootGo = new GameObject(RootName, typeof(RectTransform));
                 rootGo.transform.SetParent(viewRt, false);
                 _root = rootGo.GetComponent<RectTransform>();
                 Stretch(_root);
+                SyncHudClipMask(contentRotationZ);
 
                 _corners = MissileCameraCornerHud.Create(_root, screenUi);
                 // FlirHud is lazy — MFD launch must not Instantiate ~7 panels every missile.
@@ -84,7 +88,7 @@ namespace MissileCamera
             }
         }
 
-        /// <summary>Create FLIR chrome on first FS need — never on MFD launch path.</summary>
+        /// <summary>Create gunship chrome on first FS need — never on MFD launch path.</summary>
         private void EnsureFlirBuilt()
         {
             if (_root == null || _flir != null)
@@ -92,13 +96,13 @@ namespace MissileCamera
 
             try
             {
-                _flir = MissileCameraFlirHud.Create(_root);
+                _flir = MissileCameraGunshipHud.Create(_root);
                 _flirRootStatic = _flir.Root;
             }
             catch (System.Exception ex)
             {
                 MissileCameraMissionLifecycleDiag.Warn(
-                    "FlirHud lazy Create: " + ex.GetType().Name + ": " + ex.Message);
+                    "GunshipHud lazy Create: " + ex.GetType().Name + ": " + ex.Message);
                 _flir = null;
                 _flirRootStatic = null;
             }
@@ -175,12 +179,25 @@ namespace MissileCamera
 
             MissileCameraCockpitPipController.Tick(null, panel);
 
+            // FS: kill classic MFD center chrome every frame (not only dynamic tick —
+            // otherwise intercept/attitude rings stick until next interval).
+            if (flir)
+            {
+                _attitude?.SetVisible(false);
+                if (_interceptRoot != null && _interceptRoot.gameObject.activeSelf)
+                    _interceptRoot.gameObject.SetActive(false);
+                _targetMarker?.SetVisible(false);
+            }
+
             if (!updateDynamic)
                 return;
 
             _nextDynamicTime = Time.unscaledTime + DynamicInterval;
 
-            bool showCenter = MissileCameraHudConfig.ShowCenterCluster && !flir;
+            if (flir)
+                return;
+
+            bool showCenter = MissileCameraHudConfig.ShowCenterCluster;
             _attitude?.SetVisible(showCenter);
             if (showCenter)
                 _attitude?.Update(snapshot, panel.MinSide);
@@ -192,9 +209,9 @@ namespace MissileCamera
                 feedCamera,
                 panel.MinSide,
                 showIntercept,
-                filled: !flir);
+                filled: true);
 
-            UpdateTargetMarker(snapshot, viewRt, feedCamera, panel.MinSide, !flir);
+            UpdateTargetMarker(snapshot, viewRt, feedCamera, panel.MinSide, mfdClassic: true);
         }
 
         private void UpdateTargetMarker(
@@ -294,6 +311,31 @@ namespace MissileCamera
             _interceptRoot = null;
         }
 
+        /// <summary>
+        /// RectMask2D clips MFD marker overflow on upright panels.
+        /// Under intentional RotatedView (~90° for sideways MFD) Unity RectMask2D culls all children —
+        /// feed RawImage still draws, classic HUD vanishes.
+        /// </summary>
+        private void SyncHudClipMask(float contentRotationZ)
+        {
+            if (_root == null)
+                return;
+
+            bool wantMask = Mathf.Abs(contentRotationZ) < 0.5f;
+            RectMask2D? mask = _root.GetComponent<RectMask2D>();
+            if (wantMask)
+            {
+                if (mask == null)
+                    _root.gameObject.AddComponent<RectMask2D>();
+                else if (!mask.enabled)
+                    mask.enabled = true;
+                return;
+            }
+
+            if (mask != null && mask.enabled)
+                mask.enabled = false;
+        }
+
         private static RectTransform? FindMissileCameraPanel(RectTransform layoutRt)
         {
             Transform? node = layoutRt;
@@ -313,12 +355,35 @@ namespace MissileCamera
             if (searchRoot == null)
                 return;
 
+            // FS: always suppress legacy stub on the MFD panel.
             if (MissileCameraFullscreenController.IsActive)
-                hide = true;
+            {
+                SetChildActiveDeep(searchRoot, "MissileCameraTitle", false);
+                SetChildActiveDeep(searchRoot, "MissileCameraColor", false);
+                SetChildActiveDeep(searchRoot, "MissileTelemetry", false);
+                return;
+            }
+
+            // Do not blank Title/COLOR/Telemetry until CornerHud exists — bare seeker looks "UI missing".
+            if (hide && !HasLiveHudChrome(searchRoot))
+                hide = false;
 
             SetChildActiveDeep(searchRoot, "MissileCameraTitle", !hide);
             SetChildActiveDeep(searchRoot, "MissileCameraColor", !hide);
             SetChildActiveDeep(searchRoot, "MissileTelemetry", !hide);
+        }
+
+        private static bool HasLiveHudChrome(RectTransform searchRoot)
+        {
+            Transform? hud = FindDeep(searchRoot, RootName);
+            if (hud == null)
+            {
+                Transform? panel = FindMissileCameraPanel(searchRoot);
+                if (panel != null && panel != searchRoot)
+                    hud = FindDeep(panel, RootName);
+            }
+
+            return hud != null && hud.gameObject.activeInHierarchy;
         }
 
         internal static void ApplyPanelBackground(Image? panelImage, TargetScreenUI? screenUi)
@@ -390,11 +455,8 @@ namespace MissileCamera
                 return;
 
             child.gameObject.SetActive(active);
-            if (!active && child.TryGetComponent(out Text text))
-            {
-                text.text = string.Empty;
-                text.enabled = false;
-            }
+            if (child.TryGetComponent(out Text text))
+                text.enabled = active;
         }
 
         private static Transform? FindDeep(Transform root, string name)

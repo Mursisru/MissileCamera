@@ -18,11 +18,11 @@ namespace MissileCamera
             MissileCameraVisionMode.BlackContour
         };
 
-        private static MissileCameraVisionMode _mode = MissileCameraVisionMode.Color;
+        private static MissileCameraVisionMode _mode = MissileCameraVisionMode.WhiteHot;
 
         internal static MissileCameraVisionMode Mode => _mode;
 
-        internal static void Reset() => _mode = MissileCameraVisionMode.Color;
+        internal static void Reset() => _mode = MissileCameraVisionMode.WhiteHot;
 
         internal static void Cycle()
         {
@@ -80,6 +80,18 @@ namespace MissileCamera
                 MissileCameraVisionMode.WhiteContour => "PALETTE: Contour+",
                 MissileCameraVisionMode.BlackContour => "PALETTE: Contour-",
                 _ => "PALETTE: ---"
+            };
+
+        /// <summary>Compact English labels for gunship HUD weapon block.</summary>
+        internal static string GunshipModeLabel(MissileCameraVisionMode mode) =>
+            mode switch
+            {
+                MissileCameraVisionMode.NightVision => "MODE  NVG",
+                MissileCameraVisionMode.WhiteHot => "MODE  WHITE HOT",
+                MissileCameraVisionMode.BlackHot => "MODE  BLACK HOT",
+                MissileCameraVisionMode.WhiteContour => "MODE  EDGE+",
+                MissileCameraVisionMode.BlackContour => "MODE  EDGE-",
+                _ => "MODE  COLOR"
             };
 
         internal static bool IsBlockedByUi()

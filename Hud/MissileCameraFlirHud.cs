@@ -267,7 +267,12 @@ namespace MissileCamera
 
             ApplyContent(snapshot, panel);
             _gaugeBars.Update(snapshot, panel);
-            _ownshipPip.Update();
+
+            MissileCameraHudConfig.Refresh();
+            if (MissileCameraHudConfig.CockpitPipEnabled)
+                _ownshipPip.Update();
+            else
+                _ownshipPip.Hide();
 
             bool showLadder = snapshot.HasFeed && !MissileCameraFullscreenBootstrap.IsRunning;
             Camera? feedCamera = MissileCameraFeedController.TryGetFeedCamera();
@@ -869,10 +874,14 @@ namespace MissileCamera
             Place(_northArrow, 0f, 0.58f, pad + 22f, 8f, 64f, row, TextAnchor.MiddleLeft);
 
             float pipPad = Mathf.Clamp(panel.HorizontalInset, 6f, 18f);
-            _ownshipPip.Place(panel, pipPad);
-            // Keep bottom-left blocks readable under potentially large PiP.
-            float pipTopY = pipPad + _ownshipPip.Size;
-            float sensorBottomY = Mathf.Max(bottomY, pipTopY + stackGap);
+            bool pipOn = MissileCameraHudConfig.CockpitPipEnabled;
+            if (pipOn)
+                _ownshipPip.Place(panel, pipPad);
+            else
+                _ownshipPip.Hide();
+
+            float pipTopY = pipOn ? pipPad + _ownshipPip.Size : pipPad;
+            float sensorBottomY = Mathf.Max(bottomY, pipTopY + (pipOn ? stackGap : 0f));
             _sensorPanel.Place(0f, 0f, pad, sensorBottomY, colW, sensorH, TextAnchor.MiddleLeft, TextAnchor.UpperLeft);
             _guidancePanel.Place(1f, 0f, -pad, bottomY, colW, guidanceH, TextAnchor.MiddleRight, TextAnchor.UpperRight);
         }

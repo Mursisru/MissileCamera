@@ -295,6 +295,9 @@ namespace MissileCamera
             if (!MissileCameraFeedConfig.Enabled)
             {
                 UseIdleDriverWait = true;
+                // Feed off mid-sortie must Restore weapons — DetachRig alone left sticky hide (issue #4/#5).
+                try { MfdLayoutController.ReleaseFully("feed_disabled"); }
+                catch { /* ignore */ }
                 DetachRig();
                 UpdateDisplay(null);
                 TryUnbindAircraft();
@@ -473,6 +476,8 @@ namespace MissileCamera
 
         internal static void NotifyFullscreenExited()
         {
+            MissileCameraFsLookAround.Reset();
+            MissileCameraLookAroundHud.DestroyUi();
             _cachedPanelW = -1f;
             _cachedPanelH = -1f;
             HudOverlay.InvalidateCornerLayout();
@@ -794,6 +799,8 @@ namespace MissileCamera
             {
                 HudOverlay.EnsureBuilt(layoutRt, MfdLayoutController.GetActiveScreenUi());
                 HudOverlay.InvalidateDynamicSchedule();
+                // EnsureBuilt creates HUD after first Apply — reorder feed under HUD.
+                MissileCameraFeedLayout.Apply(layoutRt, portrait, contentRotationZ);
             }
             catch (System.Exception ex)
             {
@@ -1418,7 +1425,8 @@ namespace MissileCamera
             if (_overlayActive && MfdLayoutController.IsLayoutActive && HasLiveMfdFeedBind())
                 return;
 
-            MfdLayoutRetryHost.ScheduleEnsureLayoutNextFrame();
+            // First missile: kick so a prior failed/empty SoftPark wake cannot swallow the schedule.
+            MfdLayoutRetryHost.KickEnsureLayoutNextFrame();
         }
 
         private static void OnDeregisterMissile(Missile missile)

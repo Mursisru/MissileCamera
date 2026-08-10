@@ -9,8 +9,9 @@ namespace MissileCamera
 
         public string StageId => "Scanlines";
         public bool IsAvailable => MissileCameraEffectsAvailability.IsStageAvailable(StageId);
-        public bool IsEnabled => MissileCameraEffectsConfig.ScanlinesEnabled && IsAvailable;
-        public float Intensity => MissileCameraEffectsConfig.ScanlinesIntensity;
+        // FS TV = UI GunshipTvOverlay only. PostFx blit at FS res caused zoom lag + frozen _Time lines.
+        public bool IsEnabled => false;
+        public float Intensity => 0f;
 
         public bool Apply(RenderTexture source, RenderTexture destination) =>
             MissileCameraFxBlit.TryBlit(
