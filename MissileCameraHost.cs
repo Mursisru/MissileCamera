@@ -53,6 +53,8 @@ namespace MissileCamera
             MissileCameraMissionLifecycleDiag.Init(pluginDir);
             SceneManager.sceneLoaded += _instance.OnSceneLoaded;
             SceneManager.sceneUnloaded += _instance.OnSceneUnloaded;
+            MissileCameraUpdatePrompt.EnsureOn(go);
+            MissileCameraUpdateChecker.StartIfNeeded();
             _instance.TryBootstrapCurrentScene();
         }
 

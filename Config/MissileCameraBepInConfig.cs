@@ -66,6 +66,10 @@ namespace MissileCamera.Config
         internal static ConfigEntry<bool> AircraftCamHideInFullscreen { get; private set; } = null!;
         internal static ConfigEntry<KeyboardShortcut> AircraftCamCycle { get; private set; } = null!;
 
+        // Updates
+        internal static ConfigEntry<bool> CheckForUpdates { get; private set; } = null!;
+        internal static ConfigEntry<bool> UpdatePromptDontShowAgain { get; private set; } = null!;
+
         private static bool _liveRefreshHooked;
 
         internal static void Bind(ConfigFile config)
@@ -190,6 +194,12 @@ namespace MissileCamera.Config
             AircraftCamCycle = config.Bind(aircraftCam, "CycleMode",
                 MissileCameraKeybindConfig.DefaultAircraftCamCycle,
                 "Keybind: cycle mini-cam mode. Default: RightAlt + V");
+
+            const string updates = "Updates";
+            CheckForUpdates = config.Bind(updates, "CheckForUpdates", true,
+                "Check GitHub for a newer full release (not pre-release) on launch. Offline = silent.");
+            UpdatePromptDontShowAgain = config.Bind(updates, "DontShowAgain", false,
+                "If true, never show the outdated-version prompt (set by the in-game checkbox).");
 
             IsBound = true;
             HookLiveRefresh(config);
