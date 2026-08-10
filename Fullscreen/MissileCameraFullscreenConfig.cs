@@ -22,6 +22,8 @@ namespace MissileCamera
         internal static float ZoomMax = 50f;
         internal static bool ZoomResetOnExit = true;
         internal static bool PitchLadderEnabled = true;
+        internal static bool LookAroundEnabled = true;
+        internal static float LookAroundMaxDeg = 70f;
         internal static int Revision;
 
         internal static void Refresh(bool force = false)
@@ -35,6 +37,8 @@ namespace MissileCamera
             float zoomMax = MissileCameraBepInConfig.FullscreenZoomMax.Value;
             bool zoomResetOnExit = MissileCameraBepInConfig.FullscreenZoomResetOnExit.Value;
             bool pitchLadderEnabled = MissileCameraBepInConfig.FullscreenPitchLadderEnabled.Value;
+            bool lookAroundEnabled = MissileCameraBepInConfig.FullscreenLookAroundEnabled.Value;
+            float lookAroundMaxDeg = MissileCameraBepInConfig.FullscreenLookAroundMaxDeg.Value;
 
             if (!force
                 && enabled == Enabled
@@ -42,7 +46,9 @@ namespace MissileCamera
                 && feedHeight == FeedHeight
                 && zoomMax == ZoomMax
                 && zoomResetOnExit == ZoomResetOnExit
-                && pitchLadderEnabled == PitchLadderEnabled)
+                && pitchLadderEnabled == PitchLadderEnabled
+                && lookAroundEnabled == LookAroundEnabled
+                && Mathf.Approximately(lookAroundMaxDeg, LookAroundMaxDeg))
                 return;
 
             Enabled = enabled;
@@ -51,6 +57,8 @@ namespace MissileCamera
             ZoomMax = Mathf.Clamp(zoomMax, 2f, 50f);
             ZoomResetOnExit = zoomResetOnExit;
             PitchLadderEnabled = pitchLadderEnabled;
+            LookAroundEnabled = lookAroundEnabled;
+            LookAroundMaxDeg = Mathf.Clamp(lookAroundMaxDeg, 15f, 89f);
             Revision++;
         }
     }

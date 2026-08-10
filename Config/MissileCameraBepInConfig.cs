@@ -51,6 +51,8 @@ namespace MissileCamera.Config
         internal static ConfigEntry<float> FullscreenZoomMax { get; private set; } = null!;
         internal static ConfigEntry<bool> FullscreenZoomResetOnExit { get; private set; } = null!;
         internal static ConfigEntry<bool> FullscreenPitchLadderEnabled { get; private set; } = null!;
+        internal static ConfigEntry<bool> FullscreenLookAroundEnabled { get; private set; } = null!;
+        internal static ConfigEntry<float> FullscreenLookAroundMaxDeg { get; private set; } = null!;
 
         // Post-FX toggles (intensities hardcoded)
         internal static ConfigEntry<bool> FxScanlinesEnabled { get; private set; } = null!;
@@ -161,6 +163,12 @@ namespace MissileCamera.Config
                 "Reset magnification to 1x when leaving fullscreen.");
             FullscreenPitchLadderEnabled = config.Bind(fullscreen, "PitchLadderEnabled", true,
                 "Shows stock FlightHud pitch ladder on fullscreen FLIR.");
+            FullscreenLookAroundEnabled = config.Bind(fullscreen, "LookAroundEnabled", true,
+                "Hold RMB in fullscreen to pan the feed camera (±LookAroundMaxDeg from bore).");
+            FullscreenLookAroundMaxDeg = config.Bind(fullscreen, "LookAroundMaxDeg", 70f,
+                new ConfigDescription(
+                    "Max look-off angle (degrees) while holding RMB in fullscreen.",
+                    new AcceptableValueRange<float>(15f, 89f)));
 
             const string fx = "MissileCameraEffects";
             FxScanlinesEnabled = config.Bind(fx, "ScanlinesEnabled", true,

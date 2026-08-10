@@ -102,7 +102,7 @@ namespace MissileCamera
             EnsureLayout(panel);
             _tv.Update();
             _telemetry.Update(snapshot);
-            _crosshair.Update(snapshot);
+            _crosshair.Update(snapshot, panel);
             _range.Update(snapshot);
             _weapons.Update(snapshot);
             _nav.Update(snapshot);

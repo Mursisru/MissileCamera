@@ -30,17 +30,21 @@ namespace MissileCamera
         private readonly Image _dotS;
         private readonly Image _dotE;
         private readonly Image _dotW;
+        private readonly RectTransform _boreAim;
         private float _cardinalR = 120f;
         private string _lastArea = "";
         private float _lastHdg = float.NaN;
+        private Vector2 _lastBoreOffset = new Vector2(float.NaN, float.NaN);
 
         private GunshipCrosshair(
+            RectTransform boreAim,
             Text area, Text[] nesw,
             Image armN, Image armS, Image armE, Image armW,
             Image capN, Image capS, Image capE, Image capW,
             Image[] ticks,
             Image dotN, Image dotS, Image dotE, Image dotW)
         {
+            _boreAim = boreAim;
             _area = area;
             _nesw = nesw;
             _armN = armN;
@@ -65,28 +69,38 @@ namespace MissileCamera
             RectTransform root = rootGo.GetComponent<RectTransform>();
             GunshipChrome.Stretch(root);
 
-            Image armN = Line(root, "ArmN");
-            Image armS = Line(root, "ArmS");
-            Image armE = Line(root, "ArmE");
-            Image armW = Line(root, "ArmW");
-            Image capN = Line(root, "CapN");
-            Image capS = Line(root, "CapS");
-            Image capE = Line(root, "CapE");
-            Image capW = Line(root, "CapW");
+            // Bore-locked group: offsets during FS look-around so main reticle stays on nose aim.
+            var aimGo = new GameObject("BoreAim", typeof(RectTransform));
+            aimGo.transform.SetParent(root, false);
+            RectTransform boreAim = aimGo.GetComponent<RectTransform>();
+            boreAim.anchorMin = boreAim.anchorMax = new Vector2(0.5f, 0.5f);
+            boreAim.pivot = new Vector2(0.5f, 0.5f);
+            boreAim.anchoredPosition = Vector2.zero;
+            boreAim.sizeDelta = Vector2.zero;
+            boreAim.localScale = Vector3.one;
+
+            Image armN = Line(boreAim, "ArmN");
+            Image armS = Line(boreAim, "ArmS");
+            Image armE = Line(boreAim, "ArmE");
+            Image armW = Line(boreAim, "ArmW");
+            Image capN = Line(boreAim, "CapN");
+            Image capS = Line(boreAim, "CapS");
+            Image capE = Line(boreAim, "CapE");
+            Image capW = Line(boreAim, "CapW");
 
             var ticks = new Image[TicksPerArm * 4];
             for (int i = 0; i < ticks.Length; i++)
-                ticks[i] = Line(root, "Tk" + i);
+                ticks[i] = Line(boreAim, "Tk" + i);
 
-            Image dotN = Line(root, "DotN");
-            Image dotS = Line(root, "DotS");
-            Image dotE = Line(root, "DotE");
-            Image dotW = Line(root, "DotW");
+            Image dotN = Line(boreAim, "DotN");
+            Image dotS = Line(boreAim, "DotS");
+            Image dotE = Line(boreAim, "DotE");
+            Image dotW = Line(boreAim, "DotW");
 
             var nesw = new Text[4];
             for (int i = 0; i < 4; i++)
             {
-                nesw[i] = GunshipChrome.CreateText(root, "Card" + Labels[i], TextAnchor.MiddleCenter, 26);
+                nesw[i] = GunshipChrome.CreateText(boreAim, "Card" + Labels[i], TextAnchor.MiddleCenter, 26);
                 nesw[i].text = Labels[i];
                 nesw[i].fontStyle = FontStyle.Bold;
                 nesw[i].color = GunshipChrome.White;
@@ -95,10 +109,11 @@ namespace MissileCamera
                     Vector2.zero, new Vector2(34f, 34f));
             }
 
-            Text area = GunshipChrome.CreateText(root, "Area", TextAnchor.UpperCenter, GunshipChrome.FontBody);
+            Text area = GunshipChrome.CreateText(boreAim, "Area", TextAnchor.UpperCenter, GunshipChrome.FontBody);
             area.fontStyle = FontStyle.Normal;
 
             return new GunshipCrosshair(
+                boreAim,
                 area, nesw,
                 armN, armS, armE, armW,
                 capN, capS, capE, capW,
@@ -156,10 +171,13 @@ namespace MissileCamera
             GunshipChrome.Place(_area.rectTransform,
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 1f),
                 new Vector2(0f, areaY), new Vector2(720f, 24f));
+            _lastBoreOffset = new Vector2(float.NaN, float.NaN);
         }
 
-        internal void Update(MissileCameraHudSnapshot snapshot)
+        internal void Update(MissileCameraHudSnapshot snapshot, MissileCameraPanelMetrics panel)
         {
+            SyncBoreAimOffset(panel);
+
             string area;
             if (snapshot.HasTarget)
             {
@@ -176,6 +194,21 @@ namespace MissileCamera
             if (area != _lastArea) { _lastArea = area; _area.text = area; }
 
             UpdateCardinals(snapshot);
+        }
+
+        private void SyncBoreAimOffset(MissileCameraPanelMetrics panel)
+        {
+            if (_boreAim == null)
+                return;
+
+            Camera? cam = MissileCameraFeedController.TryGetFeedCamera();
+            Vector2 offset = MissileCameraFsLookAround.GetBorePanelOffset(cam, panel.Width, panel.Height);
+            if (!float.IsNaN(_lastBoreOffset.x)
+                && (offset - _lastBoreOffset).sqrMagnitude < 0.25f)
+                return;
+
+            _lastBoreOffset = offset;
+            _boreAim.anchoredPosition = offset;
         }
 
         private void UpdateCardinals(MissileCameraHudSnapshot snapshot)

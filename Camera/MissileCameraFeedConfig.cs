@@ -8,14 +8,26 @@ namespace MissileCamera
         // Hardcoded seeker / IR picture defaults (not player-facing).
         internal const float NoseSkinInset = 0.08f;
         internal const float CameraBackOffset = 0.35f;
+        // Soft horizon: counter body bank around bore when not near-vertical (calm = level picture).
+        // Full world LookRotation rebuild is forbidden (pitch spin / 180° singularity).
         internal const bool HorizonLock = true;
+        /// <summary>|forward.y| above this → fade horizon counter to body-fixed.</summary>
+        internal const float HorizonLevelFadeStart = 0.82f;
+        internal const float HorizonLevelFadeEnd = 0.97f;
+        internal const float HorizonLevelSmoothTime = 0.22f;
+        internal const float HorizonLevelSlewDegPerSec = 180f;
         internal const float TurnLookBankScale = 1f;
-        internal const float MaxTurnLookDegrees = 90f;
+        // Visible bank on turns without near-inverting the view (±90 was saturating on light stick).
+        internal const float MaxTurnLookDegrees = 42f;
         internal const float DefaultMissileGLimit = 20f;
-        internal const float TurnLookGDeadband = 0.15f;
-        internal const float TurnLookGFilterHz = 7f;
-        internal const float TurnLookSlewDegPerSec = 120f;
-        internal const float TurnLookSmoothTime = 0.18f;
+        internal const float TurnLookGDeadband = 0.4f;
+        /// <summary>Reach MaxTurnLook at this fraction of missile gLimit (ease-in below).</summary>
+        internal const float TurnLookFullGFraction = 0.85f;
+        /// <summary>Opposite-turn G must exceed this × gLimit before bank sign may reverse.</summary>
+        internal const float TurnLookReverseHysteresis = 0.28f;
+        internal const float TurnLookGFilterHz = 5f;
+        internal const float TurnLookSlewDegPerSec = 55f;
+        internal const float TurnLookSmoothTime = 0.28f;
         internal const float PostExplosionHoldSeconds = 0f;
         internal const float InfraredContrast = 1f;
         internal const float InfraredBlackPoint = 0.05f;

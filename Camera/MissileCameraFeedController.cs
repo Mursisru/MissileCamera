@@ -476,6 +476,8 @@ namespace MissileCamera
 
         internal static void NotifyFullscreenExited()
         {
+            MissileCameraFsLookAround.Reset();
+            MissileCameraLookAroundHud.DestroyUi();
             _cachedPanelW = -1f;
             _cachedPanelH = -1f;
             HudOverlay.InvalidateCornerLayout();

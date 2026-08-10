@@ -44,6 +44,7 @@ namespace MissileCamera
 
             if (fullscreen)
             {
+                MissileCameraFsLookAround.Tick();
                 ProcessFullscreenZoom();
                 ProcessFullscreenVision();
             }
@@ -59,6 +60,9 @@ namespace MissileCamera
         private static void ProcessFullscreenZoom()
         {
             if (MissileCameraVisionModeController.IsBlockedByUi())
+                return;
+
+            if (Input.GetMouseButton(1))
                 return;
 
             if (IsShortcutDown(MissileCameraKeybindConfig.FullscreenZoomReset))
