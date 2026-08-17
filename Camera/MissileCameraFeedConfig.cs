@@ -94,7 +94,10 @@ namespace MissileCamera
         /// </summary>
         internal static void ResolveActiveFeedSize(out int width, out int height)
         {
-            if (!MissileCameraFullscreenController.IsActive)
+            // An external bridge consumer (e.g. NOXMFD's browser MFD) wants fullscreen-grade
+            // quality too, not the small cockpit-panel resolution — that's the whole point of
+            // McBridge.RequestCapture (docs: Bridge/McBridge.cs "always transmit fullscreen").
+            if (!MissileCameraFullscreenController.IsActive && !MissileCameraFeedController.IsBridgeCaptureActive)
             {
                 width = Mathf.Clamp(FeedWidth, 128, 2048);
                 height = Mathf.Clamp(FeedHeight, 128, 2048);

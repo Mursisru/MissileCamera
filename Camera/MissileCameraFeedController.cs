@@ -18,6 +18,12 @@ namespace MissileCamera
         private static RectTransform? _panelRt;
         private static readonly MissileCameraHudOverlay HudOverlay = new MissileCameraHudOverlay();
         private static bool _overlayActive;
+        // Set by Bridge/McBridge.cs (RequestCapture) when an external consumer — e.g. NOXMFD's
+        // browser MFD — wants live frames but neither the cockpit MFD panel nor Fullscreen is up.
+        // OR'd into IsDisplayPipelineActive below; everything else about the pipeline (missile
+        // selection, RenderFrame cadence, HasTrackableOwnedMissile) is unchanged — this only keeps
+        // Tick() from parking the rig when it's the sole reason a session should stay live.
+        private static bool _bridgeCaptureActive;
         private static Missile? _followedMissile;
         private static bool _manualFollowActive;
         private static float _zoomOffset;
@@ -48,6 +54,16 @@ namespace MissileCamera
 
         /// <summary>TEMP diag only — do not use for gameplay gating.</summary>
         internal static bool IsOverlayActiveForDiag => _overlayActive;
+
+        // Bridge/McBridge.RequestCapture forwards here. Idempotent — safe to call every frame
+        // with the same value (which is exactly how RcFeed-style callers use it: "do I still want
+        // frames" polled continuously, not an edge-triggered toggle).
+        internal static void SetBridgeCaptureActive(bool active) => _bridgeCaptureActive = active;
+
+        // Read side — used by MissileCameraFeedConfig.ResolveActiveFeedSize to decide feed
+        // resolution: an external bridge consumer counts as "wants fullscreen-grade quality", the
+        // same as Fullscreen itself, rather than falling back to the small cockpit-panel size.
+        internal static bool IsBridgeCaptureActive => _bridgeCaptureActive;
 
         internal static void Shutdown()
         {
@@ -86,6 +102,7 @@ namespace MissileCamera
             _postLossSequenceActive = false;
             _manualFollowActive = false;
             _followedMissile = null;
+            _bridgeCaptureActive = false;
             _zoomOffset = 0f;
             _fullscreenMagnification = 1f;
             _restoreAfterLossAtUnscaled = -1f;
@@ -380,10 +397,15 @@ namespace MissileCamera
             Vector3 missilePos = missile.transform.position;
             bool autoInfrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
 
+            // An external bridge consumer wants the same contrast/vision-mode behavior as
+            // Fullscreen (manual VisionModeController.Mode, defaults WhiteHot) rather than the
+            // cockpit panel's lighting-only auto-IR — see McBridge.cs "always transmit fullscreen".
+            bool visionUsesFullscreenMode = fullscreen || _bridgeCaptureActive;
+
             // Dedicated feed RT → RawImage only. Never touch CameraStateManager (CAMERA_SAFETY).
             // COLOR: pipeline-driven (camera enabled → ParticleSystem culling + URP draw).
             // NVG + IR blit: manual RenderFrame (Volume/PP or HDR→blit). Pipeline path wiped NVG Volume each Tick.
-            bool needManual = fullscreen
+            bool needManual = visionUsesFullscreenMode
                 ? MissileCameraVisionModeController.UsesInfraredBlit(MissileCameraVisionModeController.Mode)
                     || MissileCameraVisionModeController.UsesNightVisionVolume(MissileCameraVisionModeController.Mode)
                 : autoInfrared;
@@ -397,7 +419,7 @@ namespace MissileCamera
             {
                 MissileCameraInfraredEffect.Clear(feedImage, rig);
             }
-            else if (fullscreen)
+            else if (visionUsesFullscreenMode)
             {
                 MissileCameraInfraredEffect.ApplyFullscreenVision(
                     feedImage,
@@ -585,6 +607,34 @@ namespace MissileCamera
 
             Camera feed = _rig.FeedCamera;
             return feed != null ? feed : null;
+        }
+
+        /// <summary>Fresh (uncached) telemetry snapshot for an external consumer — see
+        /// Bridge/McBridge.cs TelemetryJson. Deliberately bypasses ResolveHudSnapshot's cache: that
+        /// cache is refreshed from call sites tied to a real UI panel/Fullscreen being drawn, which
+        /// a headless bridge-only caller wouldn't otherwise trigger.</summary>
+        internal static MissileCameraHudSnapshot? TryBuildTelemetry()
+        {
+            if (_rig == null || !_rig.IsRootAlive)
+                return null;
+
+            Missile? missile = TryGetFollowedMissile();
+            if (missile == null)
+                return null;
+
+            try
+            {
+                return MissileCameraHudSnapshot.Build(missile, _rig, OwnedActive);
+            }
+            catch
+            {
+                // Headless external callers (Bridge/McBridge.cs) can land here between an ordinary
+                // per-frame Update and a missile despawning/disabling mid-read — Build() isn't
+                // written to expect that race (its other call sites all run inside Tick(), already
+                // past a fresher disabled-check that frame). Null here is a normal "nothing to show
+                // this tick" from the caller's perspective, not a fatal error.
+                return null;
+            }
         }
 
         internal static void NotifyFullscreenChanged()
@@ -1445,7 +1495,7 @@ namespace MissileCamera
         }
 
         private static bool IsDisplayPipelineActive() =>
-            _overlayActive || MissileCameraFullscreenController.IsActive;
+            _overlayActive || MissileCameraFullscreenController.IsActive || _bridgeCaptureActive;
 
         private static RawImage? ResolveFeedImage() =>
             MissileCameraFullscreenController.IsActive
