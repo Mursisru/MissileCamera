@@ -5,7 +5,12 @@ using UnityEngine.UI;
 
 namespace MissileCamera
 {
-    internal static class MissileCameraFeedController
+    // Bridge/MissileCameraFeedController.Bridge.cs holds the external-consumer half
+    // (_bridgeCaptureActive's declaration + accessors, TryBuildTelemetry) as a partial-class
+    // extension. This file keeps only the few one-line touches where the existing pipeline logic
+    // itself needs to widen to account for a bridge consumer (reset, vision-mode gating,
+    // IsDisplayPipelineActive).
+    internal static partial class MissileCameraFeedController
     {
         private static readonly List<Missile> OwnedActive = new List<Missile>();
 
@@ -18,12 +23,6 @@ namespace MissileCamera
         private static RectTransform? _panelRt;
         private static readonly MissileCameraHudOverlay HudOverlay = new MissileCameraHudOverlay();
         private static bool _overlayActive;
-        // Set by Bridge/McBridge.cs (RequestCapture) when an external consumer — e.g. NOXMFD's
-        // browser MFD — wants live frames but neither the cockpit MFD panel nor Fullscreen is up.
-        // OR'd into IsDisplayPipelineActive below; everything else about the pipeline (missile
-        // selection, RenderFrame cadence, HasTrackableOwnedMissile) is unchanged — this only keeps
-        // Tick() from parking the rig when it's the sole reason a session should stay live.
-        private static bool _bridgeCaptureActive;
         private static Missile? _followedMissile;
         private static bool _manualFollowActive;
         private static float _zoomOffset;
@@ -54,16 +53,6 @@ namespace MissileCamera
 
         /// <summary>TEMP diag only — do not use for gameplay gating.</summary>
         internal static bool IsOverlayActiveForDiag => _overlayActive;
-
-        // Bridge/McBridge.RequestCapture forwards here. Idempotent — safe to call every frame
-        // with the same value (which is exactly how RcFeed-style callers use it: "do I still want
-        // frames" polled continuously, not an edge-triggered toggle).
-        internal static void SetBridgeCaptureActive(bool active) => _bridgeCaptureActive = active;
-
-        // Read side — used by MissileCameraFeedConfig.ResolveActiveFeedSize to decide feed
-        // resolution: an external bridge consumer counts as "wants fullscreen-grade quality", the
-        // same as Fullscreen itself, rather than falling back to the small cockpit-panel size.
-        internal static bool IsBridgeCaptureActive => _bridgeCaptureActive;
 
         internal static void Shutdown()
         {
@@ -607,34 +596,6 @@ namespace MissileCamera
 
             Camera feed = _rig.FeedCamera;
             return feed != null ? feed : null;
-        }
-
-        /// <summary>Fresh (uncached) telemetry snapshot for an external consumer — see
-        /// Bridge/McBridge.cs TelemetryJson. Deliberately bypasses ResolveHudSnapshot's cache: that
-        /// cache is refreshed from call sites tied to a real UI panel/Fullscreen being drawn, which
-        /// a headless bridge-only caller wouldn't otherwise trigger.</summary>
-        internal static MissileCameraHudSnapshot? TryBuildTelemetry()
-        {
-            if (_rig == null || !_rig.IsRootAlive)
-                return null;
-
-            Missile? missile = TryGetFollowedMissile();
-            if (missile == null)
-                return null;
-
-            try
-            {
-                return MissileCameraHudSnapshot.Build(missile, _rig, OwnedActive);
-            }
-            catch
-            {
-                // Headless external callers (Bridge/McBridge.cs) can land here between an ordinary
-                // per-frame Update and a missile despawning/disabling mid-read — Build() isn't
-                // written to expect that race (its other call sites all run inside Tick(), already
-                // past a fresher disabled-check that frame). Null here is a normal "nothing to show
-                // this tick" from the caller's perspective, not a fatal error.
-                return null;
-            }
         }
 
         internal static void NotifyFullscreenChanged()

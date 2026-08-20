@@ -6,7 +6,9 @@ namespace MissileCamera
     /// <summary>
     /// Fullscreen vision filter cycle (J). MFD ignores this and keeps lighting auto-IR.
     /// </summary>
-    internal static class MissileCameraVisionModeController
+    // Bridge/MissileCameraVisionModeController.Bridge.cs holds the external-consumer half (Set)
+    // as a partial-class extension.
+    internal static partial class MissileCameraVisionModeController
     {
         private static readonly MissileCameraVisionMode[] CycleOrder =
         {
@@ -23,16 +25,6 @@ namespace MissileCamera
         internal static MissileCameraVisionMode Mode => _mode;
 
         internal static void Reset() => _mode = MissileCameraVisionMode.WhiteHot;
-
-        /// <summary>Direct set (Bridge/McBridge.cs SetVisionMode) — same effect as landing on this
-        /// mode via Cycle(), just without stepping through the ones in between.</summary>
-        internal static void Set(MissileCameraVisionMode mode)
-        {
-            if (mode == _mode)
-                return;
-            _mode = mode;
-            MfdLog.Info("vision mode → " + _mode);
-        }
 
         internal static void Cycle()
         {
