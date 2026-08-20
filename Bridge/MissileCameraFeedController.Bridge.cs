@@ -1,21 +1,13 @@
 namespace MissileCamera
 {
-    // Partial-class extension of Camera/MissileCameraFeedController.cs — the external-consumer
-    // half lives here: the _bridgeCaptureActive flag's own accessors, and the uncached telemetry
-    // builder a headless bridge caller needs. The three places the existing pipeline logic itself
-    // has to widen to account for _bridgeCaptureActive (reset, vision-mode gating,
-    // IsDisplayPipelineActive) stay in the other file, since they're edits inside Mursisru's own
-    // existing methods rather than new standalone members.
     internal static partial class MissileCameraFeedController
     {
-        // Set by RequestCapture (below) when an external consumer — e.g. NOXMFD's browser MFD —
-        // wants live frames but neither the cockpit MFD panel nor Fullscreen is up. Read directly
-        // by the other half of this partial class at the three points noted above.
+        // Set by RequestCapture (below) when an external consumer wants live frames but neither
+        // the cockpit MFD panel nor Fullscreen is up.
         private static bool _bridgeCaptureActive;
 
-        // Bridge/McBridge.RequestCapture forwards here. Idempotent — safe to call every frame
-        // with the same value (which is exactly how RcFeed-style callers use it: "do I still want
-        // frames" polled continuously, not an edge-triggered toggle).
+        // Idempotent — safe to call every frame with the same value ("do I still want frames"
+        // polled continuously, not an edge-triggered toggle).
         internal static void SetBridgeCaptureActive(bool active) => _bridgeCaptureActive = active;
 
         // Read side — used by MissileCameraFeedConfig.ResolveActiveFeedSize to decide feed

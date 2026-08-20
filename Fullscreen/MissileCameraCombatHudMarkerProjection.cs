@@ -10,9 +10,6 @@ namespace MissileCamera
     /// Reproject via feed camera viewport → Screen. Missile units: hide image only (never Deselect).
     /// Never rewrite marker.image.color (vanilla faction theme). CAMERA_SAFETY: no CSM writes.
     /// </summary>
-    // Bridge/MissileCameraCombatHudMarkerProjection.Bridge.cs holds the external-consumer half
-    // (BuildMarkersJson/EscapeJson) as a partial-class extension — keeps this file to Mursisru's
-    // own vanilla-HUD-reprojection code only.
     internal static partial class MissileCameraCombatHudMarkerProjection
     {
         private static readonly FieldInfo? HiddenField =

@@ -3,12 +3,9 @@ using UnityEngine;
 namespace MissileCamera.Bridge
 {
     /// <summary>
-    /// Small, stable, PUBLIC surface for third-party mods (external MFD/HUD displays, streaming
-    /// overlays) to read the missile feed and keep it live WITHOUT needing the cockpit MFD panel
-    /// bound or Fullscreen active. Mirrors the shape of MissileCameraRemoteControl's own Bridge
-    /// (Bridge/McRcBridge.cs there) — a thin forward onto MissileCameraFeedController, which
-    /// already drives the feed pipeline for the cockpit panel and Fullscreen; RequestCapture just
-    /// adds a third, independent reason for that same pipeline to stay live (see
+    /// Small, stable, PUBLIC surface for third-party mods to read the missile feed and keep it
+    /// live without needing the cockpit MFD panel bound or Fullscreen active. RequestCapture adds
+    /// a third, independent reason for the feed pipeline to stay live (see
     /// MissileCameraFeedController.IsDisplayPipelineActive / CAMERA_SAFETY.md — this never touches
     /// vanilla cockpit camera state, only the dedicated feed RT/RawImage path that already existed).
     ///
@@ -130,10 +127,9 @@ namespace MissileCamera.Bridge
         /// <summary>True while at least one consumer currently has capture active via
         /// RequestCapture(true) above. Distinct from HasTrackableMissile — that's true whenever
         /// ANY owned missile is trackable, regardless of whether anyone is watching; this is the
-        /// actual "a bridge consumer is keeping the feed alive right now" signal. Other mods
-        /// gating their own behavior on "is a headless bridge consumer active" (e.g.
-        /// MissileCameraRemoteControl unlocking RC control without real Fullscreen) should use
-        /// this, not HasTrackableMissile.</summary>
+        /// actual "a bridge consumer is keeping the feed alive right now" signal. Anything gating
+        /// its own behavior on "is a headless bridge consumer active" should use this, not
+        /// HasTrackableMissile.</summary>
         public static bool IsCaptureActive => MissileCameraFeedController.IsBridgeCaptureActive;
     }
 }

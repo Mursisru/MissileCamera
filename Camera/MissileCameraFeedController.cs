@@ -5,11 +5,6 @@ using UnityEngine.UI;
 
 namespace MissileCamera
 {
-    // Bridge/MissileCameraFeedController.Bridge.cs holds the external-consumer half
-    // (_bridgeCaptureActive's declaration + accessors, TryBuildTelemetry) as a partial-class
-    // extension. This file keeps only the few one-line touches where the existing pipeline logic
-    // itself needs to widen to account for a bridge consumer (reset, vision-mode gating,
-    // IsDisplayPipelineActive).
     internal static partial class MissileCameraFeedController
     {
         private static readonly List<Missile> OwnedActive = new List<Missile>();
@@ -386,9 +381,6 @@ namespace MissileCamera
             Vector3 missilePos = missile.transform.position;
             bool autoInfrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
 
-            // An external bridge consumer wants the same contrast/vision-mode behavior as
-            // Fullscreen (manual VisionModeController.Mode, defaults WhiteHot) rather than the
-            // cockpit panel's lighting-only auto-IR — see McBridge.cs "always transmit fullscreen".
             bool visionUsesFullscreenMode = fullscreen || _bridgeCaptureActive;
 
             // Dedicated feed RT → RawImage only. Never touch CameraStateManager (CAMERA_SAFETY).

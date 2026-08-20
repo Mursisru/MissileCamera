@@ -2,11 +2,6 @@ using UnityEngine;
 
 namespace MissileCamera
 {
-    // Partial-class extension of Fullscreen/MissileCameraCombatHudMarkerProjection.cs — the
-    // external-consumer half of marker projection lives here instead, so that file stays
-    // Mursisru's own vanilla-HUD-reprojection code with nothing added inline. Shares MarkersField,
-    // HiddenField and TryResolveWorld with the other half via the partial class, no visibility
-    // changes needed on either side.
     internal static partial class MissileCameraCombatHudMarkerProjection
     {
         /// <summary>Bridge/McBridge.cs MarkersJson — same marker list/eligibility as

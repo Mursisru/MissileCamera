@@ -6,8 +6,6 @@ namespace MissileCamera
     /// <summary>
     /// Fullscreen vision filter cycle (J). MFD ignores this and keeps lighting auto-IR.
     /// </summary>
-    // Bridge/MissileCameraVisionModeController.Bridge.cs holds the external-consumer half (Set)
-    // as a partial-class extension.
     internal static partial class MissileCameraVisionModeController
     {
         private static readonly MissileCameraVisionMode[] CycleOrder =
