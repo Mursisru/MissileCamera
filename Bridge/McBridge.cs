@@ -64,14 +64,17 @@ namespace MissileCamera.Bridge
         /// JSON array, each entry { n (unit name), x, y (viewport 0..1, Unity convention — y=0 is
         /// bottom, flip for CSS top like the aim reticle), sel (bool — this is the locked/selected
         /// target), c (hex color, e.g. "#ff3b30") }. Empty array (not null) when there's nothing to
-        /// show — no trackable missile, no feed camera yet, or no markers currently on-screen.</summary>
+        /// show — no trackable missile, no feed camera yet, or no markers currently on-screen.
+        /// Rebuilt from scratch on every call (walks CombatHUD's live marker list) — a consumer
+        /// polling every frame should throttle rather than call this on a tight loop.</summary>
         public static string MarkersJson() =>
             MissileCameraCombatHudMarkerProjection.BuildMarkersJson(MissileCameraFeedController.TryGetFeedCamera());
 
         /// <summary>Missile telemetry as a compact JSON object — same pre-formatted strings the
         /// cockpit MFD panel / Fullscreen HUD text renders (SpeedText, AltitudeText, etc. — same
         /// units/rounding/labels, so a consumer's readout matches the in-game one exactly rather
-        /// than reformatting the underlying numbers itself). Null when there's no trackable missile.
+        /// than reformatting the underlying numbers itself). Never null — see visionMode note below
+        /// for what you get when there's no trackable missile.
         /// Fields: missile, target, ownship (names) · speed, alt, range, g, fuel, mach, guidance,
         /// tgtAngle (pre-formatted text) · hasTarget, hasTti (bools) · ttiSec, ttiFrac, closMs,
         /// relAltM (floats, meaningful only when hasTarget/hasTti as noted) · infrared (bool) ·
@@ -79,8 +82,10 @@ namespace MissileCamera.Bridge
         /// text, e.g. "MODE: IR" — same label Fullscreen's own HUD shows; see CycleVisionMode).
         /// visionMode is included even when everything else is unavailable — the mode is a global
         /// selection, not something that needs a trackable missile — so this method still returns
-        /// a (partial) object with just that field set when there's no missile, rather than null.</summary>
-        public static string? TelemetryJson()
+        /// a (partial) object with just that field set when there's no missile, rather than null.
+        /// Rebuilt (string-formatted) on every call — a consumer polling every frame should
+        /// throttle rather than call this on a tight loop.</summary>
+        public static string TelemetryJson()
         {
             string visionMode = Esc(MissileCameraVisionModeController.ModeLabel(MissileCameraVisionModeController.Mode));
 
@@ -104,8 +109,9 @@ namespace MissileCamera.Bridge
                 visionMode);
         }
 
-        private static string Esc(string? s) =>
-            string.IsNullOrEmpty(s) ? string.Empty : s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        // Shared with Fullscreen/MissileCameraCombatHudMarkerProjection.cs's own JSON producer —
+        // one escape helper for both, not two copies.
+        private static string Esc(string? s) => MissileCameraCombatHudMarkerProjection.EscapeJson(s);
 
         /// <summary>Cycle the Fullscreen-style vision filter (Color → NightVision → WhiteHot →
         /// BlackHot → WhiteContour → BlackContour → ...) — same cycle the in-game J key drives.
@@ -120,5 +126,14 @@ namespace MissileCamera.Bridge
         /// watching), the same way the cockpit panel's own binding is a live state, not a one-shot
         /// trigger. Harmless to call with the same value repeatedly.</summary>
         public static void RequestCapture(bool active) => MissileCameraFeedController.SetBridgeCaptureActive(active);
+
+        /// <summary>True while at least one consumer currently has capture active via
+        /// RequestCapture(true) above. Distinct from HasTrackableMissile — that's true whenever
+        /// ANY owned missile is trackable, regardless of whether anyone is watching; this is the
+        /// actual "a bridge consumer is keeping the feed alive right now" signal. Other mods
+        /// gating their own behavior on "is a headless bridge consumer active" (e.g.
+        /// MissileCameraRemoteControl unlocking RC control without real Fullscreen) should use
+        /// this, not HasTrackableMissile.</summary>
+        public static bool IsCaptureActive => MissileCameraFeedController.IsBridgeCaptureActive;
     }
 }

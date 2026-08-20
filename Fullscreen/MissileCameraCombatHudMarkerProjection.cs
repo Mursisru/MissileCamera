@@ -311,7 +311,7 @@ namespace MissileCamera
                     first = false;
                     sb.Append(string.Format(System.Globalization.CultureInfo.InvariantCulture,
                         "{{\"n\":\"{0}\",\"x\":{1:0.000},\"y\":{2:0.000},\"sel\":{3},\"c\":\"{4}\"}}",
-                        EscapeJsonLocal(name), vp.x, vp.y, marker.selected ? "true" : "false", colorHex));
+                        EscapeJson(name), vp.x, vp.y, marker.selected ? "true" : "false", colorHex));
                 }
                 sb.Append(']');
                 return sb.ToString();
@@ -322,7 +322,9 @@ namespace MissileCamera
             }
         }
 
-        private static string EscapeJsonLocal(string s) =>
+        /// <summary>Shared with Bridge/McBridge.cs's TelemetryJson — one JSON-string-escape helper
+        /// for both bridge JSON producers rather than two copies.</summary>
+        internal static string EscapeJson(string? s) =>
             string.IsNullOrEmpty(s) ? string.Empty : s.Replace("\\", "\\\\").Replace("\"", "\\\"");
     }
 }
