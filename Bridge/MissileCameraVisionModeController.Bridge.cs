@@ -1,5 +1,6 @@
 namespace MissileCamera
 {
+    // Continued from Camera/MissileCameraVisionModeController.cs
     internal static partial class MissileCameraVisionModeController
     {
         /// <summary>Direct set (Bridge/McBridge.cs SetVisionMode) — same effect as landing on this

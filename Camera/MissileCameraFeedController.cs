@@ -5,6 +5,7 @@ using UnityEngine.UI;
 
 namespace MissileCamera
 {
+    // Continued in Bridge/MissileCameraFeedController.Bridge.cs
     internal static partial class MissileCameraFeedController
     {
         private static readonly List<Missile> OwnedActive = new List<Missile>();

@@ -1,5 +1,6 @@
 namespace MissileCamera
 {
+    // Continued from Camera/MissileCameraFeedController.cs
     internal static partial class MissileCameraFeedController
     {
         // Set by RequestCapture (below) when an external consumer wants live frames but neither

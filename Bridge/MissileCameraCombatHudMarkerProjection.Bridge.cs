@@ -2,6 +2,7 @@ using UnityEngine;
 
 namespace MissileCamera
 {
+    // Continued from Fullscreen/MissileCameraCombatHudMarkerProjection.cs
     internal static partial class MissileCameraCombatHudMarkerProjection
     {
         /// <summary>Bridge/McBridge.cs MarkersJson — same marker list/eligibility as
