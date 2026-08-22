@@ -273,7 +273,7 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ### Thanks to project contributors
 
-[![Contributors](https://raw.githubusercontent.com/Mursisru/MissileCamera/dev/.github/contributors.png)](https://github.com/Mursisru/MissileCamera/graphs/contributors)
+[![Contributors](https://contrib.rocks/image?repo=Mursisru/MissileCamera)](https://github.com/Mursisru/MissileCamera/graphs/contributors)
 
 - **[Mursisru](https://github.com/Mursisru)** — MissileCamera author, maintenance, and releases
 - **[roke77](https://github.com/roke77)** — [NOXMFD](https://github.com/roke77/NOXMFD) (browser MFD shell and extension API this mod integrates with)
