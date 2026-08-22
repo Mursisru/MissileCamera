@@ -94,7 +94,7 @@ namespace MissileCamera
         /// </summary>
         internal static void ResolveActiveFeedSize(out int width, out int height)
         {
-            if (!MissileCameraFullscreenController.IsActive)
+            if (!MissileCameraFullscreenController.IsActive && !MissileCameraFeedController.IsBridgeCaptureActive)
             {
                 width = Mathf.Clamp(FeedWidth, 128, 2048);
                 height = Mathf.Clamp(FeedHeight, 128, 2048);

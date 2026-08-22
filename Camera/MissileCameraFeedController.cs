@@ -5,7 +5,8 @@ using UnityEngine.UI;
 
 namespace MissileCamera
 {
-    internal static class MissileCameraFeedController
+    // Continued in Bridge/MissileCameraFeedController.Bridge.cs
+    internal static partial class MissileCameraFeedController
     {
         private static readonly List<Missile> OwnedActive = new List<Missile>();
 
@@ -86,6 +87,7 @@ namespace MissileCamera
             _postLossSequenceActive = false;
             _manualFollowActive = false;
             _followedMissile = null;
+            _bridgeCaptureActive = false;
             _zoomOffset = 0f;
             _fullscreenMagnification = 1f;
             _restoreAfterLossAtUnscaled = -1f;
@@ -380,10 +382,12 @@ namespace MissileCamera
             Vector3 missilePos = missile.transform.position;
             bool autoInfrared = MissileCameraInfraredPolicy.Evaluate(missilePos, out float exposure);
 
+            bool visionUsesFullscreenMode = fullscreen || _bridgeCaptureActive;
+
             // Dedicated feed RT → RawImage only. Never touch CameraStateManager (CAMERA_SAFETY).
             // COLOR: pipeline-driven (camera enabled → ParticleSystem culling + URP draw).
             // NVG + IR blit: manual RenderFrame (Volume/PP or HDR→blit). Pipeline path wiped NVG Volume each Tick.
-            bool needManual = fullscreen
+            bool needManual = visionUsesFullscreenMode
                 ? MissileCameraVisionModeController.UsesInfraredBlit(MissileCameraVisionModeController.Mode)
                     || MissileCameraVisionModeController.UsesNightVisionVolume(MissileCameraVisionModeController.Mode)
                 : autoInfrared;
@@ -397,7 +401,7 @@ namespace MissileCamera
             {
                 MissileCameraInfraredEffect.Clear(feedImage, rig);
             }
-            else if (fullscreen)
+            else if (visionUsesFullscreenMode)
             {
                 MissileCameraInfraredEffect.ApplyFullscreenVision(
                     feedImage,
@@ -1445,7 +1449,7 @@ namespace MissileCamera
         }
 
         private static bool IsDisplayPipelineActive() =>
-            _overlayActive || MissileCameraFullscreenController.IsActive;
+            _overlayActive || MissileCameraFullscreenController.IsActive || _bridgeCaptureActive;
 
         private static RawImage? ResolveFeedImage() =>
             MissileCameraFullscreenController.IsActive

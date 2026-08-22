@@ -424,6 +424,16 @@ namespace MissileCamera
 
             bool useBlit = _infraredVolumeActive
                 && MissileCameraVisionModeController.UsesInfraredBlit(_visionMode);
+            // WhiteHot/BlackHot/*Contour need MissileCameraInfraredBlit's shader; on machines
+            // where it fails to load, useGrayscaleFallback substitutes the Volume/ColorAdjustments
+            // desaturation NightVision/pipeline auto-IR already use, instead of leaving the feed on
+            // an unshaded HDR blit. No invert or edge-detect without the shader, so all four modes
+            // render identically under the fallback — a degraded look, not full parity. No action
+            // needed once the shader loads again: IsAvailable flips true and useShaderBlit resumes
+            // on its own.
+            bool blitShaderAvailable = MissileCameraInfraredBlit.IsAvailable;
+            bool useShaderBlit = useBlit && blitShaderAvailable;
+            bool useGrayscaleFallback = useBlit && !blitShaderAvailable;
             bool useNvg = _nightVisionActive
                 && MissileCameraVisionModeController.UsesNightVisionVolume(_visionMode);
 
@@ -437,8 +447,8 @@ namespace MissileCamera
             _lastFrameUsedBlit = false;
             try
             {
-                RenderSettings.fog = !useBlit;
-                if (useBlit)
+                RenderSettings.fog = !(useShaderBlit || useGrayscaleFallback);
+                if (useShaderBlit)
                 {
                     EnsureHdrTexture();
                     _camera.allowHDR = true;
@@ -454,12 +464,35 @@ namespace MissileCamera
                     MissileCameraRenderPrep.BeforeRender(_camera, forceLdr: false);
 
                 urp = _camera.GetUniversalAdditionalCameraData();
-                if (useBlit)
+                if (useShaderBlit)
                 {
                     urp.renderPostProcessing = false;
                     _camera.allowHDR = true;
                     if (_irVolume != null)
                         _irVolume.enabled = false;
+                }
+                else if (useGrayscaleFallback)
+                {
+                    if (_irVolume != null)
+                    {
+                        // Scoped global only for this Camera.Render — same as NVG below, no
+                        // persistent world tint.
+                        _irVolume.isGlobal = true;
+                        _irVolume.enabled = true;
+                    }
+                    _colorAdjustments.saturation.Override(-100f);
+                    _colorAdjustments.saturation.overrideState = true;
+                    _colorAdjustments.postExposure.Override(_infraredBlitExposure);
+                    _colorAdjustments.postExposure.overrideState = true;
+                    _colorAdjustments.contrast.Override(_infraredBlitContrast);
+                    _colorAdjustments.contrast.overrideState = true;
+                    _colorAdjustments.colorFilter.overrideState = false;
+                    _bloom.threshold.overrideState = false;
+                    _bloom.intensity.overrideState = false;
+                    urp.renderPostProcessing = true;
+                    urp.volumeTrigger = _camera.transform;
+                    _renderPostProcessingEnabled = true;
+                    _infraredVolumeEnabledDuringRender = true;
                 }
                 else if (useNvg)
                 {
@@ -495,7 +528,7 @@ namespace MissileCamera
                     urp.renderType = prevType;
                 }
 
-                if (useBlit && _hdrRenderTexture != null && _renderTexture != null)
+                if (useShaderBlit && _hdrRenderTexture != null && _renderTexture != null)
                 {
                     MissileCameraInfraredBlit.Apply(
                         _hdrRenderTexture,
@@ -505,6 +538,10 @@ namespace MissileCamera
                         _visionMode);
                     _lastFrameUsedBlit = MissileCameraInfraredBlit.IsAvailable;
                     MissileCameraInfraredAudit.LogAfterRender(this, _renderTexture);
+                }
+                else if (useGrayscaleFallback)
+                {
+                    _lastFrameUsedBlit = false;
                 }
             }
             finally

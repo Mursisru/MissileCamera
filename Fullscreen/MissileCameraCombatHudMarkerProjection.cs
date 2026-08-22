@@ -10,7 +10,8 @@ namespace MissileCamera
     /// Reproject via feed camera viewport → Screen. Missile units: hide image only (never Deselect).
     /// Never rewrite marker.image.color (vanilla faction theme). CAMERA_SAFETY: no CSM writes.
     /// </summary>
-    internal static class MissileCameraCombatHudMarkerProjection
+    // Continued in Bridge/MissileCameraCombatHudMarkerProjection.Bridge.cs
+    internal static partial class MissileCameraCombatHudMarkerProjection
     {
         private static readonly FieldInfo? HiddenField =
             AccessTools.Field(typeof(HUDUnitMarker), "hidden");
