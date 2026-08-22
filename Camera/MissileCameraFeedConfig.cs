@@ -1,6 +1,8 @@
 using MissileCamera.Config;
 using UnityEngine;
 
+using MissileCamera.Bridge;
+
 namespace MissileCamera
 {
     internal static class MissileCameraFeedConfig
@@ -94,16 +96,24 @@ namespace MissileCamera
         /// </summary>
         internal static void ResolveActiveFeedSize(out int width, out int height)
         {
-            if (!MissileCameraFullscreenController.IsActive && !MissileCameraFeedController.IsBridgeCaptureActive)
+            if (MissileCameraFullscreenController.IsActive)
             {
-                width = Mathf.Clamp(FeedWidth, 128, 2048);
-                height = Mathf.Clamp(FeedHeight, 128, 2048);
+                MissileCameraFullscreenConfig.Refresh();
+                width = EvenClamp(Mathf.Clamp(MissileCameraFullscreenConfig.FeedWidth, 640, 3840), 640, 3840);
+                height = EvenClamp(Mathf.Clamp(MissileCameraFullscreenConfig.FeedHeight, 360, 2160), 360, 2160);
                 return;
             }
 
-            MissileCameraFullscreenConfig.Refresh();
-            width = EvenClamp(Mathf.Clamp(MissileCameraFullscreenConfig.FeedWidth, 640, 3840), 640, 3840);
-            height = EvenClamp(Mathf.Clamp(MissileCameraFullscreenConfig.FeedHeight, 360, 2160), 360, 2160);
+            if (MissileCameraFeedController.IsBridgeCaptureActive)
+            {
+                MissileCameraBridgeConfig.Refresh();
+                width = EvenClamp(Mathf.Clamp(MissileCameraBridgeConfig.FeedWidth, 128, 2048), 128, 2048);
+                height = EvenClamp(Mathf.Clamp(MissileCameraBridgeConfig.FeedHeight, 128, 2048), 128, 2048);
+                return;
+            }
+
+            width = Mathf.Clamp(FeedWidth, 128, 2048);
+            height = Mathf.Clamp(FeedHeight, 128, 2048);
         }
 
         /// <summary>Kept for callers; always 1 — optical zoom must not recreate RT buckets.</summary>
