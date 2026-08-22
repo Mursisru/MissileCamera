@@ -424,18 +424,13 @@ namespace MissileCamera
 
             bool useBlit = _infraredVolumeActive
                 && MissileCameraVisionModeController.UsesInfraredBlit(_visionMode);
-            // The shader-based blit (WhiteHot/BlackHot/*Contour) depends on an externally-baked
-            // AssetBundle shader that can fail to load/compile on a given machine (see
-            // MissileCameraInfraredBlit's own Error logs for why). useGrayscaleFallback covers
-            // that case by reusing the exact same Volume/ColorAdjustments desaturation
-            // NightVision + the MFD's own pipeline-driven auto-IR already rely on — no custom
-            // shader needed, so it can't fail the same way.
-            // ponytail: no shader means no true BlackHot invert and no edge-detect for the Contour
-            // modes — all four blit modes fall back to the same plain grayscale look. Ceiling: this
-            // is a degraded look, not full parity. Upgrade path: once missilecamera_shaders.bundle
-            // is rebuilt with the blit shader force-included (see docs on the actual defect), this
-            // fallback stops engaging on its own — IsAvailable flips true and useShaderBlit takes
-            // over again, nothing else to change.
+            // WhiteHot/BlackHot/*Contour need MissileCameraInfraredBlit's shader; on machines
+            // where it fails to load, useGrayscaleFallback substitutes the Volume/ColorAdjustments
+            // desaturation NightVision/pipeline auto-IR already use, instead of leaving the feed on
+            // an unshaded HDR blit. No invert or edge-detect without the shader, so all four modes
+            // render identically under the fallback — a degraded look, not full parity. No action
+            // needed once the shader loads again: IsAvailable flips true and useShaderBlit resumes
+            // on its own.
             bool blitShaderAvailable = MissileCameraInfraredBlit.IsAvailable;
             bool useShaderBlit = useBlit && blitShaderAvailable;
             bool useGrayscaleFallback = useBlit && !blitShaderAvailable;
