@@ -34,8 +34,10 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 * [Player installation](#player-installation)
 * [Controls & keybinds](#controls--keybinds)
 * [Configuration (BepInEx Configuration Manager)](#configuration-bepinex-configuration-manager)
+* [NOXMFD integration](#noxmfd-integration)
 * [Project layout](#project-layout)
 * [Changelog](#changelog)
+* [Credits](#credits)
 * [Licence](#licence)
 
 ## Features
@@ -196,6 +198,42 @@ BepInEx\config\com.at747.missilecamera.bepinex.cfg
 | `HideInFullscreen` | `false` | Hide mini-cam in fullscreen |
 | `CycleMode` | RightAlt + `V` | Keybind: cycle mini-cam mode |
 
+### MissileCameraBridge
+
+Player-facing tuning for **[NOXMFD](https://github.com/roke77/NOXMFD)** and other external consumers via `Bridge/McBridge.cs` (`RequestCapture`, headless seeker feed). See [NOXMFD integration](#noxmfd-integration).
+
+| Key | Default | Description |
+| :--- | :---: | :--- |
+| `Enabled` | `true` | Allow external consumers to hold the seeker feed via `RequestCapture` |
+| `RenderFps` | `12` | Seeker render rate (Hz) while **only** a bridge consumer is active |
+| `SuppressCockpitMfd` | `true` | Hide cockpit MFD missile feed while NOXMFD bridge capture is active |
+| `TouchCockpitLayout` | `false` | When true, bridge may rearrange cockpit MFD like a normal feed |
+| `MarkerLabels` | `SelectedOnly` | Browser HUD marker names: `All` \| `SelectedOnly` \| `None` |
+| `FeedWidth` | `960` | Internal bridge render width (16:9 recommended) |
+| `FeedHeight` | `540` | Internal bridge render height |
+| `StreamHz` | `10` | MJPEG rate hint for browser MFD extensions |
+| `StreamMaxDim` | `480` | Longest JPEG edge for browser stream |
+| `StreamJpegQuality` | `42` | JPEG quality (0–100) for browser stream |
+| `TelemetryInterval` | `0.15` | Seconds between bridge telemetry JSON rebuilds |
+| `MarkersInterval` | `0.2` | Seconds between bridge marker JSON rebuilds |
+| `PoolInterval` | `0.5` | Seconds between RC pool rescans for browser picker |
+
+---
+
+## NOXMFD integration
+
+MissileCamera ships a public **`Bridge/McBridge.cs`** surface for external MFD apps. The mod does **not** reference NOXMFD at compile time or runtime — only the optional extension does.
+
+> [!NOTE]
+> **Recommended stack:** BepInEx 5 → **MissileCamera** → **[MissileCamera: Remote Control](https://github.com/Mursisru/MissileCamera-Remote-Control)** → **[NOXMFD](https://github.com/roke77/NOXMFD)** → **[NOXMFD: RC Missile Camera](https://github.com/Mursisru/NOXMFD-Extension-Remote-Control-Missile-Camera)**.
+
+The extension adds a **MISSILE CAMERA** page inside NOXMFD's browser MFD: live seeker MJPEG, CombatHUD markers, telemetry, and RC commands (aim, throttle, afterburner, formation, vision cycle, manual detonate) **without** entering cockpit fullscreen (`K`).
+
+While the extension page is open it calls `RequestCapture(true)`, which keeps the seeker rig rendering headlessly. With `SuppressCockpitMfd=true` (default), the in-cockpit MFD missile panel stays hidden so you do not get duplicate feeds. Bridge tuning is under **`[MissileCameraBridge]`** in Configuration Manager (table above).
+
+> [!TIP]
+> If the browser feed looks square or low-res after upgrading, set `FeedWidth=960` and `FeedHeight=540` in `[MissileCameraBridge]` (or delete stale keys and relaunch once).
+
 ---
 
 ## Project layout
@@ -216,6 +254,7 @@ MissileCamera/
 ├── Access/                     # Game API wrappers
 ├── Ui/                         # HUD graphics helpers
 ├── Logging/
+├── Bridge/                     # McBridge API for NOXMFD / external consumers
 ├── release/
 │   └── v0.27.1/
 │       └── INSTALL.txt
@@ -227,6 +266,18 @@ MissileCamera/
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md).
+
+---
+
+## Credits
+
+### Thanks to project contributors
+
+[![Contributors](https://contrib.rocks/image?repo=Mursisru/MissileCamera)](https://github.com/Mursisru/MissileCamera/graphs/contributors)
+
+- **[Mursisru](https://github.com/Mursisru)** — MissileCamera author, maintenance, and releases
+- **[roke77](https://github.com/roke77)** — [NOXMFD](https://github.com/roke77/NOXMFD) (browser MFD shell and extension API this mod integrates with)
+- **[lupfine](https://github.com/lupfine)** — original remote-camera / Bridge integration concept
 
 ---
 

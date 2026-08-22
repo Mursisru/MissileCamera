@@ -1,5 +1,7 @@
 using UnityEngine;
 
+using MissileCamera.Bridge;
+
 namespace MissileCamera
 {
     // Continued from Fullscreen/MissileCameraCombatHudMarkerProjection.cs
@@ -42,9 +44,7 @@ namespace MissileCamera
                     if (vp.z <= 0f || vp.x < 0f || vp.x > 1f || vp.y < 0f || vp.y > 1f)
                         continue;   // behind camera or off-frame — no edge-pinning in this pass
 
-                    string name;
-                    try { name = marker.unit.name ?? string.Empty; }
-                    catch { name = string.Empty; }
+                    string name = ResolveBridgeMarkerLabel(marker);
 
                     string colorHex = "#ffffff";
                     try
@@ -72,9 +72,50 @@ namespace MissileCamera
             }
         }
 
+        private static string ResolveBridgeMarkerLabel(HUDUnitMarker marker)
+        {
+            if (marker?.unit == null)
+                return string.Empty;
+
+            MissileCameraBridgeConfig.Refresh();
+            switch (MissileCameraBridgeConfig.MarkerLabelMode)
+            {
+                case BridgeMarkerLabelMode.All:
+                    try { return marker.unit.name ?? string.Empty; }
+                    catch { return string.Empty; }
+                case BridgeMarkerLabelMode.SelectedOnly:
+                    if (!marker.selected)
+                        return string.Empty;
+                    try { return marker.unit.name ?? string.Empty; }
+                    catch { return string.Empty; }
+                case BridgeMarkerLabelMode.None:
+                default:
+                    return string.Empty;
+            }
+        }
+
         /// <summary>Shared with Bridge/McBridge.cs's TelemetryJson — one JSON-string-escape helper
         /// for both bridge JSON producers rather than two copies.</summary>
-        internal static string EscapeJson(string? s) =>
-            string.IsNullOrEmpty(s) ? string.Empty : s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        internal static string EscapeJson(string? s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            var sb = new System.Text.StringBuilder(s.Length + 8);
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '\\': sb.Append("\\\\"); break;
+                    case '"':  sb.Append("\\\""); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    default:
+                        if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4"));
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            return sb.ToString();
+        }
     }
 }

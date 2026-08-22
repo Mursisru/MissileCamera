@@ -1,5 +1,6 @@
 using System;
 using BepInEx.Configuration;
+using MissileCamera.Bridge;
 
 namespace MissileCamera.Config
 {
@@ -69,6 +70,21 @@ namespace MissileCamera.Config
         // Updates
         internal static ConfigEntry<bool> CheckForUpdates { get; private set; } = null!;
         internal static ConfigEntry<bool> UpdatePromptDontShowAgain { get; private set; } = null!;
+
+        // NOXMFD / external bridge consumers (headless feed + browser MFD extension)
+        internal static ConfigEntry<bool> BridgeEnabled { get; private set; } = null!;
+        internal static ConfigEntry<int> BridgeRenderFps { get; private set; } = null!;
+        internal static ConfigEntry<bool> BridgeTouchCockpitLayout { get; private set; } = null!;
+        internal static ConfigEntry<bool> BridgeSuppressCockpitMfd { get; private set; } = null!;
+        internal static ConfigEntry<string> BridgeMarkerLabels { get; private set; } = null!;
+        internal static ConfigEntry<int> BridgeFeedWidth { get; private set; } = null!;
+        internal static ConfigEntry<int> BridgeFeedHeight { get; private set; } = null!;
+        internal static ConfigEntry<int> BridgeStreamHz { get; private set; } = null!;
+        internal static ConfigEntry<int> BridgeStreamMaxDim { get; private set; } = null!;
+        internal static ConfigEntry<int> BridgeStreamJpegQuality { get; private set; } = null!;
+        internal static ConfigEntry<float> BridgeTelemetryInterval { get; private set; } = null!;
+        internal static ConfigEntry<float> BridgeMarkersInterval { get; private set; } = null!;
+        internal static ConfigEntry<float> BridgePoolInterval { get; private set; } = null!;
 
         private static bool _liveRefreshHooked;
 
@@ -201,6 +217,54 @@ namespace MissileCamera.Config
             UpdatePromptDontShowAgain = config.Bind(updates, "DontShowAgain", false,
                 "If true, never show the outdated-version prompt (set by the in-game checkbox).");
 
+            const string bridge = "MissileCameraBridge";
+            BridgeEnabled = config.Bind(bridge, "Enabled", true,
+                "Allow external MFD consumers (NOXMFD extension) to hold the seeker feed live via RequestCapture.");
+            BridgeRenderFps = config.Bind(bridge, "RenderFps", 12,
+                new ConfigDescription(
+                    "Seeker render rate (Hz) while ONLY a bridge consumer is watching (no cockpit MFD / no FS).",
+                    new AcceptableValueRange<int>(4, 60)));
+            BridgeTouchCockpitLayout = config.Bind(bridge, "TouchCockpitLayout", false,
+                "When true, bridge capture may rearrange the cockpit MFD like a normal missile feed. Default off.");
+            BridgeSuppressCockpitMfd = config.Bind(bridge, "SuppressCockpitMfd", true,
+                "When true (default), hide cockpit MFD missile feed while NOXMFD bridge capture is active.");
+            BridgeMarkerLabels = config.Bind(bridge, "MarkerLabels", "SelectedOnly",
+                new ConfigDescription(
+                    "HUD marker name labels in browser overlay: All, SelectedOnly (default), or None.",
+                    new AcceptableValueList<string>("All", "SelectedOnly", "None")));
+            BridgeFeedWidth = config.Bind(bridge, "FeedWidth", 960,
+                new ConfigDescription(
+                    "Internal render width for bridge-only capture (16:9 recommended). Lower = better FPS.",
+                    new AcceptableValueRange<int>(256, 1920)));
+            BridgeFeedHeight = config.Bind(bridge, "FeedHeight", 540,
+                new ConfigDescription(
+                    "Internal render height for bridge-only capture (match width for 16:9).",
+                    new AcceptableValueRange<int>(256, 1080)));
+            BridgeStreamHz = config.Bind(bridge, "StreamHz", 10,
+                new ConfigDescription(
+                    "MJPEG stream rate (Hz) sent to browser MFD. Lower = less GPU readback load.",
+                    new AcceptableValueRange<int>(4, 30)));
+            BridgeStreamMaxDim = config.Bind(bridge, "StreamMaxDim", 480,
+                new ConfigDescription(
+                    "Longest edge (px) of JPEG frames for browser MFD.",
+                    new AcceptableValueRange<int>(240, 1080)));
+            BridgeStreamJpegQuality = config.Bind(bridge, "StreamJpegQuality", 42,
+                new ConfigDescription(
+                    "JPEG quality (0–100) for browser MFD stream.",
+                    new AcceptableValueRange<int>(20, 90)));
+            BridgeTelemetryInterval = config.Bind(bridge, "TelemetryInterval", 0.15f,
+                new ConfigDescription(
+                    "Seconds between browser HUD/status updates.",
+                    new AcceptableValueRange<float>(0.05f, 1f)));
+            BridgeMarkersInterval = config.Bind(bridge, "MarkersInterval", 0.2f,
+                new ConfigDescription(
+                    "Seconds between HUD marker JSON rebuilds for browser overlay.",
+                    new AcceptableValueRange<float>(0.05f, 1f)));
+            BridgePoolInterval = config.Bind(bridge, "PoolInterval", 0.5f,
+                new ConfigDescription(
+                    "Seconds between RC controllable-missile pool rescans for browser picker.",
+                    new AcceptableValueRange<float>(0.1f, 2f)));
+
             IsBound = true;
             HookLiveRefresh(config);
         }
@@ -236,6 +300,7 @@ namespace MissileCamera.Config
             MissileCameraTelemetryConfig.Refresh(force: true);
             MissileCameraEffectsConfig.Refresh(force: true);
             MissileCameraAircraftCamConfig.Refresh(force: true);
+            MissileCameraBridgeConfig.Refresh(force: true);
         }
     }
 }

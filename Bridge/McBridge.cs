@@ -49,7 +49,7 @@ namespace MissileCamera.Bridge
         /// are ignored (no-op) rather than throwing.</summary>
         public static void SetVisionMode(string name)
         {
-            if (System.Enum.TryParse(name, out MissileCameraVisionMode mode)
+            if (System.Enum.TryParse(name, true, out MissileCameraVisionMode mode)
                 && System.Enum.IsDefined(typeof(MissileCameraVisionMode), mode))
             {
                 MissileCameraVisionModeController.Set(mode);
@@ -131,5 +131,17 @@ namespace MissileCamera.Bridge
         /// its own behavior on "is a headless bridge consumer active" should use this, not
         /// HasTrackableMissile.</summary>
         public static bool IsCaptureActive => MissileCameraFeedController.IsBridgeCaptureActive;
+
+        // ── NOXMFD / extension tuning (MissileCameraBridge cfg section) ─────────────
+        public static bool BridgeCaptureAllowed => MissileCameraBridgeConfig.Enabled;
+        public static int BridgeRenderFps => MissileCameraBridgeConfig.RenderFps;
+        public static int ExtensionStreamHz => MissileCameraBridgeConfig.StreamHz;
+        public static int ExtensionStreamMaxDim => MissileCameraBridgeConfig.StreamMaxDim;
+        public static int ExtensionStreamJpegQuality => MissileCameraBridgeConfig.StreamJpegQuality;
+        public static float ExtensionTelemetryInterval => MissileCameraBridgeConfig.TelemetryInterval;
+        public static float ExtensionMarkersInterval => MissileCameraBridgeConfig.MarkersInterval;
+        public static float ExtensionPoolInterval => MissileCameraBridgeConfig.PoolInterval;
+        public static string ExtensionMarkerLabelMode => MissileCameraBridgeConfig.MarkerLabelMode.ToString();
+        public static bool ExtensionSuppressCockpitMfd => MissileCameraBridgeConfig.SuppressCockpitMfd;
     }
 }

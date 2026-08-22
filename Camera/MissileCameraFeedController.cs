@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using MissileCamera.Bridge;
 using MissileCamera.Config;
 using UnityEngine;
 using UnityEngine.UI;
@@ -325,8 +326,14 @@ namespace MissileCamera
                 NotifyOverlayGone();
             }
 
+            if (BridgeSuppressesCockpitDisplay())
+                SuppressCockpitMfdForBridge();
+
             if (HasTrackableOwnedMissile()
-                && (!_overlayActive || !MfdLayoutController.IsLayoutActive))
+                && !BridgeSuppressesCockpitDisplay()
+                && (!_overlayActive || !MfdLayoutController.IsLayoutActive)
+                && (!_bridgeCaptureActive || _overlayActive || MissileCameraFullscreenController.IsActive
+                    || MissileCameraBridgeConfig.TouchCockpitLayout))
                 MfdLayoutController.EnsureLayoutForMissileFeed();
 
             if (HasTrackableOwnedMissile())
@@ -423,7 +430,12 @@ namespace MissileCamera
             if (Time.unscaledTime >= _nextRenderTimeUnscaled
                 || (fullscreen && !MissileCameraLossInterference.IsActive))
             {
-                float interval = 1f / Mathf.Max(MissileCameraFeedConfig.RenderFps, 1);
+                bool bridgeOnly = _bridgeCaptureActive && !fullscreen && !_overlayActive;
+                MissileCameraBridgeConfig.Refresh();
+                float renderFps = bridgeOnly
+                    ? MissileCameraBridgeConfig.RenderFps
+                    : MissileCameraFeedConfig.RenderFps;
+                float interval = 1f / Mathf.Max(renderFps, 1f);
                 _nextRenderTimeUnscaled = Time.unscaledTime + interval;
                 rig.SyncPose();
 
@@ -621,6 +633,9 @@ namespace MissileCamera
                     + " panelNull=" + (panelRt == null));
                 return;
             }
+
+            if (BridgeSuppressesCockpitDisplay())
+                return;
 
             // Feed RawImage bind must succeed for MFD camera. HUD chrome is best-effort —
             // EnsureBuilt NRE must NEVER abort overlay (that left weapons restored + no cam).
@@ -1014,6 +1029,7 @@ namespace MissileCamera
             MissileCameraTelemetryConfig.Refresh();
             MissileCameraEffectsConfig.Refresh();
             MissileCameraAircraftCamConfig.Refresh();
+            MissileCameraBridgeConfig.Refresh();
         }
 
         private static void ApplyManualSelection(Missile? missile)

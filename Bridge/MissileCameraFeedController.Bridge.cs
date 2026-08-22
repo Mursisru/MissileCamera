@@ -1,3 +1,5 @@
+using MissileCamera.Bridge;
+
 namespace MissileCamera
 {
     // Continued from Camera/MissileCameraFeedController.cs
@@ -9,12 +11,67 @@ namespace MissileCamera
 
         // Idempotent — safe to call every frame with the same value ("do I still want frames"
         // polled continuously, not an edge-triggered toggle).
-        internal static void SetBridgeCaptureActive(bool active) => _bridgeCaptureActive = active;
+        internal static void SetBridgeCaptureActive(bool active)
+        {
+            MissileCameraBridgeConfig.Refresh();
+            if (active && !MissileCameraBridgeConfig.Enabled)
+                active = false;
+
+            bool was = _bridgeCaptureActive;
+            _bridgeCaptureActive = active;
+
+            if (!was && active)
+                SuppressCockpitMfdForBridge();
+        }
 
         // Read side — used by MissileCameraFeedConfig.ResolveActiveFeedSize to decide feed
         // resolution: an external bridge consumer counts as "wants fullscreen-grade quality", the
         // same as Fullscreen itself, rather than falling back to the small cockpit-panel size.
         internal static bool IsBridgeCaptureActive => _bridgeCaptureActive;
+
+        internal static bool BridgeSuppressesCockpitDisplay()
+        {
+            MissileCameraBridgeConfig.Refresh();
+            return _bridgeCaptureActive
+                && MissileCameraBridgeConfig.SuppressCockpitMfd
+                && !MissileCameraFullscreenController.IsActive;
+        }
+
+        // Hide cockpit MFD UI while bridge renders — rig stays attached for headless feed.
+        internal static void SuppressCockpitMfdForBridge()
+        {
+            if (!BridgeSuppressesCockpitDisplay())
+                return;
+
+            if (!_overlayActive && !MfdLayoutController.IsLayoutActive)
+                return;
+
+            if (_overlayActive)
+            {
+                _overlayActive = false;
+
+                try { CancelPostLossSequence(); }
+                catch { /* ignore */ }
+
+                try { MissileCameraInfraredEffect.Clear(_feedImage, _rig); }
+                catch { /* ignore */ }
+
+                try { MissileCameraPostFxStack.Release(); }
+                catch { /* ignore */ }
+
+                _cachedPanelW = -1f;
+                _cachedPanelH = -1f;
+
+                try { HudOverlay.Park(); }
+                catch { /* ignore */ }
+
+                _manualFollowActive = false;
+                _zoomOffset = 0f;
+            }
+
+            try { MfdLayoutController.ReleaseForExternalBridge(); }
+            catch { /* ignore */ }
+        }
 
         /// <summary>Fresh (uncached) telemetry snapshot for an external consumer — see
         /// Bridge/McBridge.cs TelemetryJson. Deliberately bypasses ResolveHudSnapshot's cache: that

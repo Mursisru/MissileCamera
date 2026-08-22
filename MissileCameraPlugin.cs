@@ -2,6 +2,7 @@ using System.IO;
 using BepInEx;
 using BepInEx.Logging;
 using MissileCamera.Config;
+using MissileCamera.Bridge;
 
 namespace MissileCamera
 {
@@ -18,6 +19,7 @@ namespace MissileCamera
             ModLogger = base.Logger;
 
             MissileCameraBepInConfig.Bind(Config);
+            MissileCameraBridgeConfig.Refresh(force: true);
 
             string? pluginDir = Path.GetDirectoryName(Info.Location);
             if (string.IsNullOrEmpty(pluginDir))

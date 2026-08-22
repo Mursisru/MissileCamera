@@ -146,6 +146,54 @@ namespace MissileCamera
             SoftParkMissileFeed("missile_feed_ended");
         }
 
+        /// <summary>NOXMFD bridge owns the feed — drop cockpit stub/weapons hide without killing rig.</summary>
+        internal static void ReleaseForExternalBridge()
+        {
+            if (!_layoutActive && _tacOverlayRoot == null)
+                return;
+
+            try { MfdWeaponsZoneAccess.Restore(); }
+            catch { /* ignore */ }
+
+            GameObject? stubGo = null;
+            try
+            {
+                if (_tacOverlayRoot != null)
+                    stubGo = _tacOverlayRoot.gameObject;
+            }
+            catch { /* ignore */ }
+
+            _tacOverlayRoot = null;
+            _stubLabel = null;
+
+            if (stubGo != null)
+            {
+                try { Object.Destroy(stubGo); }
+                catch { /* ignore */ }
+            }
+
+            _layoutActive = false;
+            _activeTargetCam = null;
+            _activeScreenUi = null;
+            _activeTacScreen = null;
+            _appliedConfigRevision = -1;
+            _cachedOverlayZone = null;
+            _cachedOverlayRevision = -1;
+            _cachedSuppressBottomDivider = false;
+            _cachedShowPanelBorder = false;
+            _cachedSuppressBottomBorder = false;
+            _cachedOverlayRotationZ = 0f;
+            _cachedStubContentRotationZ = 0f;
+            _cachedStubFontRef = 0f;
+            _cachedStubContentBand = Vector2.up;
+            _cachedStubForcePortraitLayout = false;
+            _cachedHudLeftInsetExtra = 0.02f;
+            _cachedTelemetryLayout = MissileCameraTelemetryLayout.BottomRow;
+            _layoutGeneration++;
+
+            MissileCameraMissionLifecycleDiag.Info("ReleaseForExternalBridge");
+        }
+
         /// <summary>
         /// End of missile feed: restore vanilla MFD strip and drop stub.
         /// Clears UI bind refs (destroyHud) so next launch cold-binds reliably.
@@ -156,6 +204,15 @@ namespace MissileCamera
             // layout exists — do not DestroyAndClearRig / wipe HUD (killed MFD first bind).
             if (!_layoutActive && _tacOverlayRoot == null)
                 return;
+
+            // NOXMFD bridge: hide cockpit stub only — never SoftParkRig via NotifyOverlayGone.
+            if (MissileCameraFeedController.IsBridgeCaptureActive
+                && MissileCamera.Bridge.MissileCameraBridgeConfig.SuppressCockpitMfd
+                && !MissileCameraFullscreenController.IsActive)
+            {
+                MissileCameraFeedController.SuppressCockpitMfdForBridge();
+                return;
+            }
 
             // Do not Cancel pending EnsureLayout — a new missile may already have scheduled wake.
             try { MissileCameraFeedController.NotifyOverlayGone(destroyHud: true); }

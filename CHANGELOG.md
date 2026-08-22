@@ -4,6 +4,22 @@ All notable changes to **MissileCamera** (BepInEx) are documented here. Public v
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **`MissileCameraBridge` config section** — headless NOXMFD feed tuning (16:9 render size, MJPEG/stream intervals, marker label modes, cockpit MFD suppression).
+- **`Bridge/McBridge.cs` extension surface** — `RequestCapture`, `FeedTexture`, telemetry/markers JSON, bridge tuning getters for the NOXMFD extension.
+
+### Changed
+
+- Default bridge feed resolution **960×540** (was 512×512) for widescreen browser MFD pages.
+
+### Fixed
+
+- Headless bridge no longer loses the seeker rig when cockpit layout soft-parks (`SoftParkRig` bypass while `RequestCapture` is active).
+- Cockpit MFD layout gated while NOXMFD owns capture; no auto-restore onto unrelated NOXMFD tabs when bridge ends.
+
 ## [2.0.0] — 2026-08-10
 
 > [!IMPORTANT]
