@@ -6,6 +6,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-08-22
+
+> [!IMPORTANT]
+> **NOXMFD bridge release** — headless seeker feed for browser MFD extensions via `McBridge.RequestCapture`. Requires MissileCamera: Remote Control **2.1.0** for full RC in NOXMFD.
+
 ### Added
 
 - **`MissileCameraBridge` config section** — headless NOXMFD feed tuning (16:9 render size, MJPEG/stream intervals, marker label modes, cockpit MFD suppression).
