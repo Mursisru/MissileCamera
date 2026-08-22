@@ -271,7 +271,7 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ## Credits
 
-### 💗 Благодарность участникам проекта
+### Thanks to project contributors
 
 <table align="center">
   <tr>
