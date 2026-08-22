@@ -424,6 +424,21 @@ namespace MissileCamera
 
             bool useBlit = _infraredVolumeActive
                 && MissileCameraVisionModeController.UsesInfraredBlit(_visionMode);
+            // The shader-based blit (WhiteHot/BlackHot/*Contour) depends on an externally-baked
+            // AssetBundle shader that can fail to load/compile on a given machine (see
+            // MissileCameraInfraredBlit's own Error logs for why). useGrayscaleFallback covers
+            // that case by reusing the exact same Volume/ColorAdjustments desaturation
+            // NightVision + the MFD's own pipeline-driven auto-IR already rely on — no custom
+            // shader needed, so it can't fail the same way.
+            // ponytail: no shader means no true BlackHot invert and no edge-detect for the Contour
+            // modes — all four blit modes fall back to the same plain grayscale look. Ceiling: this
+            // is a degraded look, not full parity. Upgrade path: once missilecamera_shaders.bundle
+            // is rebuilt with the blit shader force-included (see docs on the actual defect), this
+            // fallback stops engaging on its own — IsAvailable flips true and useShaderBlit takes
+            // over again, nothing else to change.
+            bool blitShaderAvailable = MissileCameraInfraredBlit.IsAvailable;
+            bool useShaderBlit = useBlit && blitShaderAvailable;
+            bool useGrayscaleFallback = useBlit && !blitShaderAvailable;
             bool useNvg = _nightVisionActive
                 && MissileCameraVisionModeController.UsesNightVisionVolume(_visionMode);
 
@@ -437,8 +452,8 @@ namespace MissileCamera
             _lastFrameUsedBlit = false;
             try
             {
-                RenderSettings.fog = !useBlit;
-                if (useBlit)
+                RenderSettings.fog = !(useShaderBlit || useGrayscaleFallback);
+                if (useShaderBlit)
                 {
                     EnsureHdrTexture();
                     _camera.allowHDR = true;
@@ -454,12 +469,35 @@ namespace MissileCamera
                     MissileCameraRenderPrep.BeforeRender(_camera, forceLdr: false);
 
                 urp = _camera.GetUniversalAdditionalCameraData();
-                if (useBlit)
+                if (useShaderBlit)
                 {
                     urp.renderPostProcessing = false;
                     _camera.allowHDR = true;
                     if (_irVolume != null)
                         _irVolume.enabled = false;
+                }
+                else if (useGrayscaleFallback)
+                {
+                    if (_irVolume != null)
+                    {
+                        // Scoped global only for this Camera.Render — same as NVG below, no
+                        // persistent world tint.
+                        _irVolume.isGlobal = true;
+                        _irVolume.enabled = true;
+                    }
+                    _colorAdjustments.saturation.Override(-100f);
+                    _colorAdjustments.saturation.overrideState = true;
+                    _colorAdjustments.postExposure.Override(_infraredBlitExposure);
+                    _colorAdjustments.postExposure.overrideState = true;
+                    _colorAdjustments.contrast.Override(_infraredBlitContrast);
+                    _colorAdjustments.contrast.overrideState = true;
+                    _colorAdjustments.colorFilter.overrideState = false;
+                    _bloom.threshold.overrideState = false;
+                    _bloom.intensity.overrideState = false;
+                    urp.renderPostProcessing = true;
+                    urp.volumeTrigger = _camera.transform;
+                    _renderPostProcessingEnabled = true;
+                    _infraredVolumeEnabledDuringRender = true;
                 }
                 else if (useNvg)
                 {
@@ -495,7 +533,7 @@ namespace MissileCamera
                     urp.renderType = prevType;
                 }
 
-                if (useBlit && _hdrRenderTexture != null && _renderTexture != null)
+                if (useShaderBlit && _hdrRenderTexture != null && _renderTexture != null)
                 {
                     MissileCameraInfraredBlit.Apply(
                         _hdrRenderTexture,
@@ -505,6 +543,10 @@ namespace MissileCamera
                         _visionMode);
                     _lastFrameUsedBlit = MissileCameraInfraredBlit.IsAvailable;
                     MissileCameraInfraredAudit.LogAfterRender(this, _renderTexture);
+                }
+                else if (useGrayscaleFallback)
+                {
+                    _lastFrameUsedBlit = false;
                 }
             }
             finally
