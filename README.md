@@ -273,25 +273,13 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ### Thanks to project contributors
 
-<table align="center">
-  <tr>
-    <td align="center" width="128">
-      <a href="https://github.com/Mursisru"><img src="https://github.com/Mursisru.png" width="80" height="80" alt="Mursisru" /></a>
-      <br />
-      <a href="https://github.com/Mursisru"><strong>Mursisru</strong></a>
-    </td>
-    <td align="center" width="128">
-      <a href="https://github.com/roke77"><img src="https://github.com/roke77.png" width="80" height="80" alt="roke77" /></a>
-      <br />
-      <a href="https://github.com/roke77"><strong>roke77</strong></a>
-    </td>
-    <td align="center" width="128">
-      <a href="https://github.com/lupfine"><img src="https://github.com/lupfine.png" width="80" height="80" alt="lupfine" /></a>
-      <br />
-      <a href="https://github.com/lupfine"><strong>lupfine</strong></a>
-    </td>
-  </tr>
-</table>
+<p align="center">
+  <a href="https://github.com/Mursisru"><img src="https://github.com/Mursisru.png?size=80" width="80" height="80" alt="Mursisru" /></a>
+  &nbsp;
+  <a href="https://github.com/roke77"><img src="https://github.com/roke77.png?size=80" width="80" height="80" alt="roke77" /></a>
+  &nbsp;
+  <a href="https://github.com/lupfine"><img src="https://github.com/lupfine.png?size=80" width="80" height="80" alt="lupfine" /></a>
+</p>
 
 - **[Mursisru](https://github.com/Mursisru)** — MissileCamera author, maintenance, and releases
 - **[roke77](https://github.com/roke77)** — [NOXMFD](https://github.com/roke77/NOXMFD) (browser MFD shell and extension API this mod integrates with)
