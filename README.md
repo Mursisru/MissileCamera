@@ -273,13 +273,7 @@ See [CHANGELOG.md](CHANGELOG.md).
 
 ### Thanks to project contributors
 
-<p align="center">
-  <a href="https://github.com/Mursisru"><img src="https://github.com/Mursisru.png?size=80" width="80" height="80" alt="Mursisru" /></a>
-  &nbsp;
-  <a href="https://github.com/roke77"><img src="https://github.com/roke77.png?size=80" width="80" height="80" alt="roke77" /></a>
-  &nbsp;
-  <a href="https://github.com/lupfine"><img src="https://github.com/lupfine.png?size=80" width="80" height="80" alt="lupfine" /></a>
-</p>
+[![Contributors](https://contrib.rocks/image?repo=Mursisru/MissileCamera)](https://github.com/Mursisru/MissileCamera/graphs/contributors)
 
 - **[Mursisru](https://github.com/Mursisru)** — MissileCamera author, maintenance, and releases
 - **[roke77](https://github.com/roke77)** — [NOXMFD](https://github.com/roke77/NOXMFD) (browser MFD shell and extension API this mod integrates with)
