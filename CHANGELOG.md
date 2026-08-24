@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.1.1] — 2026-08-24
+
+### Fixed
+
+- Fullscreen HUD missile names now use the instance `unitName` (RC clones share the vanilla flying prefab `definition`).
+
 ## [2.1.0] — 2026-08-22
 
 > [!IMPORTANT]

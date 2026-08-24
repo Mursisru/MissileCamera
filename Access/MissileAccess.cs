@@ -20,6 +20,20 @@ namespace MissileCamera
 
         internal static string GetMissileName(Missile missile)
         {
+            if (missile == null)
+                return string.Empty;
+
+            // Instance name first — RC clones share the vanilla flying prefab/definition.
+            try
+            {
+                if (!string.IsNullOrEmpty(missile.unitName))
+                    return missile.unitName;
+            }
+            catch
+            {
+                // ignore
+            }
+
             if (missile.definition != null && !string.IsNullOrEmpty(missile.definition.unitName))
                 return missile.definition.unitName;
 
