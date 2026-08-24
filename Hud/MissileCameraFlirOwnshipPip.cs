@@ -77,8 +77,11 @@ namespace MissileCamera
 
         internal void Place(MissileCameraPanelMetrics panel, float pad)
         {
-            if (_root != null && !_root.gameObject.activeSelf)
-                _root.gameObject.SetActive(true);
+            RectTransform root = _root;
+            if (root is null)
+                return;
+            if (!root.gameObject.activeSelf)
+                root.gameObject.SetActive(true);
 
             if (Mathf.Approximately(panel.Width, _layoutW)
                 && Mathf.Approximately(panel.Height, _layoutH))
@@ -88,11 +91,11 @@ namespace MissileCamera
             _layoutH = panel.Height;
 
             Size = Mathf.Clamp(panel.MinSide * 0.22f, 160f, 260f);
-            _root.anchorMin = new Vector2(0f, 0f);
-            _root.anchorMax = new Vector2(0f, 0f);
-            _root.pivot = new Vector2(0f, 0f);
-            _root.anchoredPosition = new Vector2(pad, pad);
-            _root.sizeDelta = new Vector2(Size, Size);
+            root.anchorMin = new Vector2(0f, 0f);
+            root.anchorMax = new Vector2(0f, 0f);
+            root.pivot = new Vector2(0f, 0f);
+            root.anchoredPosition = new Vector2(pad, pad);
+            root.sizeDelta = new Vector2(Size, Size);
 
             PlaceLabel(_title, 0f, 1f, LabelPad, -LabelPad, Size - LabelPad * 2f, 14f, TextAnchor.UpperLeft);
             PlaceLabel(_alt, 0f, 0f, LabelPad, LabelPad + 14f, Size - LabelPad * 2f, 14f, TextAnchor.LowerLeft);

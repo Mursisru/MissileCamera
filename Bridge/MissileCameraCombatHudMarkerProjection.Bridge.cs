@@ -98,9 +98,11 @@ namespace MissileCamera
         /// for both bridge JSON producers rather than two copies.</summary>
         internal static string EscapeJson(string? s)
         {
-            if (string.IsNullOrEmpty(s)) return string.Empty;
-            var sb = new System.Text.StringBuilder(s.Length + 8);
-            foreach (char c in s)
+            if (s == null || s.Length == 0)
+                return string.Empty;
+            string text = s;
+            var sb = new System.Text.StringBuilder(text.Length + 8);
+            foreach (char c in text)
             {
                 switch (c)
                 {
