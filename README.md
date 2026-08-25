@@ -35,7 +35,6 @@ BepInEx 5 plugin for the flight sim **Nuclear Option** that adds a live seeker-e
 * [Controls & keybinds](#controls--keybinds)
 * [Configuration (BepInEx Configuration Manager)](#configuration-bepinex-configuration-manager)
 * [NOXMFD integration](#noxmfd-integration)
-* [Project layout](#project-layout)
 * [Changelog](#changelog)
 * [Credits](#credits)
 * [Licence](#licence)
@@ -225,7 +224,7 @@ Player-facing tuning for **[NOXMFD](https://github.com/roke77/NOXMFD)** and othe
 MissileCamera ships a public **`Bridge/McBridge.cs`** surface for external MFD apps. The mod does **not** reference NOXMFD at compile time or runtime — only the optional extension does.
 
 > [!NOTE]
-> **Recommended stack:** BepInEx 5 → **MissileCamera** → **[MissileCamera: Remote Control](https://github.com/Mursisru/MissileCamera-Remote-Control)** → **[NOXMFD](https://github.com/roke77/NOXMFD)** → **[NOXMFD: RC Missile Camera](https://github.com/Mursisru/NOXMFD-Extension-Remote-Control-Missile-Camera)**.
+> **Recommended stack:** BepInEx 5 → **MissileCamera** → **[MissileCamera: Remote Control](https://github.com/Mursisru/MissileCamera-Remote-Control)** → **[NOXMFD](https://github.com/roke77/NOXMFD)** → **[NOXMFD: RC Missile Camera](https://github.com/roke77/NOXMFD-Extension-Remote-Control-Missile-Camera)**.
 
 The extension adds a **MISSILE CAMERA** page inside NOXMFD's browser MFD: live seeker MJPEG, CombatHUD markers, telemetry, and RC commands (aim, throttle, afterburner, formation, vision cycle, manual detonate) **without** entering cockpit fullscreen (`K`).
 
@@ -233,33 +232,6 @@ While the extension page is open it calls `RequestCapture(true)`, which keeps th
 
 > [!TIP]
 > If the browser feed looks square or low-res after upgrading, set `FeedWidth=960` and `FeedHeight=540` in `[MissileCameraBridge]` (or delete stale keys and relaunch once).
-
----
-
-## Project layout
-
-```text
-MissileCamera/
-├── MissileCamera.csproj
-├── MissileCamera.sln
-├── MissileCameraPlugin.cs      # BepInPlugin entry, Config.Bind
-├── MissileCameraHost.cs        # DDOL host, mission-scene bootstrap
-├── AppVersion.cs
-├── CHANGELOG.md
-├── Harmony/                    # Harmony patches + hooks
-├── Camera/                     # Feed rig, config, controller
-├── Hud/                        # Overlay widgets
-├── Layout/                     # MFD zone split
-├── Config/                     # BepInEx config bindings, paths
-├── Access/                     # Game API wrappers
-├── Ui/                         # HUD graphics helpers
-├── Logging/
-├── Bridge/                     # McBridge API for NOXMFD / external consumers
-├── release/
-│   └── v0.27.1/
-│       └── INSTALL.txt
-└── 
-```
 
 ---
 
